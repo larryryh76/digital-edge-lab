@@ -32,11 +32,31 @@ def request_gemini(model, parts, config=None):
     body = {"contents": [{"parts": parts}]}
     if config:
         body["generationConfig"] = config
-    response = requests.post(
-        url, params={"key": API_KEY}, json=body, timeout=240
-    )
-    if not response.ok:
-        stop(f"Gemini API {response.status_code}: {response.text[:1500]}")
+    # Retry temporary Gemini overload/rate-limit/server failures with backoff.
+    response = None
+    for attempt in range(5):
+        try:
+            response = requests.post(
+                url, params={"key": API_KEY}, json=body, timeout=240
+            )
+        except requests.RequestException as exc:
+            if attempt == 4:
+                stop(f"Gemini network request failed after 5 attempts: {exc}")
+            wait = min(8 * (2 ** attempt), 60)
+            print(f"Gemini network issue; retrying in {wait}s (attempt {attempt + 2}/5)...", flush=True)
+            import time
+            time.sleep(wait)
+            continue
+        if response.ok:
+            break
+        if response.status_code not in (429, 500, 502, 503, 504):
+            stop(f"Gemini API {response.status_code}: {response.text[:1500]}")
+        if attempt == 4:
+            stop(f"Gemini API {response.status_code} after 5 attempts: {response.text[:1500]}")
+        wait = min(8 * (2 ** attempt), 60)
+        print(f"Gemini API {response.status_code} temporary failure; retrying in {wait}s (attempt {attempt + 2}/5)...", flush=True)
+        import time
+        time.sleep(wait)
     data = response.json()
     try:
         return data["candidates"][0]["content"]["parts"]
