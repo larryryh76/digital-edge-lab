@@ -33,7 +33,7 @@ jobs:
       - name: Generate pilot video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_TEXT_MODEL: gemini-2.5-flash
+          GEMINI_TEXT_MODEL: gemini-3.8-flash
           GEMINI_TTS_MODEL: gemini-2.5-flash-preview-tts
         run: python src/pipeline.py
 
