@@ -135,29 +135,102 @@ def get_font(size, bold=False):
     return ImageFont.load_default()
 
 
-def draw_card(scene, index, total, path):
+def draw_card(scene, index, total, path, caption=""):
+    """Create a designed scene card; render() adds motion and timed narration captions."""
     im = Image.new("RGB", (W, H), (7, 12, 25))
     d = ImageDraw.Draw(im)
-    d.rounded_rectangle((32, 32, W - 32, H - 32), radius=32, outline=(30, 116, 220), width=3)
-    d.text((58, 64), "DIGITAL EDGE LAB", font=get_font(24, True), fill=(86, 205, 255))
-    d.text((58, 108), f"SCENE {index + 1:02d} / {total:02d}", font=get_font(17), fill=(156, 178, 207))
-    cx, cy = W // 2, H // 2 - 70
-    for radius, color, width in [(205, (25, 66, 130), 5), (150, (26, 112, 185), 4), (95, (56, 194, 236), 3)]:
-        d.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), outline=color, width=width)
-    d.line((cx-230, cy, cx+230, cy), fill=(35, 102, 177), width=3)
-    d.line((cx, cy-230, cx, cy+230), fill=(35, 102, 177), width=3)
-    label = str(scene.get("on_screen_text", "A useful idea")).upper()
-    lines = textwrap.wrap(label, width=18) or [label]
-    y = H - 390 - len(lines) * 25
-    for line in lines[:4]:
-        box = d.textbbox((0, 0), line, font=get_font(38, True))
-        d.text(((W - (box[2] - box[0])) // 2, y), line, font=get_font(38, True), fill=(245, 249, 255))
-        y += 56
-    visual_lines = textwrap.wrap(str(scene.get("visual", ""))[:130], width=43)[:3]
-    for j, line in enumerate(visual_lines):
-        box = d.textbbox((0, 0), line, font=get_font(17))
-        d.text(((W - (box[2] - box[0])) // 2, H - 180 + j * 26), line, font=get_font(17), fill=(157, 184, 216))
+    # Branded editorial layout with a different visual grammar per scene.
+    accent = [(56, 194, 236), (123, 108, 255), (48, 220, 170), (255, 174, 66),
+              (86, 164, 255), (255, 104, 150), (142, 226, 255)][index % 7]
+    d.rectangle((0, 0, W, 12), fill=accent)
+    d.text((48, 48), "DIGITAL EDGE LAB", font=get_font(23, True), fill=accent)
+    d.text((W-180, 54), f"{index+1:02d} / {total:02d}", font=get_font(19, True), fill=(174, 193, 220))
+    d.line((48, 94, W-48, 94), fill=(35, 54, 82), width=2)
+
+    # Abstract technical illustration changes with each scene instead of repeating one template.
+    cx, cy = W // 2, 430
+    if index % 6 == 0:  # connected workflow
+        xs = [105, 285, 465, 615]
+        labels = ["INPUT", "STEP 1", "STEP 2", "OUTPUT"]
+        for j, x in enumerate(xs):
+            d.rounded_rectangle((x-58, cy-58, x+58, cy+58), radius=18,
+                                fill=(13, 29, 53), outline=accent, width=4)
+            d.text((x-43, cy-12), labels[j], font=get_font(13, True), fill=(240, 247, 255))
+            if j < len(xs)-1:
+                d.line((x+60, cy, xs[j+1]-62, cy), fill=accent, width=5)
+                d.polygon([(xs[j+1]-70,cy-10),(xs[j+1]-55,cy),(xs[j+1]-70,cy+10)], fill=accent)
+    elif index % 6 == 1:  # comparison
+        for x, title, color, bars in [(70, "ONE BIG PROMPT", (255, 112, 112), [150, 80, 125, 55]),
+                                      (370, "SMALL STEPS", accent, [55, 95, 130, 160])]:
+            d.rounded_rectangle((x, cy-125, x+275, cy+145), radius=22,
+                                fill=(13, 25, 46), outline=color, width=3)
+            d.text((x+18, cy-98), title, font=get_font(17, True), fill=color)
+            for j, bw in enumerate(bars):
+                d.rounded_rectangle((x+22, cy-45+j*42, x+22+bw, cy-25+j*42),
+                                    radius=8, fill=color)
+    elif index % 6 == 2:  # modular steps
+        for j in range(3):
+            x, y = 78+j*195, cy-95+j*28
+            d.rounded_rectangle((x,y,x+165,y+180), radius=20,
+                                fill=(13, 29, 53), outline=accent, width=3)
+            d.ellipse((x+55,y+24,x+110,y+79), outline=accent, width=4)
+            d.text((x+70,y+39), str(j+1), font=get_font(20, True), fill=(245,249,255))
+            d.text((x+20,y+112), ["CLEAN","ANALYZE","SUMMARIZE"][j], font=get_font(14, True), fill=(218,232,250))
+    elif index % 6 == 3:  # data bars
+        baseline = cy+115
+        for j, height in enumerate([80, 145, 105, 205, 165, 240]):
+            x = 95+j*88
+            d.rounded_rectangle((x,baseline-height,x+48,baseline), radius=10, fill=accent)
+            d.ellipse((x+12,baseline-height-18,x+36,baseline-height+6), fill=(239,248,255))
+        d.line((70,baseline+4,W-70,baseline+4), fill=(93,123,163), width=3)
+    elif index % 6 == 4:  # checklist
+        for j, label in enumerate(["Clear inputs", "One task at a time", "Check each result", "Build final output"]):
+            y = cy-120+j*66
+            d.rounded_rectangle((85,y,135,y+42), radius=10, outline=accent, width=3)
+            d.line((97,y+21,110,y+32,126,y+10), fill=accent, width=4)
+            d.text((155,y+6), label, font=get_font(21, True), fill=(235,243,255))
+    else:  # network of linked nodes
+        nodes = [(140,cy-70),(300,cy-145),(300,cy+10),(470,cy-70),(590,cy+30)]
+        edges = [(0,1),(0,2),(1,3),(2,3),(3,4)]
+        for a,b in edges:
+            d.line((*nodes[a],*nodes[b]), fill=(48,91,145), width=5)
+        for x,y in nodes:
+            d.ellipse((x-30,y-30,x+30,y+30), fill=(13,29,53), outline=accent, width=5)
+
+    # Main scene statement
+    label = str(scene.get("on_screen_text", "A useful idea")).strip().upper()
+    lines = textwrap.wrap(label, width=24) or [label]
+    y = 700
+    for line in lines[:3]:
+        box = d.textbbox((0, 0), line, font=get_font(36, True))
+        d.text(((W-(box[2]-box[0]))//2,y), line, font=get_font(36,True), fill=(245,249,255))
+        y += 48
+
+    # The visual description is editorial context, not a claim that an external clip was generated.
+    visual = textwrap.wrap(str(scene.get("visual", ""))[:110], width=48)[:2]
+    for j, line in enumerate(visual):
+        box = d.textbbox((0,0),line,font=get_font(16))
+        d.text(((W-(box[2]-box[0]))//2, 865+j*23), line, font=get_font(16), fill=(150,177,210))
+
+    # Burn in a readable narration caption so the story remains understandable without audio.
+    caption_lines = textwrap.wrap(caption.strip(), width=38)[:3]
+    d.rounded_rectangle((36, 1010, W-36, 1198), radius=22, fill=(13,23,40), outline=(38,61,91), width=2)
+    for j, line in enumerate(caption_lines):
+        d.text((58, 1040+j*42), line, font=get_font(21), fill=(232,240,251))
     im.save(path)
+
+
+def split_caption(text, count):
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
+    sentences = [s for s in sentences if s]
+    chunks = [[] for _ in range(count)]
+    # Allocate sentences by word count to roughly equal scene lengths.
+    totals = [0] * count
+    for sentence in sentences:
+        idx = min(range(count), key=lambda i: totals[i])
+        chunks[idx].append(sentence)
+        totals[idx] += len(sentence.split())
+    return [" ".join(group) for group in chunks]
 
 
 def render(data, wav_path):
@@ -169,29 +242,61 @@ def render(data, wav_path):
     duration = max(float(probe.stdout.strip()), 1.0)
     cards = OUT / "cards"
     cards.mkdir(exist_ok=True)
-    concat = OUT / "concat.txt"
-    lines = []
     scenes = data["scenes"]
+    captions = split_caption(data["narration"], len(scenes))
+    segment_duration = duration / len(scenes)
+    segments = []
     for i, scene in enumerate(scenes):
         image = cards / f"scene_{i:02d}.png"
-        draw_card(scene, i, len(scenes), image)
-        lines.extend([f"file '{image.as_posix()}'", f"duration {duration / len(scenes):.3f}"])
-    lines.append(f"file '{(cards / f'scene_{len(scenes)-1:02d}.png').as_posix()}'")
-    concat.write_text("\n".join(lines))
+        draw_card(scene, i, len(scenes), image, captions[i])
+        clip = OUT / f"segment_{i:02d}.mp4"
+        # Every scene has slow camera movement plus short fades, so the result is animated video,
+        # not a slideshow of motionless stills. Scene-specific artwork varies across the sequence.
+        frames = max(int(segment_duration * FPS), 1)
+        zoom_expr = "min(zoom+0.0012,1.10)" if i % 2 == 0 else "max(zoom-0.0007,1.0)"
+        x_expr = "(iw-iw/zoom)/2" if i % 2 == 0 else "(iw-iw/zoom)/2+8*sin(on/18)"
+        y_expr = "(ih-ih/zoom)/2" if i % 2 == 0 else "(ih-ih/zoom)/2+12*cos(on/21)"
+        vf = (
+            f"zoompan=z='{zoom_expr}':x='{x_expr}':y='{y_expr}':d=1:s={W}x{H}:fps={FPS},"
+            f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(segment_duration-0.25,0):.3f}:d=0.25,"
+            "format=yuv420p"
+        )
+        subprocess.run(
+            ["ffmpeg","-y","-loop","1","-i",str(image),"-t",f"{segment_duration:.3f}",
+             "-vf",vf,"-an","-c:v","libx264","-preset","veryfast","-crf","22",
+             "-pix_fmt","yuv420p","-r",str(FPS),str(clip)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        segments.append(clip)
+
+    concat = OUT / "segments.txt"
+    concat.write_text("\n".join(f"file '{p.as_posix()}'" for p in segments) + "\n")
     silent = OUT / "visuals.mp4"
     subprocess.run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat),
-         "-vf", f"scale={W}:{H},format=yuv420p,fps={FPS}", "-c:v", "libx264",
-         "-preset", "veryfast", "-pix_fmt", "yuv420p", str(silent)],
+        ["ffmpeg","-y","-f","concat","-safe","0","-i",str(concat),"-c","copy",str(silent)],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
+
     final = OUT / "digital-edge-lab-pilot.mp4"
+    # Standardize the audio for common Android/social players and normalize perceived loudness.
     subprocess.run(
-        ["ffmpeg", "-y", "-i", str(silent), "-i", str(wav_path), "-shortest",
-         "-c:v", "libx264", "-preset", "veryfast", "-crf", "24",
-         "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(final)],
+        ["ffmpeg","-y","-i",str(silent),"-i",str(wav_path),"-map","0:v:0","-map","1:a:0",
+         "-vf",f"scale={W}:{H},fps={FPS},format=yuv420p","-af",
+         "loudnorm=I=-16:TP=-1.5:LRA=11,aresample=48000",
+         "-shortest","-c:v","libx264","-preset","veryfast","-crf","22",
+         "-c:a","aac","-b:a","160k","-ac","2","-ar","48000",
+         "-movflags","+faststart",str(final)],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
+    # Fail the job if the finished MP4 has no audio stream or has a near-silent narration track.
+    check = subprocess.run(
+        ["ffmpeg","-hide_banner","-i",str(final),"-map","0:a:0","-af","volumedetect","-f","null","-"],
+        check=True, capture_output=True, text=True,
+    )
+    audio_log = check.stderr
+    match = re.search(r"mean_volume:\s*(-?[\d.]+)\s*dB", audio_log)
+    if not match or float(match.group(1)) < -45:
+        stop("Rendered MP4 audio is missing or nearly silent; refusing to report success.")
     return final, duration
 
 
