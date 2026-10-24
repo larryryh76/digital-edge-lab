@@ -2,11 +2,18 @@ name: Digital Edge Lab — Generate pilot
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - ".github/workflows/generate-pilot.yml"
+      - "memory/channel-memory.json"
+      - "requirements.txt"
   schedule:
     - cron: "0 10 * * 1"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
@@ -37,8 +44,22 @@ jobs:
           GEMINI_TTS_MODEL: gemini-2.5-flash-preview-tts
         run: python src/pipeline.py
 
+      - name: Save narrator memory for the next episode
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp output/channel-memory.json memory/channel-memory.json
+          if ! git diff --quiet -- memory/channel-memory.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add memory/channel-memory.json
+            git commit -m "Update Digital Edge Lab narrator memory"
+            git push
+          fi
+
       - name: Upload pilot artifact
-        if: always() && hashFiles('output/run-report.json') != ''
+        if: always() && hashFiles('output/delivery/run-report.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: digital-edge-lab-pilot
