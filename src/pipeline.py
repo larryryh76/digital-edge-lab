@@ -297,7 +297,36 @@ def render(data, wav_path):
     match = re.search(r"mean_volume:\s*(-?[\d.]+)\s*dB", audio_log)
     if not match or float(match.group(1)) < -45:
         stop("Rendered MP4 audio is missing or nearly silent; refusing to report success.")
-    return final, duration
+    # Verify the finished MP4 has both streams and synchronized durations.
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries",
+         "stream=codec_type,duration", "-of", "json", str(final)],
+        check=True, capture_output=True, text=True,
+    )
+    streams = json.loads(probe.stdout).get("streams", [])
+    video_streams = [s for s in streams if s.get("codec_type") == "video"]
+    audio_streams = [s for s in streams if s.get("codec_type") == "audio"]
+    if not video_streams or not audio_streams:
+        stop("Final MP4 failed QA: expected both video and audio streams.")
+    try:
+        video_seconds = float(video_streams[0]["duration"])
+        audio_seconds = float(audio_streams[0]["duration"])
+    except (KeyError, TypeError, ValueError):
+        stop("Final MP4 QA could not read stream durations.")
+    if audio_seconds < duration * 0.95 or abs(video_seconds - audio_seconds) > 1.5:
+        stop(
+            f"Final MP4 audio/video duration mismatch "
+            f"(video={video_seconds:.2f}s, audio={audio_seconds:.2f}s, "
+            f"narration={duration:.2f}s)."
+        )
+    return final, duration, {
+        "video_duration_seconds": round(video_seconds, 2),
+        "audio_duration_seconds": round(audio_seconds, 2),
+        "audio_mean_volume_db": float(match.group(1)),
+        "audio_codec": "AAC",
+        "audio_sample_rate_hz": 48000,
+        "qa_passed": True,
+    }
 
 
 def main():
@@ -306,14 +335,27 @@ def main():
     (OUT / "metadata.json").write_text(json.dumps(data, indent=2, ensure_ascii=False))
     (OUT / "narration.txt").write_text(data["narration"], encoding="utf-8")
     wav = make_narration(data["narration"])
-    video, duration = render(data, wav)
+    video, duration, audio_qa = render(data, wav)
     report = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "title": data["title"], "topic": data["topic"],
         "video_file": video.name, "duration_seconds": round(duration, 2),
         "status": "rendered_not_published",
+        "audio_qa": audio_qa,
     }
-    (OUT / "run-report.json").write_text(json.dumps(report, indent=2))
+    report_path = OUT / "run-report.json"
+    report_path.write_text(json.dumps(report, indent=2))
+    # Keep silent intermediate renders and raw PCM out of the downloadable artifact.
+    delivery = OUT / "delivery"
+    delivery.mkdir(exist_ok=True)
+    for stale in delivery.iterdir():
+        if stale.is_file():
+            stale.unlink()
+    import shutil
+    shutil.copy2(video, delivery / video.name)
+    shutil.copy2(OUT / "metadata.json", delivery / "metadata.json")
+    shutil.copy2(OUT / "narration.txt", delivery / "narration.txt")
+    shutil.copy2(report_path, delivery / "run-report.json")
     print(json.dumps(report, indent=2))
     print("Pilot rendered. Inspect sources and media before posting.")
 
