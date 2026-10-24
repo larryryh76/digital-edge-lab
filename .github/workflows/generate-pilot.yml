@@ -7,7 +7,6 @@ on:
     paths:
       - "src/**"
       - ".github/workflows/generate-pilot.yml"
-      - "memory/channel-memory.json"
       - "requirements.txt"
   schedule:
     - cron: "0 10 * * 1"
