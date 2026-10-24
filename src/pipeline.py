@@ -185,55 +185,96 @@ def draw_card(scene, index, total, path, caption=""):
     d.text((W-180, 54), f"{index+1:02d} / {total:02d}", font=get_font(19, True), fill=(174, 193, 220))
     d.line((48, 94, W-48, 94), fill=(35, 54, 82), width=2)
 
-    # Abstract technical illustration changes with each scene instead of repeating one template.
+    # Interpret the scene brief so the illustration matches the story, not just its position.
+    brief = (str(scene.get("visual", "")) + " " + str(scene.get("on_screen_text", ""))).lower()
     cx, cy = W // 2, 430
-    if index % 6 == 0:  # connected workflow
-        xs = [105, 285, 465, 615]
+    if any(k in brief for k in ("document", "page", "text block", "hundred-page", "long text")):
+        # A tall document with highlighted lines and a lost-detail marker.
+        d.rounded_rectangle((205, cy-185, 515, cy+205), radius=18,
+                            fill=(13, 25, 46), outline=accent, width=4)
+        d.rectangle((235, cy-150, 485, cy-115), fill=(27, 49, 78))
+        for j in range(9):
+            yy = cy-85+j*27
+            color = accent if j in (1, 7) else (66, 89, 119)
+            d.rounded_rectangle((238, yy, 440+(j%3)*15, yy+9), radius=4, fill=color)
+        d.ellipse((420, cy+78, 466, cy+124), fill=(255, 92, 113))
+        d.line((443, cy+101, 548, cy+145), fill=(255, 92, 113), width=5)
+        d.text((500, cy+140), "?", font=get_font(46, True), fill=(255, 122, 136))
+    elif any(k in brief for k in ("curve", "valley", "attention", "recall", "middle effect", "performance")):
+        # A deliberately legible U-shaped recall curve with a highlighted weak middle.
+        points = [(80,cy+105),(145,cy+50),(205,cy+8),(270,cy+70),(360,cy+130),
+                  (450,cy+70),(525,cy+12),(630,cy+95)]
+        for a,b in zip(points, points[1:]):
+            d.line((*a,*b), fill=accent, width=8)
+        d.line((75,cy+150,645,cy+150), fill=(76,98,130), width=3)
+        d.rounded_rectangle((270,cy+75,390,cy+155), radius=14,
+                            fill=(76,32,58), outline=(255,100,135), width=3)
+        d.text((281,cy+101), "MIDDLE", font=get_font(18,True), fill=(255,218,228))
+    elif any(k in brief for k in ("chunk", "retrieval", "filter", "query", "split", "slice")):
+        # Show one source being divided into searchable chunks before retrieval.
+        d.rounded_rectangle((50,cy-92,205,cy+100), radius=18,
+                            fill=(13,29,53), outline=(112,131,164), width=3)
+        for j in range(5):
+            d.rounded_rectangle((73,cy-65+j*31,180,cy-49+j*31), radius=5,
+                                fill=(100,121,153) if j!=2 else accent)
+        d.line((210,cy,270,cy), fill=accent, width=6)
+        d.polygon([(260,cy-12),(280,cy),(260,cy+12)], fill=accent)
+        for j,(x,y) in enumerate([(310,cy-100),(310,cy-20),(310,cy+60)]):
+            d.rounded_rectangle((x,y,x+115,y+58),radius=12,
+                                fill=(13,29,53),outline=accent if j==1 else (58,83,120),width=3)
+            d.text((x+34,y+18),f"CHUNK {j+1}",font=get_font(14,True),fill=(238,246,255))
+        d.line((430,cy,485,cy),fill=accent,width=6)
+        d.polygon([(475,cy-12),(495,cy),(475,cy+12)],fill=accent)
+        d.rounded_rectangle((505,cy-52,650,cy+52),radius=16,
+                            fill=(20,45,57),outline=(48,220,170),width=3)
+        d.text((525,cy-12),"MATCH",font=get_font(19,True),fill=(190,255,231))
+    elif any(k in brief for k in ("before", "after", "versus", "compare", "bigger context", "mega-prompt")):
+        for x,title,color in [(48,"BEFORE",(255,106,121)),(372,"AFTER",accent)]:
+            d.rounded_rectangle((x,cy-125,x+298,cy+140),radius=22,
+                                fill=(13,25,46),outline=color,width=3)
+            d.text((x+20,cy-95),title,font=get_font(21,True),fill=color)
+        for j,wid in enumerate((220,100,185,80)):
+            d.rounded_rectangle((70,cy-42+j*43,70+wid,cy-22+j*43),radius=8,fill=(255,106,121))
+        for j,wid in enumerate((90,150,205,240)):
+            d.rounded_rectangle((395,cy-42+j*43,395+wid,cy-22+j*43),radius=8,fill=accent)
+        d.ellipse((323,cy-28,365,cy+14),fill=(240,247,255))
+        d.polygon([(338,cy-17),(353,cy-7),(338,cy+3)],fill=(7,12,25))
+    elif any(k in brief for k in ("prompt", "anchor", "instruction", "top", "bottom", "context")):
+        d.rounded_rectangle((120,cy-165,600,cy+170),radius=22,
+                            fill=(13,25,46),outline=accent,width=3)
+        d.rounded_rectangle((148,cy-135,572,cy-82),radius=12,
+                            fill=(17,74,80),outline=(48,220,170),width=2)
+        d.text((172,cy-119),"KEY INSTRUCTIONS",font=get_font(20,True),fill=(194,255,239))
+        for j,wid in enumerate((365,300,330,240,345)):
+            yy=cy-48+j*35
+            d.rounded_rectangle((155,yy,155+wid,yy+12),radius=5,fill=(63,85,116))
+        d.rounded_rectangle((148,cy+112,572,cy+157),radius=12,
+                            fill=(17,74,80),outline=(48,220,170),width=2)
+        d.text((172,cy+122),"THE QUESTION",font=get_font(18,True),fill=(194,255,239))
+    elif any(k in brief for k in ("checklist", "steps", "workflow", "process", "output")):
+        xs = [95, 270, 445, 620]
         labels = ["INPUT", "STEP 1", "STEP 2", "OUTPUT"]
-        for j, x in enumerate(xs):
-            d.rounded_rectangle((x-58, cy-58, x+58, cy+58), radius=18,
-                                fill=(13, 29, 53), outline=accent, width=4)
-            d.text((x-43, cy-12), labels[j], font=get_font(13, True), fill=(240, 247, 255))
-            if j < len(xs)-1:
-                d.line((x+60, cy, xs[j+1]-62, cy), fill=accent, width=5)
-                d.polygon([(xs[j+1]-70,cy-10),(xs[j+1]-55,cy),(xs[j+1]-70,cy+10)], fill=accent)
-    elif index % 6 == 1:  # comparison
-        for x, title, color, bars in [(70, "ONE BIG PROMPT", (255, 112, 112), [150, 80, 125, 55]),
-                                      (370, "SMALL STEPS", accent, [55, 95, 130, 160])]:
-            d.rounded_rectangle((x, cy-125, x+275, cy+145), radius=22,
-                                fill=(13, 25, 46), outline=color, width=3)
-            d.text((x+18, cy-98), title, font=get_font(17, True), fill=color)
-            for j, bw in enumerate(bars):
-                d.rounded_rectangle((x+22, cy-45+j*42, x+22+bw, cy-25+j*42),
-                                    radius=8, fill=color)
-    elif index % 6 == 2:  # modular steps
-        for j in range(3):
-            x, y = 78+j*195, cy-95+j*28
-            d.rounded_rectangle((x,y,x+165,y+180), radius=20,
-                                fill=(13, 29, 53), outline=accent, width=3)
-            d.ellipse((x+55,y+24,x+110,y+79), outline=accent, width=4)
-            d.text((x+70,y+39), str(j+1), font=get_font(20, True), fill=(245,249,255))
-            d.text((x+20,y+112), ["CLEAN","ANALYZE","SUMMARIZE"][j], font=get_font(14, True), fill=(218,232,250))
-    elif index % 6 == 3:  # data bars
-        baseline = cy+115
-        for j, height in enumerate([80, 145, 105, 205, 165, 240]):
-            x = 95+j*88
-            d.rounded_rectangle((x,baseline-height,x+48,baseline), radius=10, fill=accent)
-            d.ellipse((x+12,baseline-height-18,x+36,baseline-height+6), fill=(239,248,255))
-        d.line((70,baseline+4,W-70,baseline+4), fill=(93,123,163), width=3)
-    elif index % 6 == 4:  # checklist
-        for j, label in enumerate(["Clear inputs", "One task at a time", "Check each result", "Build final output"]):
-            y = cy-120+j*66
-            d.rounded_rectangle((85,y,135,y+42), radius=10, outline=accent, width=3)
-            d.line((97,y+21,110,y+32,126,y+10), fill=accent, width=4)
-            d.text((155,y+6), label, font=get_font(21, True), fill=(235,243,255))
-    else:  # network of linked nodes
-        nodes = [(140,cy-70),(300,cy-145),(300,cy+10),(470,cy-70),(590,cy+30)]
-        edges = [(0,1),(0,2),(1,3),(2,3),(3,4)]
-        for a,b in edges:
-            d.line((*nodes[a],*nodes[b]), fill=(48,91,145), width=5)
+        for j,x in enumerate(xs):
+            d.rounded_rectangle((x-58,cy-58,x+58,cy+58),radius=18,
+                                fill=(13,29,53),outline=accent,width=4)
+            d.text((x-43,cy-12),labels[j],font=get_font(13,True),fill=(240,247,255))
+            if j<len(xs)-1:
+                d.line((x+60,cy,xs[j+1]-62,cy),fill=accent,width=5)
+                d.polygon([(xs[j+1]-70,cy-10),(xs[j+1]-55,cy),(xs[j+1]-70,cy+10)],fill=accent)
+    elif any(k in brief for k in ("network", "connected", "node", "system", "architecture")):
+        nodes=[(140,cy-70),(300,cy-145),(300,cy+10),(470,cy-70),(590,cy+30)]
+        for a,b in [(0,1),(0,2),(1,3),(2,3),(3,4)]:
+            d.line((*nodes[a],*nodes[b]),fill=(48,91,145),width=5)
         for x,y in nodes:
-            d.ellipse((x-30,y-30,x+30,y+30), fill=(13,29,53), outline=accent, width=5)
+            d.ellipse((x-30,y-30,x+30,y+30),fill=(13,29,53),outline=accent,width=5)
+    else:
+        baseline=cy+115
+        heights=[80,145,105,205,165,240]
+        for j,height in enumerate(heights):
+            x=95+j*88
+            d.rounded_rectangle((x,baseline-height,x+48,baseline),radius=10,fill=accent)
+            d.ellipse((x+12,baseline-height-18,x+36,baseline-height+6),fill=(239,248,255))
+        d.line((70,baseline+4,W-70,baseline+4),fill=(93,123,163),width=3)
 
     # Main scene statement
     label = str(scene.get("on_screen_text", "A useful idea")).strip().upper()
