@@ -90,14 +90,28 @@ def generate_script(memory):
         "continuity_context": running_context,
     }, ensure_ascii=False)
     prompt = f"""
-You are the editorial desk for Digital Edge Lab, a faceless educational brand covering AI,
-technology, digital tools, and online-business workflows. Create one useful 60-75 second
-vertical video. Choose an evergreen topic. Never invent statistics, promise income, or claim
-the brand personally tested anything. Include 2-4 reputable source URLs; do not invent URLs.
-You are the recurring narrator Edge. Speak in a consistent first-person editorial voice as the channel's guide, not as a human pretending to have a personal life. Use the channel memory below, build on prior episodes when useful, and avoid repeating recent topics. Do not claim to remember anything outside the supplied memory.\nCHANNEL MEMORY: {memory_prompt}\nReturn ONLY JSON with: title, description, topic, narration, scenes, sources, hashtags.
-narration should be 120-160 words. scenes should contain 6-8 objects, each with
-"visual" and "on_screen_text". Sources should be objects with "name", "url", and "supports".
-Use visuals that can be illustrated with typography and simple original shapes.
+You are the editorial desk and story producer for Digital Edge Lab, a faceless educational brand
+covering AI, technology, digital tools, and evidence-based online-business workflows. Create one
+60-75 second vertical explainer with a strong curiosity-gap opening, a clear central question,
+a concrete example, a useful takeaway, and a memorable final line. Do not write a generic list
+of definitions. Never invent statistics, promise income, or claim the brand personally tested
+anything. Include 2-3 reputable source URLs that you know are real; prefer primary research,
+official documentation, and original product docs. Do not invent URLs or overstate what a source
+proves. If uncertain, choose a narrower topic you can explain accurately.
+You are the recurring narrator Edge. Keep a recognizable, conversational editorial voice and
+consistent point of view without pretending to be a human with a private life. Use the supplied
+memory, build continuity when helpful, and avoid repeating recent topics. Do not claim memory
+outside the supplied context.
+CHANNEL MEMORY: {memory_prompt}
+Return ONLY JSON with: title, description, topic, narration, scenes, sources, hashtags.
+Narration: 115-145 words, natural spoken English, varied sentence length, no generic greeting,
+no filler such as "in today's fast-paced world", and no fake first-person experiments. Every
+scene must advance the story and be visually distinct. Create 6-8 scene objects with "visual"
+and "on_screen_text". The visual field must describe a concrete diagram, interface mockup, object,
+or visual metaphor that can be drawn—not just a mood. On-screen text should be 3-7 words, punchy,
+large, and not repeat narration verbatim. At least one scene should show a specific worked
+example or before/after comparison. Sources must be objects with "name", "url", and "supports".
+Use original shapes and typography; do not imply stock footage or screenshots were created.
 """
     parts = request_gemini(
         TEXT_MODEL,
@@ -245,17 +259,56 @@ def draw_card(scene, index, total, path, caption=""):
 
 
 def split_caption(text, count):
-    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    sentences = [s for s in sentences if s]
-    chunks = [[] for _ in range(count)]
-    # Allocate sentences by word count to roughly equal scene lengths.
-    totals = [0] * count
-    for sentence in sentences:
-        idx = min(range(count), key=lambda i: totals[i])
-        chunks[idx].append(sentence)
-        totals[idx] += len(sentence.split())
-    return [" ".join(group) for group in chunks]
+    """Split narration into sequential chunks so captions follow the spoken story."""
+    words = text.strip().split()
+    if not words:
+        return ["" for _ in range(count)]
+    count = max(1, count)
+    chunks, start = [], 0
+    for i in range(count):
+        remaining = len(words) - start
+        slots = count - i
+        end = len(words) if slots == 1 else min(len(words), start + max(1, round(remaining / slots)))
+        chunks.append(" ".join(words[start:end]))
+        start = end
+    return chunks
 
+
+def validate_sources(data):
+    """Check whether cited source URLs are reachable; reachability is not proof of a claim."""
+    checks = []
+    for source in data.get("sources", []):
+        url = str(source.get("url", "")).strip()
+        item = {"name": source.get("name", ""), "url": url, "reachable": False, "status_code": None}
+        if not re.match(r"^https://[^\\s]+$", url, re.I):
+            item["error"] = "URL must be a valid HTTPS URL"
+            checks.append(item)
+            continue
+        try:
+            response = requests.get(
+                url, timeout=12, allow_redirects=True,
+                headers={"User-Agent": "DigitalEdgeLab-SourceCheck/1.0"}
+            )
+            item["status_code"] = response.status_code
+            item["final_url"] = response.url
+            # Some reputable sites block automated clients; reachable is not content verification.
+            item["reachable"] = response.status_code < 400 or response.status_code in (401, 403, 429)
+            if not item["reachable"]:
+                item["error"] = "URL returned an HTTP error"
+        except requests.RequestException as exc:
+            item["error"] = str(exc)[:240]
+        checks.append(item)
+    data["source_checks"] = checks
+    reachable = sum(1 for item in checks if item["reachable"])
+    data["source_validation"] = {
+        "checked_count": len(checks),
+        "reachable_count": reachable,
+        "reachability_only": True,
+        "note": "A reachable URL does not prove that the source supports the claim; editorial review is still required."
+    }
+    if not checks or reachable == 0:
+        stop("No source URL could be reached. Refusing to produce a pilot with unverified source links.")
+    return data
 
 def render(data, wav_path):
     probe = subprocess.run(
@@ -357,6 +410,7 @@ def main():
     print("Generating a Digital Edge Lab pilot (not publishing it)...")
     memory = load_channel_memory()
     data = generate_script(memory)
+    data = validate_sources(data)
     (OUT / "metadata.json").write_text(json.dumps(data, indent=2, ensure_ascii=False))
     (OUT / "narration.txt").write_text(data["narration"], encoding="utf-8")
     # Update durable editorial memory; the workflow commits this file back to the repo.
