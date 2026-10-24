@@ -13,9 +13,16 @@
     "Avoid repetitive topic framing and repeated visual templates.",
     "Be honest about uncertainty, tradeoffs, risks, and what viewers can do next."
   ],
-  "recent_topics": [],
+  "recent_topics": [
+    {
+      "title": "Why Prompt Chaining Beats Mega-Prompts",
+      "topic": "Prompt Chaining vs. Mega-Prompts in AI Workflows",
+      "created_at_utc": "2026-10-24T19:25:02.722875+00:00"
+    }
+  ],
   "running_context": [
     "The channel covers AI, technology, digital tools, online-business workflows, and evidence-based case studies.",
-    "The production system is still in pilot-quality testing; do not publish automatically until quality checks pass."
+    "The production system is still in pilot-quality testing; do not publish automatically until quality checks pass.",
+    "Episode: Why Prompt Chaining Beats Mega-Prompts — Prompt Chaining vs. Mega-Prompts in AI Workflows"
   ]
 }
