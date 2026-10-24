@@ -42,5 +42,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: digital-edge-lab-pilot
-          path: output/
+          path: output/delivery/
           retention-days: 7
