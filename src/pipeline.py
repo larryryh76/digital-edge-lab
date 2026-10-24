@@ -14,6 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "output"
 OUT.mkdir(exist_ok=True)
+MEMORY_DIR = ROOT / "memory"
+MEMORY_FILE = MEMORY_DIR / "channel-memory.json"
 API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.8-flash")
 TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
@@ -64,13 +66,35 @@ def request_gemini(model, parts, config=None):
         stop("Unexpected Gemini response: " + json.dumps(data)[:1200])
 
 
-def generate_script():
-    prompt = """
+def load_channel_memory():
+    """Load durable editorial memory committed to the repository."""
+    if not MEMORY_FILE.exists():
+        return {"persona": "Edge", "channel_name": "Digital Edge Lab",
+                "voice": "clear, curious, confident, conversational English",
+                "principles": [], "recent_topics": [], "running_context": []}
+    try:
+        return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        stop("Channel memory file is unreadable; refusing to discard continuity.")
+
+
+def generate_script(memory):
+    recent = memory.get("recent_topics", [])[-20:]
+    running_context = memory.get("running_context", [])[-12:]
+    memory_prompt = json.dumps({
+        "narrator_persona": memory.get("persona", "Edge"),
+        "channel_name": memory.get("channel_name", "Digital Edge Lab"),
+        "voice": memory.get("voice", "clear, curious, confident, conversational"),
+        "principles": memory.get("principles", []),
+        "recent_topics_to_avoid_repeating": recent,
+        "continuity_context": running_context,
+    }, ensure_ascii=False)
+    prompt = f"""
 You are the editorial desk for Digital Edge Lab, a faceless educational brand covering AI,
 technology, digital tools, and online-business workflows. Create one useful 60-75 second
 vertical video. Choose an evergreen topic. Never invent statistics, promise income, or claim
 the brand personally tested anything. Include 2-4 reputable source URLs; do not invent URLs.
-Return ONLY JSON with: title, description, topic, narration, scenes, sources, hashtags.
+You are the recurring narrator Edge. Speak in a consistent first-person editorial voice as the channel's guide, not as a human pretending to have a personal life. Use the channel memory below, build on prior episodes when useful, and avoid repeating recent topics. Do not claim to remember anything outside the supplied memory.\nCHANNEL MEMORY: {memory_prompt}\nReturn ONLY JSON with: title, description, topic, narration, scenes, sources, hashtags.
 narration should be 120-160 words. scenes should contain 6-8 objects, each with
 "visual" and "on_screen_text". Sources should be objects with "name", "url", and "supports".
 Use visuals that can be illustrated with typography and simple original shapes.
@@ -331,9 +355,21 @@ def render(data, wav_path):
 
 def main():
     print("Generating a Digital Edge Lab pilot (not publishing it)...")
-    data = generate_script()
+    memory = load_channel_memory()
+    data = generate_script(memory)
     (OUT / "metadata.json").write_text(json.dumps(data, indent=2, ensure_ascii=False))
     (OUT / "narration.txt").write_text(data["narration"], encoding="utf-8")
+    # Update durable editorial memory; the workflow commits this file back to the repo.
+    history = list(memory.get("recent_topics", []))
+    history.append({"title": data["title"], "topic": data["topic"],
+                    "created_at_utc": datetime.now(timezone.utc).isoformat()})
+    memory["recent_topics"] = history[-30:]
+    context = list(memory.get("running_context", []))
+    context.append(f"Episode: {data['title']} — {data['topic']}")
+    memory["running_context"] = context[-20:]
+    (OUT / "channel-memory.json").write_text(
+        json.dumps(memory, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     wav = make_narration(data["narration"])
     video, duration, audio_qa = render(data, wav)
     report = {
@@ -356,6 +392,7 @@ def main():
     shutil.copy2(OUT / "metadata.json", delivery / "metadata.json")
     shutil.copy2(OUT / "narration.txt", delivery / "narration.txt")
     shutil.copy2(report_path, delivery / "run-report.json")
+    shutil.copy2(OUT / "channel-memory.json", delivery / "channel-memory.json")
     print(json.dumps(report, indent=2))
     print("Pilot rendered. Inspect sources and media before posting.")
 
