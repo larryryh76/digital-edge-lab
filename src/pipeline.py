@@ -347,8 +347,12 @@ def validate_sources(data):
         "reachability_only": True,
         "note": "A reachable URL does not prove that the source supports the claim; editorial review is still required."
     }
-    if not checks or reachable == 0:
-        stop("No source URL could be reached. Refusing to produce a pilot with unverified source links.")
+    # Network reachability is advisory: hosted runners may block domains or have transient
+    # network failures. Do not abort the entire render for that alone; mark the episode for review.
+    data["source_validation"]["review_required"] = (not checks or reachable == 0)
+    data["source_validation"]["status"] = (
+        "reachable_links_found" if reachable else "manual_review_required"
+    )
     return data
 
 def render(data, wav_path):
