@@ -600,6 +600,14 @@ def render(data, wav_path):
 
 def main():
     print("Generating a Digital Edge Lab pilot (not publishing it)...")
+    # Remove stale files first so a failed generation cannot masquerade as a fresh delivery.
+    for stale in OUT.iterdir():
+        if stale.is_file():
+            stale.unlink()
+        elif stale.is_dir():
+            shutil.rmtree(stale)
+    OUT.mkdir(exist_ok=True)
+    diagnostic("run", {"status": "started", "configured_text_model": TEXT_MODEL, "configured_tts_model": TTS_MODEL})
     memory = load_channel_memory()
     data = generate_script(memory)
     data = validate_sources(data)
