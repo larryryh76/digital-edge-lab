@@ -28,6 +28,30 @@ def stop(message):
     raise SystemExit(1)
 
 
+def list_available_models():
+    """Discover models exposed by this API key instead of relying on retired names."""
+    try:
+        response = requests.get(
+            "https://generativelanguage.googleapis.com/v1beta/models",
+            params={"key": API_KEY, "pageSize": 1000},
+            timeout=30,
+        )
+        if not response.ok:
+            print(f"Gemini model discovery unavailable (HTTP {response.status_code}); using configured model only.", flush=True)
+            return []
+        data = response.json()
+        models = []
+        for item in data.get("models", []):
+            name = str(item.get("name", "")).removeprefix("models/")
+            methods = item.get("supportedGenerationMethods", [])
+            if name and "generateContent" in methods:
+                models.append(name)
+        return models
+    except (requests.RequestException, ValueError) as exc:
+        print(f"Gemini model discovery failed ({exc}); using configured model only.", flush=True)
+        return []
+
+
 def request_gemini(model, parts, config=None):
     if not API_KEY:
         stop("Missing GEMINI_API_KEY repository secret.")
@@ -35,14 +59,21 @@ def request_gemini(model, parts, config=None):
     if config:
         body["generationConfig"] = config
 
-    # Try the configured model first, then compatible fallbacks when Google returns
-    # overload/model-unavailable errors. A transient failure must not kill the daily run.
     is_audio = bool(config and "AUDIO" in config.get("responseModalities", []))
     candidates = [model]
+    available = list_available_models()
     if is_audio:
-        candidates += ["gemini-2.5-flash-preview-tts"]
+        # TTS models are specialized; use only models actually exposed to this API key.
+        candidates += [
+            name for name in available
+            if "tts" in name.lower() and ("flash" in name.lower() or "pro" in name.lower())
+        ]
     else:
-        candidates += ["gemini-2.5-flash", "gemini-2.0-flash"]
+        # Prefer the configured model, then available non-retired flash models.
+        candidates += [
+            name for name in available
+            if "flash" in name.lower() and "tts" not in name.lower()
+        ]
     models = list(dict.fromkeys(candidates))
     import time
     last_error = "No model attempted"
@@ -52,34 +83,35 @@ def request_gemini(model, parts, config=None):
             try:
                 response = requests.post(url, params={"key": API_KEY}, json=body, timeout=180)
             except requests.RequestException as exc:
-                last_error = f"network error: {exc}"
+                last_error = f"network error on {model_name}: {exc}"
                 if attempt < 2:
                     wait = 5 * (attempt + 1)
                     print(f"Gemini network issue on {model_name}; retrying in {wait}s...", flush=True)
                     time.sleep(wait)
                     continue
+                print(f"Gemini model {model_name} exhausted network retries.", flush=True)
                 break
             if response.ok:
                 try:
                     data = response.json()
                     return data["candidates"][0]["content"]["parts"]
                 except (ValueError, KeyError, IndexError, TypeError):
-                    last_error = "Unexpected Gemini response: " + response.text[:1000]
+                    last_error = "Unexpected Gemini response on " + model_name + ": " + response.text[:700]
+                    print(last_error, flush=True)
                     break
-            last_error = f"Gemini API {response.status_code} on {model_name}: {response.text[:1000]}"
-            if response.status_code not in (429, 500, 502, 503, 504):
-                # Invalid model/request/auth errors will not improve by retrying another model
-                # except 404, which can mean a model is not enabled or no longer available.
-                if response.status_code != 404:
-                    stop(last_error)
-                break
-            if attempt < 2:
+            last_error = f"Gemini API {response.status_code} on {model_name}: {response.text[:700]}"
+            print(last_error, flush=True)
+            if response.status_code not in (429, 500, 502, 503, 504, 404):
+                stop(last_error)
+            if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
                 wait = 5 * (attempt + 1)
-                print(f"Gemini API {response.status_code} on {model_name}; retrying in {wait}s...", flush=True)
+                print(f"Retrying {model_name} in {wait}s...", flush=True)
                 time.sleep(wait)
+                continue
+            break
         if model_name != models[-1]:
-            print(f"Switching to fallback model after {model_name} failed.", flush=True)
-    stop("All compatible Gemini models failed. " + last_error)
+            print(f"Trying next API-listed model after {model_name} failed.", flush=True)
+    stop("All available Gemini models failed. " + last_error)
 
 
 def load_channel_memory():
