@@ -385,6 +385,16 @@ def render(data, wav_path):
         )
         if not image.exists() or image.stat().st_size < 10000:
             stop(f"Blender did not produce a valid 3D render for scene {i + 1}.")
+        # Add readable, timed narration captions over the 3D image (not a slide template).
+        frame = Image.open(image).convert("RGB")
+        painter = ImageDraw.Draw(frame)
+        painter.rounded_rectangle((28, 1000, W - 28, 1210), radius=24,
+                                  fill=(8, 14, 28), outline=(54, 92, 135), width=2)
+        caption_lines = textwrap.wrap(captions[i].strip(), width=38)[:3]
+        for line_no, line in enumerate(caption_lines):
+            painter.text((52, 1034 + line_no * 43), line, font=get_font(21),
+                         fill=(239, 245, 255), stroke_width=0)
+        frame.save(image)
         clip = OUT / f"segment_{i:02d}.mp4"
         # Blender renders the 3D scene; FFmpeg adds a restrained moving camera crop and transitions.
         # This is the first 3D milestone, not yet full character animation.
