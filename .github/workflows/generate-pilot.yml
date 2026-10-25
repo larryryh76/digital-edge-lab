@@ -13,7 +13,7 @@ on:
 
 concurrency:
   group: digital-edge-lab-pilot-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -40,6 +40,14 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Python syntax and offline tests
+        run: |
+          python -m compileall -q src tests
+          python -m unittest discover -s tests -v
+
+      - name: Blender smoke test
+        run: python tests/blender_smoke.py
+
       - name: Generate pilot video
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -61,10 +69,21 @@ jobs:
             git push
           fi
 
-      - name: Upload pilot artifact
-        if: always() && hashFiles('output/delivery/run-report.json') != ''
+      - name: Upload successful delivery
+        if: success() && hashFiles('output/delivery/run-report.json') != ''
         uses: actions/upload-artifact@v4
         with:
           name: digital-edge-lab-pilot
           path: output/delivery/
-          retention-days: 7
+          retention-days: 14
+
+      - name: Preserve failure diagnostics
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-edge-lab-failure-${{ github.run_number }}
+          path: |
+            output/**
+            !output/delivery/digital-edge-lab-pilot.mp4
+          if-no-files-found: warn
+          retention-days: 14
