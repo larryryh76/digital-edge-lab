@@ -147,7 +147,12 @@ storytelling, not a lecture or a slideshow. Do not imitate any named creator, ch
 signature catchphrase, or exact visual style. Build a distinct Digital Edge Lab identity: midnight
 blue environments, electric-cyan highlights, warm metallic accents, tactile 3D objects, dramatic
 lighting, close-up-to-wide visual progression, purposeful camera movement, and restrained editorial
-graphics. Never invent statistics, promise income, or claim the brand personally tested anything.
+graphics. Never invent statistics, promise income, or claim the brand personally tested anything. Do not choose
+an abstract AI-workflow topic merely because it sounds technical. Prefer a vivid, physical, surprising
+question with an answer that can be demonstrated on screen in 30-50 seconds. The narration must be
+factually coherent to a general audience: define any necessary technical term in plain English,
+avoid invented mechanisms and grandiose claims, and never confuse a metaphor with a literal process.
+If the topic needs nuance, narrow the claim rather than bluffing.
 Include 2-3 reputable source URLs you believe are real; prefer primary research, official docs, and
 original product documentation. Do not invent URLs or overstate what a source proves. If uncertain,
 choose a narrower topic that can be explained accurately.
@@ -156,12 +161,16 @@ wit used sparingly. Edge is a consistent fictional editorial narrator, not a hum
 private life. Use supplied memory for continuity and avoid repeating recent topics.
 CHANNEL MEMORY: {memory_prompt}
 Return ONLY JSON with: title, description, topic, narration, scenes, sources, hashtags.
-Narration: 105-130 words, natural spoken English with varied rhythm, intentional pauses using
-punctuation, no generic greeting, no filler, no fake first-person experiments. Start with a vivid
+Narration: 95-120 words, natural spoken English with varied rhythm, intentional pauses using
+punctuation, no generic greeting, no filler, no fake first-person experiments. Every sentence must
+advance the story or explain what the viewer is seeing. Avoid jargon unless immediately explained.
+Read it aloud mentally: if it sounds like an AI blog post, rewrite it as spoken language. Start with a vivid
 claim, surprising contrast, or specific question—not "Did you know?". End with a satisfying payoff.
 Create 6-8 scene objects with "visual" and "on_screen_text". Each scene must describe a different
 shot and physical composition that can be rendered as a distinct 3D setup: specify hero object,
-camera distance/angle, movement or action implied, environment, and lighting. Avoid reusing the
+camera distance/angle, movement or action, environment, and lighting. The action must be filmable:
+an object falls, cracks, opens, expands, collides, transforms, flows, is revealed by a cutaway, or
+moves through a space. Do not describe static diagrams, floating text cards, or a list of facts. Avoid reusing the
 same hero object in adjacent scenes. Include at least one visual transformation, a concrete
 worked example, and a clear reveal. Do not ask the renderer to show legible paragraphs or tiny UI
 text. On-screen text should be 2-5 words, punchy, readable on a phone, and not repeat narration.
@@ -182,20 +191,43 @@ never imply stock footage or real screenshots were created.
     required = ("title", "description", "topic", "narration", "scenes", "sources", "hashtags")
     if any(k not in data for k in required):
         stop("Generated script is missing required fields.")
-    if len(data["narration"].split()) < 80 or len(data["scenes"]) < 4:
+    if len(data["narration"].split()) < 80 or len(data["scenes"]) < 5:
         stop("Generated narration or scene plan is too short.")
+    # Reject generic filler and unsupported pseudo-technical explanations before paying for TTS.
+    narration = str(data["narration"]).strip()
+    if len(narration.split()) > 145:
+        stop("Narration is too long for the target short; refusing to render rushed speech.")
+    weak_openers = ("in today's video", "welcome back", "did you know", "in the world of")
+    if narration.lower().startswith(weak_openers):
+        stop("Narration opens with generic filler; regenerate with a specific curiosity hook.")
+    if not any(mark in narration for mark in ("?", "!", ".")):
+        stop("Narration lacks natural sentence structure.")
+    for field in ("title", "topic", "description"):
+        if not str(data.get(field, "")).strip():
+            stop(f"Generated script has an empty {field}.")
+    if not isinstance(data["scenes"], list) or not isinstance(data["sources"], list):
+        stop("Generated scenes and sources must be structured lists.")
     return data
 
 
 def make_narration(text):
-    prompt = "Read this narration exactly in a natural, clear, confident English voice at a moderate pace:\n\n" + text
+    # A warm, grounded documentary delivery with human pacing; avoid synthetic announcer energy.
+    prompt = (
+        "Voice direction for Edge, the Digital Edge Lab narrator: sound like a real, confident "
+        "documentary storyteller speaking to one curious person. Use a warm, mid-low register, "
+        "natural conversational rhythm, subtle curiosity, restrained emotion, clean consonants, "
+        "and short intentional pauses at commas and reveals. Emphasize only the key words. "
+        "Do not sound robotic, overexcited, salesy, or like a news bulletin. Do not add words, "
+        "ad-libs, or sound effects. Read the supplied narration verbatim.\n\n"
+        + text
+    )
     parts = request_gemini(
         TTS_MODEL,
         [{"text": prompt}],
         {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
-                "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Kore"}}
+                "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Charon"}}
             },
         },
     )
@@ -376,7 +408,7 @@ def validate_sources(data):
     for source in data.get("sources", []):
         url = str(source.get("url", "")).strip()
         item = {"name": source.get("name", ""), "url": url, "reachable": False, "status_code": None}
-        if not re.match(r"^https://\\S+$", url, re.I):
+        if not re.match(r"^https://\S+$", url, re.I):
             item["error"] = "URL must be a valid HTTPS URL"
             checks.append(item)
             continue
