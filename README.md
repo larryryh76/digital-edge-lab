@@ -1,45 +1,67 @@
 # Digital Edge Lab
 
-A zero-budget-first workflow for producing original faceless educational videos about AI, technology, digital tools, and online-business workflows.
+Digital Edge Lab is a zero-budget-first production workflow for original faceless educational content about AI, technology, digital tools, and evidence-based online-business workflows.
 
-## Current stage
+## Launch status
 
-This repository creates a **pilot video artifact**. It does not publish to YouTube or TikTok yet. Automatic publishing will only be added after the required platform accounts, permissions, and tests are complete.
+**Development / private-pilot stage.** The workflow generates a reviewable video artifact; it does not publish publicly. We will only enable platform publishing after account ownership, permissions, upload tests, and quality checks are verified.
 
-## Android-friendly setup
+## Required account setup
 
-1. Open **Settings → Secrets and variables → Actions** in this repository.
-2. Choose **New repository secret**.
-3. Set the name to `GEMINI_API_KEY` and paste a Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-4. Open the **Actions** tab.
-5. Select **Digital Edge Lab — Generate pilot** → **Run workflow** → **Run workflow**.
-6. Open the finished run and download the `digital-edge-lab-pilot` artifact.
+### 1. Google AI Studio (script and narration)
+1. Open https://aistudio.google.com/app/apikey and create or review an API key.
+2. In this repository, open **Settings → Secrets and variables → Actions → New repository secret**.
+3. Name the secret exactly `GEMINI_API_KEY`. Never commit or share the key.
+4. The workflow tries compatible fallback models if a configured Gemini model is overloaded or unavailable. API quotas and model availability are not guaranteed.
 
-Never paste an API key into source code, issues, screenshots, or chat. The repository is public, so everything committed here is visible to everyone.
+### 2. YouTube (publishing, after pilot approval)
+1. Create/confirm the channel under the intended Google account and enable 2-step verification.
+2. In Google Cloud Console, create a project, enable **YouTube Data API v3**, configure the OAuth consent screen, and create an OAuth client.
+3. Store OAuth credentials only in GitHub Actions secrets. Do not paste credentials into this repository.
+4. Test uploads as **private** first. Review title, description, audience setting, synthetic-media disclosure where applicable, and copyright before any public release.
+5. YouTube API projects subject to an audit/restriction may have upload limitations until reviewed.
 
-## What the pilot does
+### 3. TikTok (publishing, after pilot approval)
+1. Confirm the TikTok account and account type.
+2. Register an app in TikTok for Developers and apply for Content Posting API access and the required scopes.
+3. Complete the platform's authorization flow and any required audit. Direct posting availability is controlled by TikTok; credentials alone do not guarantee unrestricted posting.
+4. Test in the platform's allowed test/private mode before scheduling public posts.
 
-- Asks Gemini to produce a short script, scene plan, and source URLs.
-- Requests narration from Gemini TTS.
-- Generates original blue/cyan motion-graphic cards.
-- Renders a vertical MP4 using FFmpeg.
-- Uploads the result as a downloadable workflow artifact.
+**Important:** YouTube and TikTok publishing are not enabled in this repository yet. Account login, OAuth consent, app approval, and any account verification must be completed by the account owner. Do not send passwords or API keys in chat.
 
-The pilot is a technical test, not a finished publishing system. Review facts, source URLs, audio, and video before posting.
+## Run the pilot
 
-## Free-tier limitations
+1. Open the **Actions** tab.
+2. Select **Digital Edge Lab — Generate pilot**.
+3. Choose **Run workflow**.
+4. When it finishes, download the `digital-edge-lab-pilot` artifact.
+5. Review the actual MP4, narration, sources, and run report before approving it.
 
-API availability, model names, and quotas can change. Do not enable billing or paid services unless you explicitly choose to. Consumer Gemini video-generation features are not the same as a free, unattended video-generation API. If Gemini TTS is unavailable for your account, the workflow will fail visibly rather than silently create a video with no narration.
+## Production pipeline
 
-## Roadmap
+- Generate a script and scene plan with Gemini.
+- Generate synthetic narration with Gemini TTS.
+- Render original procedural 3D scenes using Blender.
+- Add timed captions, camera movement, transitions, and narration with FFmpeg.
+- Check that the final MP4 contains synchronized audio and video and passes audio-level checks.
+- Package the deliverables as a downloadable artifact for human review.
 
-1. Generate and inspect the first pilot.
-2. Fix any API/model or rendering errors using the workflow logs.
-3. Improve visual variety and package long-form and vertical exports.
-4. Set up YouTube OAuth and test uploads as private/unlisted first.
-5. Apply for TikTok Content Posting API access and required scopes/audit.
-6. Enable scheduling only after end-to-end tests pass.
+The 3D renderer is an early-stage procedural renderer, not a replacement for a full professional animation studio. Visual quality is evaluated from generated outputs, not assumed from successful code execution.
 
-## Quality and compliance
+## 24-hour launch priorities
 
-Make videos useful and original, with meaningful explanations and editorial judgment. Do not invent statistics, claim personal testing that did not happen, or reuse media without permission. Repetitive low-value mass-produced content may not qualify for monetization. Disclose realistic synthetic/altered media where platform rules require it.
+1. Get a complete pilot build through script, narration, 3D render, and MP4 QA.
+2. Inspect the actual video and correct any visual/audio defects.
+3. Confirm source links and editorial accuracy.
+4. Confirm channel ownership and required account security.
+5. Complete YouTube OAuth setup and private-upload testing if credentials and account-owner authorization are available.
+6. Confirm TikTok developer access; do not promise automatic posting until access is granted.
+7. Only then enable scheduled publishing. Keep public release behind an explicit approval step until quality is consistent.
+
+## Editorial and platform safety
+
+- Never invent facts, statistics, source links, or claims of personally testing tools.
+- Use original visuals and licensed/authorized media only.
+- Add synthetic/altered-media disclosures when required.
+- Avoid repetitive mass-produced videos; each episode must have a distinct idea, real explanatory value, and meaningful editorial review.
+- Do not enable paid services or billing without explicit approval.
