@@ -33,6 +33,11 @@
       "title": "Why Vector Search Fails on Exact Matches",
       "topic": "Hybrid Search: Combining BM25 Lexical Matching with Dense Vector Embeddings",
       "created_at_utc": "2026-10-25T08:29:51.229636+00:00"
+    },
+    {
+      "title": "Why Running Two AI Models is Faster Than One",
+      "topic": "Speculative Decoding and Inference Latency Optimization in Large Language Models",
+      "created_at_utc": "2026-10-25T14:03:55.850284+00:00"
     }
   ],
   "running_context": [
@@ -41,6 +46,7 @@
     "Episode: Why Prompt Chaining Beats Mega-Prompts — Prompt Chaining vs. Mega-Prompts in AI Workflows",
     "Episode: Why AI Models Forget the Middle of Your Prompt — Context Window Degradation and the Lost-in-the-Middle Effect in LLMs",
     "Episode: Why \"Just Return JSON\" Breaks Your AI Pipelines — Constrained Decoding and Structured Outputs in Large Language Models",
-    "Episode: Why Vector Search Fails on Exact Matches — Hybrid Search: Combining BM25 Lexical Matching with Dense Vector Embeddings"
+    "Episode: Why Vector Search Fails on Exact Matches — Hybrid Search: Combining BM25 Lexical Matching with Dense Vector Embeddings",
+    "Episode: Why Running Two AI Models is Faster Than One — Speculative Decoding and Inference Latency Optimization in Large Language Models"
   ]
 }
