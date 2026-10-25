@@ -8,19 +8,25 @@ from mathutils import Vector
 
 # Usage: blender -b -t 2 --python src/blender_scene.py -- scene.json frame.png index total
 args = sys.argv[sys.argv.index("--") + 1:]
-brief_path, output_path, scene_index, scene_total = args
+brief_path, output_path, scene_index, scene_total, duration_arg = args
 brief = json.loads(Path(brief_path).read_text())
 index, total = int(scene_index), int(scene_total)
+shot_seconds = max(float(duration_arg), 2.0)
 scene = bpy.context.scene
 try:
     scene.render.engine = "BLENDER_EEVEE_NEXT"
 except Exception:
     scene.render.engine = "BLENDER_EEVEE"
 
-scene.render.resolution_x = 720
-scene.render.resolution_y = 1280
+scene.render.resolution_x = 540
+scene.render.resolution_y = 960
 scene.render.resolution_percentage = 100
-scene.render.image_settings.file_format = "PNG"
+scene.render.fps = 12
+scene.render.image_settings.file_format = "FFMPEG"
+scene.render.ffmpeg.format = "MPEG4"
+scene.render.ffmpeg.codec = "H264"
+scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
+scene.render.ffmpeg.ffmpeg_preset = "GOOD"
 scene.world.color = (0.006, 0.009, 0.02)
 scene.render.film_transparent = False
 scene.view_settings.view_transform = "AgX"
@@ -230,12 +236,53 @@ scene.camera.data.dof.use_dof = True
 scene.camera.data.dof.focus_object = bpy.data.objects.get("Core") or bpy.data.objects.get("Helmet crown")
 scene.camera.data.dof.aperture_fstop = 5.6
 scene.render.resolution_percentage = 100
-scene.render.image_settings.file_format = "PNG"
-scene.render.filepath = str(Path(output_path).resolve())
-scene.render.resolution_x, scene.render.resolution_y = 720, 1280
+scene.render.image_settings.file_format = "FFMPEG"
+scene.render.ffmpeg.format = "MPEG4"
+scene.render.ffmpeg.codec = "H264"
+scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
+scene.render.ffmpeg.ffmpeg_preset = "GOOD"
+scene.render.resolution_x, scene.render.resolution_y = 540, 960
+scene.render.resolution_percentage = 100
 scene.render.image_settings.color_depth = "8"
 scene.render.film_transparent = False
 scene.camera.data.lens = 55
-scene.render.resolution_percentage = 75 if index % 2 else 100
+scene.render.fps = 12
+scene.frame_start = 1
+scene.frame_end = max(24, int(shot_seconds * scene.render.fps))
 scene.render.filepath = str(Path(output_path).resolve())
-bpy.ops.render.render(write_still=True)
+
+# Real 3D animation: hero geometry has subtle independent motion, while the camera
+# pushes and arcs through the set. This is rendered frame-by-frame, not a still-image zoom.
+start_frame, end_frame = scene.frame_start, scene.frame_end
+for obj in list(scene.objects):
+    if obj.type in {"MESH", "CURVE", "FONT"}:
+        base_loc = obj.location.copy()
+        base_rot = obj.rotation_euler.copy()
+        obj.location.z = base_loc.z - 0.035
+        obj.rotation_euler.z = base_rot.z - 0.035
+        obj.keyframe_insert(data_path="location", frame=start_frame)
+        obj.keyframe_insert(data_path="rotation_euler", frame=start_frame)
+        obj.location = base_loc
+        obj.rotation_euler = base_rot
+        obj.keyframe_insert(data_path="location", frame=(start_frame + end_frame)//2)
+        obj.location.z = base_loc.z + 0.055
+        obj.rotation_euler.z = base_rot.z + (0.11 if index % 2 == 0 else -0.11)
+        obj.keyframe_insert(data_path="location", frame=end_frame)
+        obj.keyframe_insert(data_path="rotation_euler", frame=end_frame)
+
+camera = scene.camera
+camera_start = camera.location.copy()
+camera.rotation_euler = (Vector((0,0,1.25))-camera.location).to_track_quat("-Z","Y").to_euler()
+camera.keyframe_insert(data_path="location", frame=start_frame)
+camera.keyframe_insert(data_path="rotation_euler", frame=start_frame)
+camera.location.x += 0.32 if index % 2 == 0 else -0.32
+camera.location.z += 0.12
+camera.rotation_euler = (Vector((0,0,1.35))-camera.location).to_track_quat("-Z","Y").to_euler()
+camera.keyframe_insert(data_path="location", frame=end_frame)
+camera.keyframe_insert(data_path="rotation_euler", frame=end_frame)
+for action in bpy.data.actions:
+    for fcurve in action.fcurves:
+        for key in fcurve.keyframe_points:
+            key.interpolation = "BEZIER"
+scene.render.filepath = str(Path(output_path).resolve())
+bpy.ops.render.render(animation=True)
