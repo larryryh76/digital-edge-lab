@@ -378,22 +378,39 @@ def render(data, wav_path):
         blender = shutil.which("blender")
         if not blender:
             stop("Blender is required for the 3D-first renderer but was not found.")
-        subprocess.run(
-            [blender, "-b", "-t", "2", "--python", str(ROOT / "src" / "blender_scene.py"),
-             "--", str(scene_json), str(image), str(i), str(len(scenes))],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-        )
+        blender_log = cards / f"scene_{i:02d}_blender.log"
+        blender_env = os.environ.copy()
+        # Blender's bundled libraries can otherwise oversubscribe threads on hosted runners.
+        blender_env.update({
+            "OMP_NUM_THREADS": "1",
+            "OPENBLAS_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
+            "OPENCV_OPENCL_RUNTIME": "disabled",
+        })
+        with blender_log.open("w", encoding="utf-8") as log:
+            result = subprocess.run(
+                [blender, "-b", "-t", "1", "--python", str(ROOT / "src" / "blender_scene.py"),
+                 "--", str(scene_json), str(image), str(i), str(len(scenes))],
+                stdout=log, stderr=subprocess.STDOUT, text=True, env=blender_env,
+                timeout=240,
+            )
+        if result.returncode:
+            details = blender_log.read_text(encoding="utf-8", errors="replace")[-5000:]
+            stop(f"Blender render failed for scene {i + 1} (exit {result.returncode}). Log tail:\\n{details}")
         if not image.exists() or image.stat().st_size < 10000:
             stop(f"Blender did not produce a valid 3D render for scene {i + 1}.")
         # Add readable, timed narration captions over the 3D image (not a slide template).
         frame = Image.open(image).convert("RGB")
         painter = ImageDraw.Draw(frame)
-        painter.rounded_rectangle((28, 1000, W - 28, 1210), radius=24,
-                                  fill=(8, 14, 28), outline=(54, 92, 135), width=2)
+        fw, fh = frame.size
+        sx, sy = fw / W, fh / H
+        panel = (int(28*sx), int(1000*sy), fw-int(28*sx), fh-int(70*sy))
+        painter.rounded_rectangle(panel, radius=max(12, int(24*sx)),
+                                  fill=(8, 14, 28), outline=(54, 92, 135), width=max(1, int(2*sx)))
         caption_lines = textwrap.wrap(captions[i].strip(), width=38)[:3]
         for line_no, line in enumerate(caption_lines):
-            painter.text((52, 1034 + line_no * 43), line, font=get_font(21),
-                         fill=(239, 245, 255), stroke_width=0)
+            painter.text((int(52*sx), int((1034 + line_no * 43)*sy)), line,
+                         font=get_font(max(16, int(21*sx))), fill=(239, 245, 255), stroke_width=0)
         frame.save(image)
         clip = OUT / f"segment_{i:02d}.mp4"
         # Blender renders the 3D scene; FFmpeg adds a restrained moving camera crop and transitions.
