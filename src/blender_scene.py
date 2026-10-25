@@ -12,8 +12,10 @@ brief_path, output_path, scene_index, scene_total = args
 brief = json.loads(Path(brief_path).read_text())
 index, total = int(scene_index), int(scene_total)
 scene = bpy.context.scene
-scene.render.engine = "BLENDER_EEVEE_NEXT"
-scene.eevee.taa_render_samples = 32
+try:
+    scene.render.engine = "BLENDER_EEVEE_NEXT"
+except Exception:
+    scene.render.engine = "BLENDER_EEVEE"
 
 scene.render.resolution_x = 720
 scene.render.resolution_y = 1280
@@ -107,21 +109,40 @@ floor = cube("Infinite stage", (0, 0, -0.24), (16, 16, 0.4), floor_mat, 0.03)
 
 # Build a scene-specific 3D hero object, not a flat graphic.
 if historical:
-    # Original stylised Roman-inspired helmet bust: procedural geometry, not copied artwork.
-    cylinder("Bust plinth", (0, 0.1, 0.15), 1.18, 0.32, stone)
-    cylinder("Bronze trim", (0, 0.1, 0.34), 1.05, 0.06, gold)
-    sphere("Helmet crown", (0, 0.0, 1.62), (0.9, 0.66, 0.92), steel)
-    cube("Helmet brow", (0, -0.58, 1.48), (1.68, 0.18, 0.19), gold, 0.06)
-    cube("Nose guard", (0, -0.63, 1.08), (0.16, 0.18, 0.65), steel, 0.04)
-    for side in (-1, 1):
-        sphere("Helmet cheek guard", (side*0.7, -0.36, 1.0), (0.24, 0.18, 0.48), gold)
+    if any(k in brief_text for k in ("socrates", "philosoph", "athens", "thinker")):
+        cylinder("Pedestal", (0, 0.1, 0.15), 1.12, 0.3, stone)
+        cylinder("Bronze pedestal rim", (0, 0.1, 0.33), 1.0, 0.06, gold)
+        sphere("Philosopher head", (0, 0, 1.72), (0.68, 0.59, 0.82), stone)
+        sphere("Beard", (0, -0.43, 1.22), (0.48, 0.23, 0.43), stone)
+        for side in (-1, 1):
+            sphere("Eye", (side*0.24, -0.535, 1.83), (0.07,0.035,0.045), gold)
+            for j in range(3):
+                sphere("Hair curl", (side*(0.36+j*0.07), -0.25, 2.15-j*0.12), (0.13,0.13,0.13), stone)
         for j in range(3):
-            cube("Helmet crest rib", (side*(0.22+j*0.19), -0.05, 2.27-j*0.05), (0.07, 0.08, 0.42-j*0.06), red, 0.02)
+            cube("Ancient scroll", (-1.2+j*0.22, -0.05, 0.55+j*0.07), (0.16,0.55,0.12), gold, 0.045)
+        for j in range(5):
+            cube("Library column", ((j-2)*1.05, 1.7, 1.1), (0.12,0.15,2.5), stone, 0.025)
+    elif any(k in brief_text for k in ("shield", "formation", "battle", "soldier", "legion", "war")):
+        cylinder("Bust plinth", (0, 0.1, 0.15), 1.18, 0.32, stone)
+        for row in range(2):
+            for col in range(3):
+                x = (col-1)*0.86 + (0.42 if row else 0)
+                z = 0.95 + row*0.85
+                cube("Roman shield", (x, -0.1+row*0.28, z), (0.76,0.16,0.92), red if (col+row)%2 else steel, 0.12)
+                sphere("Shield boss", (x, -0.22+row*0.28, z), (0.16,0.07,0.16), gold)
+        for j in range(5):
+            cube("Distant column", ((j-2)*1.15, 1.4, 0.9), (0.12,0.12,1.9), stone, 0.02)
+    else:
+        cylinder("Bust plinth", (0, 0.1, 0.15), 1.18, 0.32, stone)
+        cylinder("Bronze trim", (0, 0.1, 0.34), 1.05, 0.06, gold)
+        sphere("Helmet crown", (0, 0.0, 1.62), (0.9, 0.66, 0.92), steel)
+        cube("Helmet brow", (0, -0.58, 1.48), (1.68, 0.18, 0.19), gold, 0.06)
+        cube("Nose guard", (0, -0.63, 1.08), (0.16, 0.18, 0.65), steel, 0.04)
+        for side in (-1, 1):
+            sphere("Helmet cheek guard", (side*0.7, -0.36, 1.0), (0.24, 0.18, 0.48), gold)
+            for j in range(3):
+                cube("Helmet crest rib", (side*(0.22+j*0.19), -0.05, 2.27-j*0.05), (0.07, 0.08, 0.42-j*0.06), red, 0.02)
     torus("Artifact halo", (0, 0.3, 1.58), 1.35, 0.025, accent)
-    for j in range(7):
-        a = j * math.tau / 7
-        cube("Stone column", (math.cos(a)*2.15, 0.65, 0.75), (0.22, 0.22, 1.9), stone, 0.025)
-        cube("Column capital", (math.cos(a)*2.15, 0.65, 1.75), (0.38, 0.34, 0.13), gold, 0.025)
 else:
     # Sculptural technology core with orbital rings, nodes and floating data blocks.
     cylinder("Reactor base", (0, 0, 0.08), 1.3, 0.24, navy)
