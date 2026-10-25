@@ -476,7 +476,7 @@ def render(data, wav_path):
                  "--", str(scene_json), str(clip), str(i), str(len(scenes)),
                  f"{segment_duration:.3f}"],
                 stdout=log, stderr=subprocess.STDOUT, text=True, env=blender_env,
-                timeout=600,
+                timeout=150,
             )
         if result.returncode:
             details = blender_log.read_text(encoding="utf-8", errors="replace")[-5000:]
@@ -598,25 +598,28 @@ def main():
     data = validate_sources(data)
     (OUT / "metadata.json").write_text(json.dumps(data, indent=2, ensure_ascii=False))
     (OUT / "narration.txt").write_text(data["narration"], encoding="utf-8")
-    # Update durable editorial memory; the workflow commits this file back to the repo.
+    wav = make_narration(data["narration"])
+    video, duration, audio_qa = render(data, wav)
+    # Persist candidate editorial history only after render() completes media QA.
     history = list(memory.get("recent_topics", []))
     history.append({"title": data["title"], "topic": data["topic"],
                     "created_at_utc": datetime.now(timezone.utc).isoformat()})
-    memory["recent_topics"] = history[-30:]
+    candidate = dict(memory)
+    candidate["recent_topics"] = history[-30:]
     context = list(memory.get("running_context", []))
-    context.append(f"Episode: {data['title']} — {data['topic']}")
-    memory["running_context"] = context[-20:]
-    (OUT / "channel-memory.json").write_text(
-        json.dumps(memory, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    wav = make_narration(data["narration"])
-    video, duration, audio_qa = render(data, wav)
+    context.append("Episode: " + str(data["title"]) + " — " + str(data["topic"]))
+    candidate["running_context"] = context[-20:]
+    (OUT / "channel-memory.json").write_text(json.dumps(candidate, indent=2, ensure_ascii=False), encoding="utf-8")
     report = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "title": data["title"], "topic": data["topic"],
         "video_file": video.name, "duration_seconds": round(duration, 2),
         "status": "rendered_not_published",
         "audio_qa": audio_qa,
+        "models": {"text": TEXT_MODEL, "tts": TTS_MODEL},
+        "source_validation": data.get("source_validation", {}),
+        "human_review_required": True,
+        "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented"},
     }
     report_path = OUT / "run-report.json"
     report_path.write_text(json.dumps(report, indent=2))
