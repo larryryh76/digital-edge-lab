@@ -31,40 +31,55 @@ def stop(message):
 def request_gemini(model, parts, config=None):
     if not API_KEY:
         stop("Missing GEMINI_API_KEY repository secret.")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
     body = {"contents": [{"parts": parts}]}
     if config:
         body["generationConfig"] = config
-    # Retry temporary Gemini overload/rate-limit/server failures with backoff.
-    response = None
-    for attempt in range(5):
-        try:
-            response = requests.post(
-                url, params={"key": API_KEY}, json=body, timeout=240
-            )
-        except requests.RequestException as exc:
-            if attempt == 4:
-                stop(f"Gemini network request failed after 5 attempts: {exc}")
-            wait = min(8 * (2 ** attempt), 60)
-            print(f"Gemini network issue; retrying in {wait}s (attempt {attempt + 2}/5)...", flush=True)
-            import time
-            time.sleep(wait)
-            continue
-        if response.ok:
-            break
-        if response.status_code not in (429, 500, 502, 503, 504):
-            stop(f"Gemini API {response.status_code}: {response.text[:1500]}")
-        if attempt == 4:
-            stop(f"Gemini API {response.status_code} after 5 attempts: {response.text[:1500]}")
-        wait = min(8 * (2 ** attempt), 60)
-        print(f"Gemini API {response.status_code} temporary failure; retrying in {wait}s (attempt {attempt + 2}/5)...", flush=True)
-        import time
-        time.sleep(wait)
-    data = response.json()
-    try:
-        return data["candidates"][0]["content"]["parts"]
-    except (KeyError, IndexError, TypeError):
-        stop("Unexpected Gemini response: " + json.dumps(data)[:1200])
+
+    # Try the configured model first, then compatible fallbacks when Google returns
+    # overload/model-unavailable errors. A transient failure must not kill the daily run.
+    is_audio = bool(config and "AUDIO" in config.get("responseModalities", []))
+    candidates = [model]
+    if is_audio:
+        candidates += ["gemini-2.5-flash-preview-tts"]
+    else:
+        candidates += ["gemini-2.5-flash", "gemini-2.0-flash"]
+    models = list(dict.fromkeys(candidates))
+    import time
+    last_error = "No model attempted"
+    for model_name in models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+        for attempt in range(3):
+            try:
+                response = requests.post(url, params={"key": API_KEY}, json=body, timeout=180)
+            except requests.RequestException as exc:
+                last_error = f"network error: {exc}"
+                if attempt < 2:
+                    wait = 5 * (attempt + 1)
+                    print(f"Gemini network issue on {model_name}; retrying in {wait}s...", flush=True)
+                    time.sleep(wait)
+                    continue
+                break
+            if response.ok:
+                try:
+                    data = response.json()
+                    return data["candidates"][0]["content"]["parts"]
+                except (ValueError, KeyError, IndexError, TypeError):
+                    last_error = "Unexpected Gemini response: " + response.text[:1000]
+                    break
+            last_error = f"Gemini API {response.status_code} on {model_name}: {response.text[:1000]}"
+            if response.status_code not in (429, 500, 502, 503, 504):
+                # Invalid model/request/auth errors will not improve by retrying another model
+                # except 404, which can mean a model is not enabled or no longer available.
+                if response.status_code != 404:
+                    stop(last_error)
+                break
+            if attempt < 2:
+                wait = 5 * (attempt + 1)
+                print(f"Gemini API {response.status_code} on {model_name}; retrying in {wait}s...", flush=True)
+                time.sleep(wait)
+        if model_name != models[-1]:
+            print(f"Switching to fallback model after {model_name} failed.", flush=True)
+    stop("All compatible Gemini models failed. " + last_error)
 
 
 def load_channel_memory():
