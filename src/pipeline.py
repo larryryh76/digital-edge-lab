@@ -138,28 +138,35 @@ def generate_script(memory):
         "continuity_context": running_context,
     }, ensure_ascii=False)
     prompt = f"""
-You are the editorial desk and story producer for Digital Edge Lab, a faceless educational brand
-covering AI, technology, digital tools, and evidence-based online-business workflows. Create one
-60-75 second vertical explainer with a strong curiosity-gap opening, a clear central question,
-a concrete example, a useful takeaway, and a memorable final line. Do not write a generic list
-of definitions. Never invent statistics, promise income, or claim the brand personally tested
-anything. Include 2-3 reputable source URLs that you know are real; prefer primary research,
-official documentation, and original product docs. Do not invent URLs or overstate what a source
-proves. If uncertain, choose a narrower topic you can explain accurately.
-You are the recurring narrator Edge. Keep a recognizable, conversational editorial voice and
-consistent point of view without pretending to be a human with a private life. Use the supplied
-memory, build continuity when helpful, and avoid repeating recent topics. Do not claim memory
-outside the supplied context.
+You are the senior story editor and visual director for Digital Edge Lab, an original faceless
+short-form channel about AI, technology, digital tools, and evidence-based digital workflows.
+Make one 50-65 second vertical mini-documentary with the pacing of a premium science/technology
+short: immediate visual hook, a question viewers genuinely want answered, escalating discoveries,
+one concrete example, a clear payoff, and a final line worth remembering. Use cinematic visual
+storytelling, not a lecture or a slideshow. Do not imitate any named creator, channel, trademark,
+signature catchphrase, or exact visual style. Build a distinct Digital Edge Lab identity: midnight
+blue environments, electric-cyan highlights, warm metallic accents, tactile 3D objects, dramatic
+lighting, close-up-to-wide visual progression, purposeful camera movement, and restrained editorial
+graphics. Never invent statistics, promise income, or claim the brand personally tested anything.
+Include 2-3 reputable source URLs you believe are real; prefer primary research, official docs, and
+original product documentation. Do not invent URLs or overstate what a source proves. If uncertain,
+choose a narrower topic that can be explained accurately.
+The recurring narrator is Edge: a recognizable, curious, precise, conversational voice with dry
+wit used sparingly. Edge is a consistent fictional editorial narrator, not a human claiming a
+private life. Use supplied memory for continuity and avoid repeating recent topics.
 CHANNEL MEMORY: {memory_prompt}
 Return ONLY JSON with: title, description, topic, narration, scenes, sources, hashtags.
-Narration: 115-145 words, natural spoken English, varied sentence length, no generic greeting,
-no filler such as "in today's fast-paced world", and no fake first-person experiments. Every
-scene must advance the story and be visually distinct. Create 6-8 scene objects with "visual"
-and "on_screen_text". The visual field must describe a concrete diagram, interface mockup, object,
-or visual metaphor that can be drawn—not just a mood. On-screen text should be 3-7 words, punchy,
-large, and not repeat narration verbatim. At least one scene should show a specific worked
-example or before/after comparison. Sources must be objects with "name", "url", and "supports".
-Use original shapes and typography; do not imply stock footage or screenshots were created.
+Narration: 105-130 words, natural spoken English with varied rhythm, intentional pauses using
+punctuation, no generic greeting, no filler, no fake first-person experiments. Start with a vivid
+claim, surprising contrast, or specific question—not "Did you know?". End with a satisfying payoff.
+Create 6-8 scene objects with "visual" and "on_screen_text". Each scene must describe a different
+shot and physical composition that can be rendered as a distinct 3D setup: specify hero object,
+camera distance/angle, movement or action implied, environment, and lighting. Avoid reusing the
+same hero object in adjacent scenes. Include at least one visual transformation, a concrete
+worked example, and a clear reveal. Do not ask the renderer to show legible paragraphs or tiny UI
+text. On-screen text should be 2-5 words, punchy, readable on a phone, and not repeat narration.
+Sources must be objects with "name", "url", and "supports". Use original objects and typography;
+never imply stock footage or real screenshots were created.
 """
     parts = request_gemini(
         TEXT_MODEL,
@@ -369,7 +376,7 @@ def validate_sources(data):
     for source in data.get("sources", []):
         url = str(source.get("url", "")).strip()
         item = {"name": source.get("name", ""), "url": url, "reachable": False, "status_code": None}
-        if not re.match(r"^https://[^\\s]+$", url, re.I):
+        if not re.match(r"^https://\\S+$", url, re.I):
             item["error"] = "URL must be a valid HTTPS URL"
             checks.append(item)
             continue
@@ -454,10 +461,34 @@ def render(data, wav_path):
         panel = (int(28*sx), int(1000*sy), fw-int(28*sx), fh-int(70*sy))
         painter.rounded_rectangle(panel, radius=max(12, int(24*sx)),
                                   fill=(8, 14, 28), outline=(54, 92, 135), width=max(1, int(2*sx)))
-        caption_lines = textwrap.wrap(captions[i].strip(), width=38)[:3]
+        # Fit captions to the actual render width and reserve a safe bottom margin.
+        caption_font = get_font(max(16, int(20*sx)), True)
+        max_caption_width = fw - int(104*sx)
+        caption_words = captions[i].strip().split()
+        caption_lines, current = [], ""
+        for word in caption_words:
+            candidate = f"{current} {word}".strip()
+            if painter.textbbox((0, 0), candidate, font=caption_font)[2] <= max_caption_width:
+                current = candidate
+            else:
+                if current:
+                    caption_lines.append(current)
+                current = word
+        if current:
+            caption_lines.append(current)
+        # Cap at three lines; append an ellipsis instead of letting text escape the panel.
+        if len(caption_lines) > 3:
+            caption_lines = caption_lines[:3]
+            last = caption_lines[2]
+            while last and painter.textbbox((0, 0), last + "…", font=caption_font)[2] > max_caption_width:
+                last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
+            caption_lines[2] = last.rstrip(" .") + "…"
+        line_height = max(30, int(36*sy))
+        total_height = len(caption_lines) * line_height
+        start_y = max(int(1010*sy), fh - int(58*sy) - total_height)
         for line_no, line in enumerate(caption_lines):
-            painter.text((int(52*sx), int((1034 + line_no * 43)*sy)), line,
-                         font=get_font(max(16, int(21*sx))), fill=(239, 245, 255), stroke_width=0)
+            painter.text((int(52*sx), start_y + line_no*line_height), line,
+                         font=caption_font, fill=(245, 248, 255), stroke_width=0)
         frame.save(image)
         clip = OUT / f"segment_{i:02d}.mp4"
         # Blender renders the 3D scene; FFmpeg adds a restrained moving camera crop and transitions.
