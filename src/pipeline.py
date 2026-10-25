@@ -456,17 +456,14 @@ def render(data, wav_path):
     segment_duration = duration / len(scenes)
     segments = []
     for i, scene in enumerate(scenes):
-        image = cards / f"scene_{i:02d}.png"
+        clip = OUT / f"segment_{i:02d}.mp4"
         scene_json = cards / f"scene_{i:02d}.json"
         scene_json.write_text(json.dumps(scene, ensure_ascii=False))
-        # Render a real procedural 3D environment in Blender. No slide-card fallback:
-        # if the 3D renderer fails, the pilot fails rather than disguising slides as 3D.
         blender = shutil.which("blender")
         if not blender:
-            stop("Blender is required for the 3D-first renderer but was not found.")
+            stop("Blender is required for the animated 3D renderer but was not found.")
         blender_log = cards / f"scene_{i:02d}_blender.log"
         blender_env = os.environ.copy()
-        # Blender's bundled libraries can otherwise oversubscribe threads on hosted runners.
         blender_env.update({
             "OMP_NUM_THREADS": "1",
             "OPENBLAS_NUM_THREADS": "1",
@@ -475,30 +472,29 @@ def render(data, wav_path):
         })
         with blender_log.open("w", encoding="utf-8") as log:
             result = subprocess.run(
-                [blender, "-b", "-t", "1", "--python", str(ROOT / "src" / "blender_scene.py"),
-                 "--", str(scene_json), str(image), str(i), str(len(scenes))],
+                [blender, "-b", "-t", "2", "--python", str(ROOT / "src" / "blender_scene.py"),
+                 "--", str(scene_json), str(clip), str(i), str(len(scenes)),
+                 f"{segment_duration:.3f}"],
                 stdout=log, stderr=subprocess.STDOUT, text=True, env=blender_env,
-                timeout=240,
+                timeout=600,
             )
         if result.returncode:
             details = blender_log.read_text(encoding="utf-8", errors="replace")[-5000:]
-            stop(f"Blender render failed for scene {i + 1} (exit {result.returncode}). Log tail:\\n{details}")
-        if not image.exists() or image.stat().st_size < 10000:
-            stop(f"Blender did not produce a valid 3D render for scene {i + 1}.")
-        # Add readable, timed narration captions over the 3D image (not a slide template).
-        frame = Image.open(image).convert("RGB")
-        painter = ImageDraw.Draw(frame)
-        fw, fh = frame.size
-        sx, sy = fw / W, fh / H
-        panel = (int(28*sx), int(1000*sy), fw-int(28*sx), fh-int(70*sy))
-        painter.rounded_rectangle(panel, radius=max(12, int(24*sx)),
-                                  fill=(8, 14, 28), outline=(54, 92, 135), width=max(1, int(2*sx)))
-        # Fit captions to the actual render width and reserve a safe bottom margin.
-        caption_font = get_font(max(16, int(20*sx)), True)
-        max_caption_width = fw - int(104*sx)
-        caption_words = captions[i].strip().split()
+            stop(f"Animated Blender render failed for scene {i + 1} (exit {result.returncode}). Log tail:\\n{details}")
+        if not clip.exists() or clip.stat().st_size < 10000:
+            stop(f"Blender did not produce a valid animated 3D clip for scene {i + 1}.")
+
+        # Render captions as a transparent overlay so the underlying 3D action remains visible.
+        overlay = cards / f"caption_{i:02d}.png"
+        caption_image = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        painter = ImageDraw.Draw(caption_image)
+        panel = (28, 1000, W-28, 1210)
+        painter.rounded_rectangle(panel, radius=24, fill=(8, 14, 28, 218),
+                                  outline=(54, 92, 135, 235), width=2)
+        caption_font = get_font(20, True)
+        max_caption_width = W - 104
         caption_lines, current = [], ""
-        for word in caption_words:
+        for word in captions[i].strip().split():
             candidate = f"{current} {word}".strip()
             if painter.textbbox((0, 0), candidate, font=caption_font)[2] <= max_caption_width:
                 current = candidate
@@ -508,39 +504,31 @@ def render(data, wav_path):
                 current = word
         if current:
             caption_lines.append(current)
-        # Cap at three lines; append an ellipsis instead of letting text escape the panel.
         if len(caption_lines) > 3:
             caption_lines = caption_lines[:3]
             last = caption_lines[2]
             while last and painter.textbbox((0, 0), last + "…", font=caption_font)[2] > max_caption_width:
                 last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
             caption_lines[2] = last.rstrip(" .") + "…"
-        line_height = max(30, int(36*sy))
-        total_height = len(caption_lines) * line_height
-        start_y = max(int(1010*sy), fh - int(58*sy) - total_height)
+        line_height = 38
+        start_y = max(1015, 1100 - (len(caption_lines)*line_height)//2)
         for line_no, line in enumerate(caption_lines):
-            painter.text((int(52*sx), start_y + line_no*line_height), line,
-                         font=caption_font, fill=(245, 248, 255), stroke_width=0)
-        frame.save(image)
-        clip = OUT / f"segment_{i:02d}.mp4"
-        # Blender renders the 3D scene; FFmpeg adds a restrained moving camera crop and transitions.
-        # This is the first 3D milestone, not yet full character animation.
-        frames = max(int(segment_duration * FPS), 1)
-        zoom_expr = "min(zoom+0.0012,1.10)" if i % 2 == 0 else "max(zoom-0.0007,1.0)"
-        x_expr = "(iw-iw/zoom)/2" if i % 2 == 0 else "(iw-iw/zoom)/2+8*sin(on/18)"
-        y_expr = "(ih-ih/zoom)/2" if i % 2 == 0 else "(ih-ih/zoom)/2+12*cos(on/21)"
-        vf = (
-            f"zoompan=z='{zoom_expr}':x='{x_expr}':y='{y_expr}':d=1:s={W}x{H}:fps={FPS},"
-            f"fade=t=in:st=0:d=0.25,fade=t=out:st={max(segment_duration-0.25,0):.3f}:d=0.25,"
-            "format=yuv420p"
-        )
+            painter.text((52, start_y + line_no*line_height), line,
+                         font=caption_font, fill=(245, 248, 255, 255))
+        caption_image.save(overlay)
+
+        # Preserve the Blender-rendered motion, add readable captions, then edit to delivery FPS.
         subprocess.run(
-            ["ffmpeg","-y","-loop","1","-i",str(image),"-t",f"{segment_duration:.3f}",
-             "-vf",vf,"-an","-c:v","libx264","-preset","veryfast","-crf","22",
-             "-pix_fmt","yuv420p","-r",str(FPS),str(clip)],
+            ["ffmpeg", "-y", "-i", str(clip), "-loop", "1", "-i", str(overlay),
+             "-filter_complex",
+             f"[0:v][1:v]overlay=0:0:shortest=1,scale={W}:{H},fps={FPS},"
+             f"fade=t=in:st=0:d=0.18,fade=t=out:st={max(segment_duration-0.18,0):.3f}:d=0.18,format=yuv420p[v]",
+             "-map", "[v]", "-an", "-t", f"{segment_duration:.3f}",
+             "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
+             "-pix_fmt", "yuv420p", "-r", str(FPS), str(OUT / f"final_segment_{i:02d}.mp4")],
             check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-        segments.append(clip)
+        segments.append(OUT / f"final_segment_{i:02d}.mp4")
 
     concat = OUT / "segments.txt"
     concat.write_text("\n".join(f"file '{p.as_posix()}'" for p in segments) + "\n")
