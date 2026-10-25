@@ -3,6 +3,7 @@ import json
 import os
 import re
 import subprocess
+import shutil
 import sys
 import textwrap
 from datetime import datetime, timezone
@@ -370,10 +371,23 @@ def render(data, wav_path):
     segments = []
     for i, scene in enumerate(scenes):
         image = cards / f"scene_{i:02d}.png"
-        draw_card(scene, i, len(scenes), image, captions[i])
+        scene_json = cards / f"scene_{i:02d}.json"
+        scene_json.write_text(json.dumps(scene, ensure_ascii=False))
+        # Render a real procedural 3D environment in Blender. No slide-card fallback:
+        # if the 3D renderer fails, the pilot fails rather than disguising slides as 3D.
+        blender = shutil.which("blender")
+        if not blender:
+            stop("Blender is required for the 3D-first renderer but was not found.")
+        subprocess.run(
+            [blender, "-b", "-t", "2", "--python", str(ROOT / "src" / "blender_scene.py"),
+             "--", str(scene_json), str(image), str(i), str(len(scenes))],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if not image.exists() or image.stat().st_size < 10000:
+            stop(f"Blender did not produce a valid 3D render for scene {i + 1}.")
         clip = OUT / f"segment_{i:02d}.mp4"
-        # Every scene has slow camera movement plus short fades, so the result is animated video,
-        # not a slideshow of motionless stills. Scene-specific artwork varies across the sequence.
+        # Blender renders the 3D scene; FFmpeg adds a restrained moving camera crop and transitions.
+        # This is the first 3D milestone, not yet full character animation.
         frames = max(int(segment_duration * FPS), 1)
         zoom_expr = "min(zoom+0.0012,1.10)" if i % 2 == 0 else "max(zoom-0.0007,1.0)"
         x_expr = "(iw-iw/zoom)/2" if i % 2 == 0 else "(iw-iw/zoom)/2+8*sin(on/18)"
