@@ -18,10 +18,14 @@ try:
 except Exception:
     scene.render.engine = "BLENDER_EEVEE"
 
-scene.render.resolution_x = 540
-scene.render.resolution_y = 960
+scene.render.resolution_x = 360
+scene.render.resolution_y = 640
 scene.render.resolution_percentage = 100
-scene.render.fps = 12
+try:
+    scene.eevee.taa_render_samples = 8
+except Exception:
+    pass
+scene.render.fps = 8
 scene.render.image_settings.file_format = "FFMPEG"
 scene.render.ffmpeg.format = "MPEG4"
 scene.render.ffmpeg.codec = "H264"
@@ -65,30 +69,30 @@ def cube(name, loc, scale, mat, bevel=0.08):
     apply_mat(obj, mat)
     if bevel:
         mod = obj.modifiers.new("Soft machined edges", "BEVEL")
-        mod.width, mod.segments = bevel, 3
+        mod.width, mod.segments = bevel, 1
         obj.modifiers.new("Weighted corner normals", "WEIGHTED_NORMAL")
     return obj
 
 def sphere(name, loc, scale, mat):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=20, location=loc)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=10, location=loc)
     obj = bpy.context.object
     obj.name = name
     obj.scale = scale
     bpy.ops.object.shade_smooth()
     return apply_mat(obj, mat)
 
-def cylinder(name, loc, radius, depth, mat, vertices=48):
+def cylinder(name, loc, radius, depth, mat, vertices=24):
     bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=depth, location=loc)
     obj = bpy.context.object
     obj.name = name
     apply_mat(obj, mat)
     bevel = obj.modifiers.new("Edge highlights", "BEVEL")
-    bevel.width, bevel.segments = 0.04, 2
+    bevel.width, bevel.segments = 0.04, 1
     obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
     return obj
 
 def torus(name, loc, major, minor, mat):
-    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=64, minor_segments=12, location=loc)
+    bpy.ops.mesh.primitive_torus_add(major_radius=major, minor_radius=minor, major_segments=32, minor_segments=8, location=loc)
     obj = bpy.context.object
     obj.name = name
     bpy.ops.object.shade_smooth()
@@ -203,7 +207,7 @@ else:
             cube("Floating data tile", (x*1.22, y*1.22, 0.35+(j%3)*0.27), (0.28,0.12,0.22), navy, 0.035)
 
 # Background architectural ribs add parallax and cinematic depth.
-for j in range(9):
+for j in range(5):
     x = (j-4)*0.78
     cube("Backdrop rib", (x, 2.5, 1.5), (0.035,0.08,4.0), accent if j%3==0 else steel, 0.01)
 
@@ -241,7 +245,7 @@ scene.render.ffmpeg.format = "MPEG4"
 scene.render.ffmpeg.codec = "H264"
 scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
 scene.render.ffmpeg.ffmpeg_preset = "GOOD"
-scene.render.resolution_x, scene.render.resolution_y = 540, 960
+scene.render.resolution_x, scene.render.resolution_y = 360, 640
 scene.render.resolution_percentage = 100
 scene.render.image_settings.color_depth = "8"
 scene.render.film_transparent = False
