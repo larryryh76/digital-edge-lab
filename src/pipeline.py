@@ -29,89 +29,96 @@ def stop(message):
 
 
 def list_available_models():
-    """Discover models exposed by this API key instead of relying on retired names."""
+    """Discover model IDs and methods actually advertised for this API key."""
+    if not API_KEY:
+        stop("Missing GEMINI_API_KEY repository secret.")
     try:
-        response = requests.get(
-            "https://generativelanguage.googleapis.com/v1beta/models",
-            params={"key": API_KEY, "pageSize": 1000},
-            timeout=30,
-        )
+        response = requests.get("https://generativelanguage.googleapis.com/v1beta/models",
+                                params={"key": API_KEY, "pageSize": 1000}, timeout=(5, 15))
         if not response.ok:
-            print(f"Gemini model discovery unavailable (HTTP {response.status_code}); using configured model only.", flush=True)
-            return []
-        data = response.json()
-        models = []
-        for item in data.get("models", []):
+            diagnostic("model_discovery", {"status": "failed", "http_status": response.status_code})
+            return {}
+        result = {}
+        for item in response.json().get("models", []):
             name = str(item.get("name", "")).removeprefix("models/")
             methods = item.get("supportedGenerationMethods", [])
             if name and "generateContent" in methods:
-                models.append(name)
-        return models
+                result[name] = methods
+        diagnostic("model_discovery", {"status": "success", "models": sorted(result)})
+        return result
     except (requests.RequestException, ValueError) as exc:
-        print(f"Gemini model discovery failed ({exc}); using configured model only.", flush=True)
-        return []
+        diagnostic("model_discovery", {"status": "failed", "error": str(exc)[:300]})
+        return {}
+
+
+def diagnostic(stage, details):
+    path = OUT / "diagnostics.json"
+    try:
+        current = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except Exception:
+        current = {}
+    current[stage] = details
+    path.write_text(json.dumps(current, indent=2), encoding="utf-8")
 
 
 def request_gemini(model, parts, config=None):
     if not API_KEY:
         stop("Missing GEMINI_API_KEY repository secret.")
-    body = {"contents": [{"parts": parts}]}
-    if config:
-        body["generationConfig"] = config
-
-    is_audio = bool(config and "AUDIO" in config.get("responseModalities", []))
-    candidates = [model]
+    import random, time
+    audio = bool(config and "AUDIO" in config.get("responseModalities", []))
     available = list_available_models()
-    if is_audio:
-        # TTS models are specialized; use only models actually exposed to this API key.
-        candidates += [
-            name for name in available
-            if "tts" in name.lower() and ("flash" in name.lower() or "pro" in name.lower())
-        ]
+    if audio:
+        candidates = [model] + [n for n in available if "tts" in n.lower()]
     else:
-        # Prefer the configured model, then available non-retired flash models.
-        candidates += [
-            name for name in available
-            if "flash" in name.lower() and "tts" not in name.lower()
-        ]
-    models = list(dict.fromkeys(candidates))
-    import time
-    last_error = "No model attempted"
-    for model_name in models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+        candidates = [model] + [n for n in available if "flash" in n.lower() and "tts" not in n.lower()]
+    models = list(dict.fromkeys(n for n in candidates if n in available))
+    if not models and not available:
+        models = [model]
+    if not models:
+        stop("No API-listed generateContent model suitable for this operation; inspect diagnostics.")
+    deadline = time.monotonic() + 150
+    failures = []
+    for name in models[:5]:
         for attempt in range(3):
-            try:
-                response = requests.post(url, params={"key": API_KEY}, json=body, timeout=180)
-            except requests.RequestException as exc:
-                last_error = f"network error on {model_name}: {exc}"
-                if attempt < 2:
-                    wait = 5 * (attempt + 1)
-                    print(f"Gemini network issue on {model_name}; retrying in {wait}s...", flush=True)
-                    time.sleep(wait)
-                    continue
-                print(f"Gemini model {model_name} exhausted network retries.", flush=True)
+            remaining = deadline - time.monotonic()
+            if remaining <= 2:
                 break
-            if response.ok:
-                try:
-                    data = response.json()
-                    return data["candidates"][0]["content"]["parts"]
-                except (ValueError, KeyError, IndexError, TypeError):
-                    last_error = "Unexpected Gemini response on " + model_name + ": " + response.text[:700]
-                    print(last_error, flush=True)
-                    break
-            last_error = f"Gemini API {response.status_code} on {model_name}: {response.text[:700]}"
-            print(last_error, flush=True)
-            if response.status_code not in (429, 500, 502, 503, 504, 404):
-                stop(last_error)
-            if response.status_code in (429, 500, 502, 503, 504) and attempt < 2:
-                wait = 5 * (attempt + 1)
-                print(f"Retrying {model_name} in {wait}s...", flush=True)
-                time.sleep(wait)
-                continue
-            break
-        if model_name != models[-1]:
-            print(f"Trying next API-listed model after {model_name} failed.", flush=True)
-    stop("All available Gemini models failed. " + last_error)
+            url = "https://generativelanguage.googleapis.com/v1beta/models/" + name + ":generateContent"
+            try:
+                response = requests.post(url, params={"key": API_KEY},
+                    json={"contents": [{"parts": parts}], **({"generationConfig": config} if config else {})},
+                    timeout=(min(8, remaining), min(35, remaining)))
+            except requests.Timeout as exc:
+                status, retryable, detail = "timeout", True, str(exc)[:250]
+            except requests.RequestException as exc:
+                status, retryable, detail = "network_error", True, str(exc)[:250]
+            else:
+                if response.ok:
+                    try:
+                        payload = response.json()
+                        output = payload["candidates"][0]["content"]["parts"]
+                        if not isinstance(output, list) or not output:
+                            raise ValueError("empty response parts")
+                        diagnostic("last_model_request", {"status": "success", "model": name, "operation": "tts" if audio else "text"})
+                        return output
+                    except (ValueError, KeyError, IndexError, TypeError) as exc:
+                        status, retryable, detail = "malformed_response", False, str(exc)[:250]
+                else:
+                    status = "http_" + str(response.status_code)
+                    detail = response.text[:400]
+                    retryable = response.status_code in (429, 500, 502, 503, 504)
+                    # 404 is unsupported/unavailable for this key; immediately move on.
+            failures.append({"model": name, "status": status, "attempt": attempt + 1, "detail": detail})
+            diagnostic("last_model_request", {"status": status, "model": name, "operation": "tts" if audio else "text", "failures": failures[-10:]})
+            if not retryable:
+                break
+            delay = min((2 ** attempt) + random.random(), max(0, deadline - time.monotonic()))
+            if delay:
+                print("Gemini " + status + " on " + name + "; retrying in " + str(round(delay, 1)) + "s", flush=True)
+                time.sleep(delay)
+    diagnostic("generation_failure", {"configured_model": model, "operation": "tts" if audio else "text", "attempted_models": models, "failures": failures})
+    stop("Gemini generation exhausted bounded retries; diagnostics saved to output/diagnostics.json")
+
 
 
 def load_channel_memory():
