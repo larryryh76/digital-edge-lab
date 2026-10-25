@@ -521,8 +521,9 @@ def render(data, wav_path):
         subprocess.run(
             ["ffmpeg", "-y", "-i", str(clip), "-loop", "1", "-i", str(overlay),
              "-filter_complex",
-             f"[0:v][1:v]overlay=0:0:shortest=1,scale={W}:{H},fps={FPS},"
-             f"fade=t=in:st=0:d=0.18,fade=t=out:st={max(segment_duration-0.18,0):.3f}:d=0.18,format=yuv420p[v]",
+             f"[0:v]scale={W}:{H}[base];[base][1:v]overlay=0:0:shortest=1,"
+             f"fps={FPS},fade=t=in:st=0:d=0.18,"
+             f"fade=t=out:st={max(segment_duration-0.18,0):.3f}:d=0.18,format=yuv420p[v]",
              "-map", "[v]", "-an", "-t", f"{segment_duration:.3f}",
              "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
              "-pix_fmt", "yuv420p", "-r", str(FPS), str(OUT / f"final_segment_{i:02d}.mp4")],
