@@ -9,7 +9,7 @@ on:
       - ".github/workflows/generate-pilot.yml"
       - "requirements.txt"
   schedule:
-    - cron: "0 10 * * 1"
+    - cron: "0 10 * * *"
 
 concurrency:
   group: digital-edge-lab-pilot-${{ github.ref }}
