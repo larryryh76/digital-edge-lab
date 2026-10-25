@@ -12,9 +12,9 @@ brief_path, output_path, scene_index, scene_total = args
 brief = json.loads(Path(brief_path).read_text())
 index, total = int(scene_index), int(scene_total)
 scene = bpy.context.scene
-scene.render.engine = "CYCLES"
-scene.cycles.samples = 16
-scene.cycles.use_denoising = True
+scene.render.engine = "BLENDER_EEVEE_NEXT"
+scene.eevee.taa_render_samples = 32
+
 scene.render.resolution_x = 720
 scene.render.resolution_y = 1280
 scene.render.resolution_percentage = 100
