@@ -144,17 +144,57 @@ if historical:
                 cube("Helmet crest rib", (side*(0.22+j*0.19), -0.05, 2.27-j*0.05), (0.07, 0.08, 0.42-j*0.06), red, 0.02)
     torus("Artifact halo", (0, 0.3, 1.58), 1.35, 0.025, accent)
 else:
-    # Sculptural technology core with orbital rings, nodes and floating data blocks.
-    cylinder("Reactor base", (0, 0, 0.08), 1.3, 0.24, navy)
-    torus("Energy ring one", (0, 0, 1.2), 1.12, 0.045, glow).rotation_euler[0] = math.radians(62)
-    torus("Energy ring two", (0, 0, 1.2), 1.38, 0.035, accent).rotation_euler[1] = math.radians(62)
-    sphere("Core", (0, 0, 1.2), (0.65, 0.65, 0.65), navy)
-    sphere("Core light", (0, -0.04, 1.2), (0.42, 0.42, 0.42), glow)
-    for j in range(8):
-        a = j * math.tau / 8
-        x, y = math.cos(a)*1.85, math.sin(a)*1.85
-        sphere("Orbit node", (x, y, 1.15 + 0.25*math.sin(a*2)), (0.16,0.16,0.16), accent if j%2 else steel)
-        cube("Floating data tile", (x*1.22, y*1.22, 0.35+(j%3)*0.27), (0.28,0.12,0.22), navy, 0.035)
+    # Rotate through distinct technical metaphors so adjacent scenes do not repeat one hero object.
+    variant = index % 4
+    if variant == 0:
+        # Semantic-vector field: points in a searchable spatial cloud.
+        for j in range(15):
+            a = j * math.tau / 15
+            radius = 0.75 + (j % 4) * 0.34
+            x, y = math.cos(a) * radius, math.sin(a) * radius
+            z = 0.65 + (j % 5) * 0.36
+            sphere("Embedding point", (x, y, z), (0.09, 0.09, 0.09), glow if j % 3 == 0 else steel)
+            if j:
+                prev = (math.cos((j-1)*math.tau/15)*(0.75+((j-1)%4)*0.34),
+                        math.sin((j-1)*math.tau/15)*(0.75+((j-1)%4)*0.34),
+                        0.65+((j-1)%5)*0.36)
+                midpoint = ((x+prev[0])/2, (y+prev[1])/2, (z+prev[2])/2)
+                edge = cube("Vector relation", midpoint, (0.025, 0.025, (Vector((x,y,z))-Vector(prev)).length), accent, 0)
+                edge.rotation_euler = (Vector((x,y,z))-Vector(prev)).to_track_quat("Z","Y").to_euler()
+        cylinder("Vector field plinth", (0, 0, 0.12), 1.7, 0.22, navy)
+    elif variant == 1:
+        # Exact-match index: searchable drawers and one highlighted record.
+        for row in range(4):
+            for col in range(3):
+                x, z = (col-1)*0.95, 0.65 + row*0.52
+                highlighted = row == 2 and col == 1
+                cube("Index record", (x, 0, z), (0.78, 0.46, 0.38),
+                     glow if highlighted else navy, 0.06)
+                cube("Record key", (x, -0.25, z), (0.42, 0.025, 0.045),
+                     gold if highlighted else steel, 0.01)
+        torus("Index halo", (0, 0.3, 1.6), 1.7, 0.025, glow)
+    elif variant == 2:
+        # Hybrid retrieval pipeline: keyword and semantic paths merge into one result.
+        for j, x in enumerate((-1.7, -0.85, 0, 0.85, 1.7)):
+            z = 0.85 + (j % 2) * 0.7
+            cube("Pipeline module", (x, 0, z), (0.62, 0.5, 0.58),
+                 gold if j in (0, 1) else glow, 0.09)
+            sphere("Pipeline indicator", (x, -0.31, z), (0.11, 0.05, 0.11), steel if j != 4 else gold)
+        for y in (-0.5, 0.5):
+            cylinder("Signal column", (-0.85, y, 1.55), 0.07, 1.2, accent, 20)
+            cylinder("Signal column", (0.85, y, 1.55), 0.07, 1.2, glow, 20)
+    else:
+        # A recognizable AI compute core, reserved for every fourth technical scene.
+        cylinder("Reactor base", (0, 0, 0.08), 1.3, 0.24, navy)
+        torus("Energy ring one", (0, 0, 1.2), 1.12, 0.045, glow).rotation_euler[0] = math.radians(62)
+        torus("Energy ring two", (0, 0, 1.2), 1.38, 0.035, accent).rotation_euler[1] = math.radians(62)
+        sphere("Core", (0, 0, 1.2), (0.65, 0.65, 0.65), navy)
+        sphere("Core light", (0, -0.04, 1.2), (0.42, 0.42, 0.42), glow)
+        for j in range(8):
+            a = j * math.tau / 8
+            x, y = math.cos(a)*1.85, math.sin(a)*1.85
+            sphere("Orbit node", (x, y, 1.15 + 0.25*math.sin(a*2)), (0.16,0.16,0.16), accent if j%2 else steel)
+            cube("Floating data tile", (x*1.22, y*1.22, 0.35+(j%3)*0.27), (0.28,0.12,0.22), navy, 0.035)
 
 # Background architectural ribs add parallax and cinematic depth.
 for j in range(9):
