@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "tests/**"
       - ".github/workflows/generate-pilot.yml"
       - "requirements.txt"
   schedule:
