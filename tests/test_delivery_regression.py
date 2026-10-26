@@ -9,6 +9,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class DeliveryRegressionTests(unittest.TestCase):
+
+    def test_precision_weight_scene_wins_over_incidental_balance_metaphor(self):
+        source = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
+        balance = source.index('elif (("balance scale" in brief_text')
+        precision = source.index('elif "16-bit" in brief_text')
+        self.assertLess(balance, precision)  # balance branch must explicitly exclude precision briefs
+        branch = source[balance:precision]
+        self.assertIn('"16-bit" not in brief_text', branch)
+        self.assertIn('not ("floating-point" in brief_text and "weights" in brief_text)', branch)
+        self.assertIn('story_treatment = "high_precision_weight_sphere"', source)
+        self.assertIn('treatment_specific_subject_animation', source)
+
     def test_delivery_report_has_explicit_review_and_publish_state(self):
         source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
         self.assertIn('"human_review_required": True', source)
