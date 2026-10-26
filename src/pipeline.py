@@ -847,7 +847,7 @@ def main():
     # Bundle the exact per-scene briefs, Blender logs, and treatment traces for human visual review.
     review_bundle = delivery / "scene-review"
     review_bundle.mkdir(exist_ok=True)
-    for review_file in cards.glob("scene_*"):
+    for review_file in (OUT / "cards").glob("scene_*"):
         if review_file.is_file():
             shutil.copy2(review_file, review_bundle / review_file.name)
     for trace_file in OUT.glob("segment_*.visual.json"):
