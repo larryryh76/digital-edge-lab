@@ -249,14 +249,14 @@ never imply stock footage or real screenshots were created.
     missing = [k for k in required if not isinstance(data, dict) or k not in data]
     if missing:
         diagnostic("script_schema_retry", {"missing_fields": missing, "reason": "initial response omitted required JSON fields"})
-        correction = prompt + "\\n\\nREPAIR REQUIREMENT: Your previous response omitted required fields: " + ", ".join(missing) + ". Return a complete JSON object containing every required field. Do not explain the repair or use Markdown fences."
+        correction = prompt + "\n\nREPAIR REQUIREMENT: Your previous response omitted required fields: " + ", ".join(missing) + ". Return a complete JSON object containing every required field. Do not explain the repair or use Markdown fences."
         parts = request_gemini(
             TEXT_MODEL,
             [{"text": correction}],
             {"temperature": 0.35, "responseMimeType": "application/json"},
         )
-        raw = "\\n".join(p.get("text", "") for p in parts if p.get("text")).strip()
-        raw = re.sub(r"^\\`\\`\\`(?:json)?\\s*|\\s*\\`\\`\\`$", "", raw, flags=re.I)
+        raw = "\n".join(p.get("text", "") for p in parts if p.get("text")).strip()
+        raw = re.sub(r"^\`\`\`(?:json)?\s*|\s*\`\`\`$", "", raw, flags=re.I)
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -614,7 +614,7 @@ def render(data, wav_path):
             )
         if result.returncode:
             details = blender_log.read_text(encoding="utf-8", errors="replace")[-5000:]
-            stop(f"Animated Blender render failed for scene {i + 1} (exit {result.returncode}). Log tail:\\n{details}")
+            stop(f"Animated Blender render failed for scene {i + 1} (exit {result.returncode}). Log tail:\n{details}")
         try:
             clip = normalize_blender_output(clip, i)
         except RuntimeError as exc:
@@ -624,7 +624,7 @@ def render(data, wav_path):
                     {"name": p.name, "size_bytes": p.stat().st_size}
                     for p in cards.parent.glob(clip.stem + "*.mp4") if p.is_file()
                 ]})
-            stop(str(exc) + "\\nBlender log tail:\\n" + details)
+            stop(str(exc) + "\nBlender log tail:\n" + details)
 
         # Render captions as a transparent overlay so the underlying 3D action remains visible.
         overlay = cards / f"caption_{i:02d}.png"
