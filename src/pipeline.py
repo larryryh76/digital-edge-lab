@@ -246,8 +246,24 @@ never imply stock footage or real screenshots were created.
     except json.JSONDecodeError:
         stop("Gemini did not return valid JSON: " + raw[:1200])
     required = ("title", "description", "topic", "narration", "scenes", "sources", "hashtags")
-    if any(k not in data for k in required):
-        stop("Generated script is missing required fields.")
+    missing = [k for k in required if not isinstance(data, dict) or k not in data]
+    if missing:
+        diagnostic("script_schema_retry", {"missing_fields": missing, "reason": "initial response omitted required JSON fields"})
+        correction = prompt + "\\n\\nREPAIR REQUIREMENT: Your previous response omitted required fields: " + ", ".join(missing) + ". Return a complete JSON object containing every required field. Do not explain the repair or use Markdown fences."
+        parts = request_gemini(
+            TEXT_MODEL,
+            [{"text": correction}],
+            {"temperature": 0.35, "responseMimeType": "application/json"},
+        )
+        raw = "\\n".join(p.get("text", "") for p in parts if p.get("text")).strip()
+        raw = re.sub(r"^\\`\\`\\`(?:json)?\\s*|\\s*\\`\\`\\`$", "", raw, flags=re.I)
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            stop("Gemini returned invalid JSON during schema repair: " + raw[:1200])
+        missing = [k for k in required if not isinstance(data, dict) or k not in data]
+        if missing:
+            stop("Generated script still lacks required fields after one repair attempt: " + ", ".join(missing))
     if len(data["narration"].split()) < 80 or len(data["scenes"]) < 5:
         stop("Generated narration or scene plan is too short.")
     # Reject generic filler and unsupported pseudo-technical explanations before paying for TTS.
