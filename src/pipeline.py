@@ -19,7 +19,7 @@ MEMORY_DIR = ROOT / "memory"
 MEMORY_FILE = MEMORY_DIR / "channel-memory.json"
 API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.8-flash")
-TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
 W, H, FPS = 720, 1280, 24
 ACTUAL_MODELS = {"text": None, "tts": None}
 
@@ -62,25 +62,46 @@ def diagnostic(stage, details):
     path.write_text(json.dumps(current, indent=2), encoding="utf-8")
 
 
+def ordered_model_candidates(configured, available, audio=False):
+    """Prefer current models for the requested task; skip deprecated and image-only models."""
+    if audio:
+        eligible = [name for name in available if "tts" in name.lower() and "image" not in name.lower()]
+        priority = ("gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts",
+                    "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
+    else:
+        eligible = [name for name in available
+                    if "flash" in name.lower() and "tts" not in name.lower()
+                    and "image" not in name.lower() and not name.startswith("gemini-2.5-")]
+        priority = ("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
+                    "gemini-3.5-flash", "gemini-3-flash-preview",
+                    "gemini-3.1-flash-lite-preview", "gemini-3.1-flash-lite",
+                    "gemini-3.5-flash-lite", "gemini-flash-latest",
+                    "gemini-flash-lite-latest")
+    ordered = []
+    if configured in eligible:
+        ordered.append(configured)
+    ordered.extend(name for name in priority if name in eligible and name not in ordered)
+    ordered.extend(name for name in sorted(eligible) if name not in ordered)
+    return ordered
+
+
 def request_gemini(model, parts, config=None):
     if not API_KEY:
         stop("Missing GEMINI_API_KEY repository secret.")
     import random, time
     audio = bool(config and "AUDIO" in config.get("responseModalities", []))
     available = list_available_models()
-    if audio:
-        candidates = [model] + [n for n in available if "tts" in n.lower()]
-    else:
-        candidates = [model] + [n for n in available if "flash" in n.lower() and "tts" not in n.lower()]
-    models = list(dict.fromkeys(n for n in candidates if n in available))
+    models = ordered_model_candidates(model, available, audio=audio)
     if not models and not available:
+        # Keep a single configured-model attempt if model discovery itself was temporarily unavailable.
         models = [model]
     if not models:
         stop("No API-listed generateContent model suitable for this operation; inspect diagnostics.")
-    deadline = time.monotonic() + 150
+    # A failed model must not consume the entire run. Rotate quickly through alternatives.
+    deadline = time.monotonic() + 300
     failures = []
-    for name in models[:5]:
-        for attempt in range(3):
+    for name in models[:6]:
+        for attempt in range(2):
             remaining = deadline - time.monotonic()
             if remaining <= 2:
                 break
@@ -88,7 +109,7 @@ def request_gemini(model, parts, config=None):
             try:
                 response = requests.post(url, params={"key": API_KEY},
                     json={"contents": [{"parts": parts}], **({"generationConfig": config} if config else {})},
-                    timeout=(min(8, remaining), min(35, remaining)))
+                    timeout=(min(5, remaining), min(22, remaining)))
             except requests.Timeout as exc:
                 status, retryable, detail = "timeout", True, str(exc)[:250]
             except requests.RequestException as exc:
@@ -110,17 +131,20 @@ def request_gemini(model, parts, config=None):
                     status = "http_" + str(response.status_code)
                     detail = response.text[:400]
                     retryable = response.status_code in (429, 500, 502, 503, 504)
-                    # 404 is unsupported/unavailable for this key; immediately move on.
             failures.append({"model": name, "status": status, "attempt": attempt + 1, "detail": detail})
-            diagnostic("last_model_request", {"status": status, "model": name, "operation": "tts" if audio else "text", "failures": failures[-10:]})
+            diagnostic("last_model_request", {"status": status, "model": name,
+                "operation": "tts" if audio else "text", "failures": failures[-12:]})
             if not retryable:
                 break
-            delay = min((2 ** attempt) + random.random(), max(0, deadline - time.monotonic()))
+            # Short retry once, then move to the next model instead of stalling on one model.
+            delay = min(0.8 + random.random() * 0.7, max(0, deadline - time.monotonic()))
             if delay:
-                print("Gemini " + status + " on " + name + "; retrying in " + str(round(delay, 1)) + "s", flush=True)
+                print("Gemini " + status + " on " + name + "; retrying once in "
+                      + str(round(delay, 1)) + "s", flush=True)
                 time.sleep(delay)
-    diagnostic("generation_failure", {"configured_model": model, "operation": "tts" if audio else "text", "attempted_models": models, "failures": failures})
-    stop("Gemini generation exhausted bounded retries; diagnostics saved to output/diagnostics.json")
+    diagnostic("generation_failure", {"configured_model": model, "operation": "tts" if audio else "text",
+        "attempted_models": models[:6], "failures": failures})
+    stop("Gemini generation exhausted model fallbacks; diagnostics saved to output/diagnostics.json")
 
 
 
