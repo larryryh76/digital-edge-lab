@@ -154,6 +154,30 @@ class DeliveryRegressionTests(unittest.TestCase):
         self.assertTrue(report["passed"])
         self.assertEqual(report["unique_count"], 6)
 
+    def test_visual_diversity_rejects_repeated_generic_fallback_even_with_five_unique_labels(self):
+        from src.pipeline import treatment_diversity_report
+        report = treatment_diversity_report([
+            "semantic_vector_field", "semantic_vector_field",
+            "blocked_reverse_signal", "directed_relation_blocks",
+            "two_slab_information_barrier", "neural_node_data_flow",
+            "digital_library_book_reveal"
+        ])
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["repeated_generic_fallbacks"]["semantic_vector_field"], 2)
+
+    def test_reversal_curse_briefs_map_to_story_specific_treatments(self):
+        renderer = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
+        pipeline = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
+        for treatment in (
+            "directed_relation_blocks", "blocked_reverse_signal",
+            "two_slab_information_barrier", "neural_node_data_flow",
+            "digital_library_book_reveal", "directional_compass_reveal",
+            "bidirectional_circuit_reveal"
+        ):
+            self.assertIn(treatment, renderer)
+            self.assertIn(treatment, pipeline)
+        self.assertIn('("4921","serial number","macro shot")', renderer)
+
     def test_quantization_scene_briefs_have_specific_renderer_and_qa_treatments(self):
         renderer = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
         pipeline = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
