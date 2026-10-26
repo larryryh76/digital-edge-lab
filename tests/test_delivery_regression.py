@@ -29,7 +29,7 @@ class DeliveryRegressionTests(unittest.TestCase):
     def test_failure_artifact_does_not_depend_on_success_report(self):
         workflow = (ROOT / ".github/workflows/generate-pilot.yml").read_text(encoding="utf-8")
         # Either status-check form is valid: failure/cancelled already overrides the implicit success() check.
-        self.assertRegex(workflow, r"if:\s*\$\{\{[^}\\n]*failure\(\)[^}\\n]*cancelled\(\)[^}\\n]*\}\}")
+        self.assertRegex(workflow, r"if:\s*\$\{\{[^\n]*failure\(\)[^\n]*cancelled\(\)[^\n]*\}\}")
         self.assertIn("output/**", workflow)
         self.assertIn("digital-edge-lab-failure-", workflow)
 
