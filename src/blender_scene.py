@@ -135,7 +135,7 @@ def label(body, loc, size, mat=ivory):
 def block_label(body, x, z, size=0.22):
     return label(body, (x, -0.315, z), size, ivory)
 
-if "strawberry" in brief_text and ("laser" in brief_text or "sweeps" in brief_text):
+if "strawberry" in brief_text and ("10 letters" in brief_text or "laser" in brief_text or "sweeps" in brief_text):
     story_treatment = "copper_strawberry_word_laser"
     # A large, legible, extruded copper word is the hero—not a network visualization.
     hero_focus = label("STRAWBERRY", (0, -0.55, 2.05), 0.48, copper)
@@ -151,6 +151,16 @@ if "strawberry" in brief_text and ("laser" in brief_text or "sweeps" in brief_te
     for j in range(18):
         sphere("Copper dust mote", ((j-9)*0.34, 0.45+(j%3)*0.13, 1.0+(j%5)*0.33),
                (0.025,0.025,0.025), gold if j%2 else token_cyan)
+elif ("straw" in brief_text and "berry" in brief_text and "laser" in brief_text):
+    story_treatment = "three_token_blocks"
+    # Match the narrated example: two chunks, not an arbitrary three-way split.
+    for j,(word,x) in enumerate((("STRAW",-0.82),("BERRY",0.82))):
+        obj=cube("Token block "+word,(x,0.0,1.65),(1.38,0.55,0.78),
+                 copper if j==0 else token_cyan,0.09)
+        obj.rotation_euler[1] = math.radians((-4,4)[j])
+        block_label(word,x,1.67,0.22)
+        torus("Token edge ring "+str(j),(x,-0.30,1.65),0.47,0.018,glow)
+    laser_obj=cube("Vertical cyan split laser",(0,-0.42,1.65),(0.035,0.045,1.25),glow,0.008)
 elif ("straw" in brief_text and any(k in brief_text for k in ("block", "token", "split", "separate"))
       and not any(k in brief_text for k in ("misaligned", "snap back", "gaps", "token gap", "sparks"))):
     story_treatment = "three_token_blocks"
@@ -158,7 +168,7 @@ elif ("straw" in brief_text and any(k in brief_text for k in ("block", "token", 
         obj=cube("Token block "+word,(x,0.0,1.65),(1.02,0.55,0.78),
                  copper if j==0 else token_cyan,0.09)
         obj.rotation_euler[1] = math.radians((-7,3,8)[j])
-        block_label(word,(x),1.67,0.20)
+        block_label(word,x,1.67,0.20)
         torus("Token edge ring "+str(j),(x,-0.30,1.65),0.39,0.018,glow)
 elif any(k in brief_text for k in ("4921","serial number","macro shot","etched")):
     story_treatment = "macro_serial_number_reveal"
