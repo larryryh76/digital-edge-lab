@@ -78,7 +78,7 @@ jobs:
           retention-days: 14
 
       - name: Preserve failure diagnostics
-        if: failure() || cancelled()
+        if: ${{ always() && (failure() || cancelled()) }}
         uses: actions/upload-artifact@v4
         with:
           name: digital-edge-lab-failure-${{ github.run_number }}
