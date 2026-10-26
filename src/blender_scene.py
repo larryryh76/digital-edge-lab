@@ -412,7 +412,9 @@ for j in range(5):
 
 # Floating title plaque; concise scene phrase is part of the set dressing.
 title = str(brief.get("on_screen_text", brief.get("visual", "THE HIDDEN MECHANISM"))).strip()[:28]
-if story_treatment in {"copper_strawberry_word_laser", "three_token_blocks",
+if story_treatment in {"phone_overloaded_by_model_cube", "high_precision_weight_sphere", "quantized_grid_sphere",
+                        "decimal_rounding_gear_track", "memory_volume_compression", "phone_socket_hero_reveal",
+                        "copper_strawberry_word_laser", "three_token_blocks",
                         "macro_serial_number_reveal", "tokenization_lens_reveal",
                         "pi_sphere_compression", "misaligned_token_reassembly",
                         "brand_cube_reveal"}:
@@ -451,6 +453,8 @@ scene.camera = camera
 scene.render.image_settings.color_mode = "RGB"
 scene.render.filepath = str(Path(output_path).resolve().with_suffix(""))
 scene.camera.data.dof.use_dof = story_treatment not in {
+    "phone_overloaded_by_model_cube", "high_precision_weight_sphere", "quantized_grid_sphere",
+    "decimal_rounding_gear_track", "memory_volume_compression", "phone_socket_hero_reveal",
     "copper_strawberry_word_laser", "three_token_blocks", "macro_serial_number_reveal",
     "tokenization_lens_reveal", "pi_sphere_compression", "misaligned_token_reassembly",
     "brand_cube_reveal"
