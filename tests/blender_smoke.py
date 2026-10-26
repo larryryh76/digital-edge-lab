@@ -17,7 +17,7 @@ s.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in bpy.types.Rend
 s.render.resolution_x, s.render.resolution_y, s.render.resolution_percentage = 180, 320, 50
 s.render.fps = 8
 s.frame_start, s.frame_end = 1, 16
-s.render.image_settings.file_format = 'FFMPEG'
+s.render.file_format = 'FFMPEG'
 s.render.ffmpeg.format = 'MPEG4'; s.render.ffmpeg.codec = 'H264'
 s.render.filepath = out
 bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, location=(0,0,0))
@@ -42,12 +42,12 @@ with tempfile.TemporaryDirectory(prefix='del-blender-smoke-') as td:
         raise SystemExit('FAIL: Blender smoke render process failed')
     if not output.exists() or output.stat().st_size < 1000:
         raise SystemExit('FAIL: smoke MP4 missing or empty')
-    probe = subprocess.run([FFPROBE, '-v', 'error', '-show_entries', 'stream=codec_type,codec_name,width,height,nb_frames', '-show_entries', 'format=duration', '-of', 'json', str(output)], capture_output=True, text=True, timeout=20)
+    probe = subprocess.run([FFPROBE, '-v', 'error', '-show_entries', 'stream=codec_type,codec_name,width,height,nb_frames,r_frame_rate', '-show_entries', 'format=duration', '-of', 'json', str(output)], capture_output=True, text=True, timeout=20)
     if probe.returncode:
         raise SystemExit('FAIL: ffprobe rejected smoke MP4: ' + probe.stderr[-1000:])
     data = json.loads(probe.stdout)
     streams = data.get('streams', [])
     video = [s for s in streams if s.get('codec_type') == 'video']
-    if not video or video[0].get('codec_name') != 'h264' or float(data['format']['duration']) < 1:
+    if (not video or video[0].get('codec_name') != 'h264' or video[0].get('width') != 180 or video[0].get('height') != 320 or float(data['format']['duration']) < 1 or not video[0].get('nb_frames')):
         raise SystemExit('FAIL: smoke MP4 did not meet expected codec/duration')
     print('PASS: animated H.264 MP4 verified by ffprobe')
