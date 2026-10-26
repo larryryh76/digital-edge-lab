@@ -124,6 +124,12 @@ class DeliveryRegressionTests(unittest.TestCase):
         self.assertLess(source.index("video, duration, audio_qa = render(data, wav)"),
                         source.index('(OUT / "channel-memory.json").write_text'))
 
+    def test_full_pilot_requires_exactly_seven_scenes(self):
+        source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
+        self.assertIn("Create exactly 7 scene objects", source)
+        self.assertIn('if len(data["scenes"]) != 7:', source)
+        self.assertIn("Pilot requires exactly seven distinct scenes", source)
+
     def test_visual_diversity_gate_rejects_genuine_repetition(self):
         from src.pipeline import treatment_diversity_report
         report = treatment_diversity_report([
