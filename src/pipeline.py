@@ -24,6 +24,17 @@ W, H, FPS = 720, 1280, 24
 ACTUAL_MODELS = {"text": None, "tts": None}
 
 
+def treatment_diversity_report(treatment_names, scene_count=None):
+    """Require at least five genuinely distinct renderer treatments for a full episode."""
+    count = len(treatment_names) if scene_count is None else int(scene_count)
+    required = min(5, count)
+    unique = sorted(set(treatment_names))
+    repeated = {name: treatment_names.count(name) for name in unique
+                if treatment_names.count(name) > 1}
+    return {"passed": len(unique) >= required, "unique_count": len(unique),
+            "required_count": required, "repeated_treatments": repeated}
+
+
 def stop(message):
     print(f"ERROR: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -769,7 +780,20 @@ def main():
         brief_text = (str(brief_scene.get("visual", "")) + " " +
                       str(brief_scene.get("on_screen_text", ""))).lower()
         expected = None
-        if "strawberry" in brief_text and "10 letters" in brief_text:
+        # Specific physical actions take precedence over incidental nouns such as "etched".
+        if ("phone" in brief_text or "smartphone" in brief_text) and any(k in brief_text for k in ("massive", "crushing", "heavy", "too big")):
+            expected = "phone_overloaded_by_model_cube"
+        elif "16-bit" in brief_text or ("floating-point" in brief_text and "weights" in brief_text):
+            expected = "high_precision_weight_sphere"
+        elif ("4-bit" in brief_text or "coarse" in brief_text or "stepped" in brief_text) and "sphere" in brief_text:
+            expected = "quantized_grid_sphere"
+        elif ("laser" in brief_text or "beam" in brief_text) and any(k in brief_text for k in ("decimal", "gear", "integer", "rounding", "15-step")):
+            expected = "decimal_rounding_gear_track"
+        elif ("memory block" in brief_text or "memory" in brief_text) and any(k in brief_text for k in ("collapses", "reducing", "volume", "three-quarters", "75%")):
+            expected = "memory_volume_compression"
+        elif ("motherboard" in brief_text or "smartphone" in brief_text or "phone frame" in brief_text) and any(k in brief_text for k in ("socket", "local speed", "energy pulse", "device")):
+            expected = "phone_socket_hero_reveal"
+        elif "strawberry" in brief_text and ("10 letters" in brief_text or "laser" in brief_text or "sweeps" in brief_text):
             expected = "copper_strawberry_word_laser"
         elif "straw" in brief_text and "berry" in brief_text and "laser" in brief_text:
             expected = "three_token_blocks"
@@ -785,8 +809,10 @@ def main():
             expected = "strawberry_count_reveal"
         if expected and trace.get("treatment") != expected:
             stop(f"Visual QA rejected scene {scene_index + 1}: expected {expected}, got {trace.get('treatment')}.")
-    if len(set(treatment_names)) < min(5, len(data["scenes"])):
-        stop("Visual QA rejected the episode: too many scenes share the same generic treatment.")
+    diversity = treatment_diversity_report(treatment_names, len(data["scenes"]))
+    if not diversity["passed"]:
+        stop("Visual QA rejected the episode: too many scenes share the same generic treatment. "
+             + json.dumps(diversity, sort_keys=True))
     # Persist candidate editorial history only after render, audio/video QA, and scene-treatment QA.
     history = list(memory.get("recent_topics", []))
     history.append({"title": data["title"], "topic": data["topic"],
