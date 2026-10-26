@@ -240,7 +240,6 @@ scene.camera.data.dof.use_dof = True
 scene.camera.data.dof.focus_object = bpy.data.objects.get("Core") or bpy.data.objects.get("Helmet crown")
 scene.camera.data.dof.aperture_fstop = 5.6
 scene.render.resolution_percentage = 100
-scene.render.image_settings.file_format = "FFMPEG"
 scene.render.ffmpeg.format = "MPEG4"
 scene.render.ffmpeg.codec = "H264"
 scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
