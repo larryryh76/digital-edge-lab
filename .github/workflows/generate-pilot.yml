@@ -78,7 +78,11 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add memory/channel-memory.json
             git commit -m "Update Digital Edge Lab narrator memory"
-            git push
+            # Source fixes may land while a long render is running. Rebase the memory-only
+            # commit onto the latest main before pushing instead of failing on non-fast-forward.
+            git fetch origin main
+            git -c rebase.autoStash=true rebase origin/main
+            git push origin HEAD:main
           fi
 
       - name: Upload successful delivery
