@@ -225,7 +225,80 @@ elif "re-assembles" in brief_text or "flickers between 2 and 3" in brief_text or
         block_label(word,x,1.5,0.22)
     label("2  /  3",(0,-0.55,2.5),0.48,ivory)
     laser_obj=cube("Counter glitch spark",(0,-0.48,2.05),(0.85,0.035,0.035),spark_mat,0.005)
-elif any(k in brief_text for k in ("4921","serial number","macro shot","etched")):
+elif ("phone" in brief_text or "smartphone" in brief_text) and any(k in brief_text for k in ("massive", "crushing", "heavy", "too big")):
+    story_treatment = "phone_overloaded_by_model_cube"
+    # Oversized model weight visibly dwarfs a phone: scale contrast is the story.
+    phone = cube("Smartphone frame",(0,0.12,0.42),(1.15,0.20,2.15),steel,0.12)
+    cube("Phone glass screen",(0,-0.015,0.44),(0.98,0.035,1.92),navy,0.07)
+    hero_focus = cube("Oversized circuit model cube",(0,-0.12,2.55),(2.35,1.15,1.35),navy,0.12)
+    for j in range(4):
+        cube("Glowing cube circuit trace",(-0.75+j*0.5,-0.72,2.58),(0.025,0.025,0.75),glow,0.005)
+    label("TOO LARGE FOR PHONE",(0,-0.76,1.55),0.16,ivory)
+    # The weight descends toward the phone during the shot.
+    hero_focus.location.z += 0.48
+    hero_focus.keyframe_insert(data_path="location",frame=1)
+    hero_focus.location.z -= 0.48
+    hero_focus.keyframe_insert(data_path="location",frame=max(24,int(shot_seconds*12)))
+elif "16-bit" in brief_text or ("floating-point" in brief_text and "weights" in brief_text):
+    story_treatment = "high_precision_weight_sphere"
+    hero_focus = sphere("High precision glass weight sphere",(0,0,1.75),(0.98,0.98,0.98),token_cyan)
+    hero_focus.data.materials.clear()
+    apply_mat(hero_focus, material("Optical glass weight", (0.13,0.42,0.68), 0.45, 0.12, 0.2))
+    for j in range(28):
+        a=j*math.tau/28
+        x=1.02*math.cos(a); z=1.75+1.02*math.sin(a)
+        sphere("Floating precision coordinate",(x,-0.12,z),(0.035,0.035,0.035),gold if j%4==0 else glow)
+    for j in range(5):
+        label(str((j+1)*3277),(0.0,-0.98,0.65+j*0.24),0.11,ivory)
+elif ("4-bit" in brief_text or "coarse" in brief_text or "stepped" in brief_text) and "sphere" in brief_text:
+    story_treatment = "quantized_grid_sphere"
+    # Discrete brass blocks approximate a sphere, contrasting with continuous precision.
+    for row in range(5):
+        z=0.65+row*0.43
+        half_width=[1,2,3,2,1][row]
+        for col in range(half_width):
+            x=(col-(half_width-1)/2)*0.48
+            cube("Quantized brass sphere cell",(x,0.0,z),(0.43,0.43,0.38),gold,0.035)
+    for x in (-1.05,-0.55,0,0.55,1.05):
+        cube("Quantization grid line",(x,-0.27,1.55),(0.018,0.025,2.15),glow,0.003)
+    hero_focus=sphere("Coarse grid center marker",(0,-0.34,1.55),(0.13,0.08,0.13),glow)
+elif ("laser" in brief_text or "beam" in brief_text) and any(k in brief_text for k in ("decimal", "gear", "integer", "rounding", "15-step")):
+    story_treatment = "decimal_rounding_gear_track"
+    for j in range(12):
+        a=j*math.tau/12
+        x=1.1*math.cos(a); z=1.45+1.1*math.sin(a)
+        tooth=cube("Brass rounding gear tooth",(x,0.05,z),(0.34,0.38,0.18),gold,0.025)
+        tooth.rotation_euler[1]=-a
+    torus("Notched gear track",(0,0.04,1.45),0.86,0.11,steel)
+    hero_focus=cylinder("Integer rounding dial",(0,-0.25,1.45),0.57,0.2,navy)
+    for j in range(15):
+        a=j*math.tau/15
+        sphere("Discrete integer marker",(0.72*math.cos(a),-0.28,1.45+0.72*math.sin(a)),
+               (0.045,0.045,0.045),glow if j%3==0 else copper)
+    laser_obj=cube("Decimal-to-integer laser",( -1.5,-0.48,1.45),(1.2,0.035,0.035),glow,0.006)
+elif ("memory block" in brief_text or "memory" in brief_text) and any(k in brief_text for k in ("collapses", "reducing", "volume", "three-quarters", "75%")):
+    story_treatment = "memory_volume_compression"
+    hero_focus=cube("Oversized blue memory volume",(0,0,1.65),(2.15,1.0,1.8),token_cyan,0.12)
+    for j in range(4):
+        cube("Memory volume data stripe",(-0.72+j*0.48,-0.53,1.65),(0.025,0.025,1.3),glow,0.005)
+    cube("Compressed gold micro-cube",(0,-0.75,1.65),(0.56,0.42,0.56),gold,0.06)
+    label("75% LESS",(0,-0.78,0.78),0.19,ivory)
+    hero_focus.scale=(2.15,1.0,1.8)
+    hero_focus.keyframe_insert(data_path="scale",frame=1)
+    hero_focus.scale=(0.62,0.48,0.58)
+    hero_focus.keyframe_insert(data_path="scale",frame=max(24,int(shot_seconds*12)))
+elif ("motherboard" in brief_text or "smartphone" in brief_text or "phone frame" in brief_text) and any(k in brief_text for k in ("socket", "local speed", "energy pulse", "device")):
+    story_treatment = "phone_socket_hero_reveal"
+    cube("Glass smartphone body",(0,0.12,1.35),(1.45,0.25,2.65),steel,0.16)
+    cube("Smartphone screen",(0,-0.025,1.35),(1.28,0.035,2.42),navy,0.09)
+    hero_focus=cube("Central motherboard socket",(0,-0.11,1.5),(0.72,0.18,0.72),gold,0.07)
+    for j in range(8):
+        a=j*math.tau/8
+        x=0.52*math.cos(a); z=1.5+0.52*math.sin(a)
+        cube("Socket contact",(x,-0.24,z),(0.08,0.035,0.08),glow,0.01)
+    for radius in (0.85,1.08,1.32):
+        torus("Device energy pulse",(0,-0.28,1.5),radius,0.018,glow).rotation_euler[0]=math.radians(90)
+elif any(k in brief_text for k in ("4921","serial number","macro shot")):
     story_treatment = "macro_serial_number_reveal"
     hero_focus=cube("Macro token ingot",(0,0,1.55),(2.7,0.75,1.35),copper,0.15)
     label("4921",(0,-0.405,1.43),0.68,glow)
