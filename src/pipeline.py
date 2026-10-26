@@ -31,8 +31,14 @@ def treatment_diversity_report(treatment_names, scene_count=None):
     unique = sorted(set(treatment_names))
     repeated = {name: treatment_names.count(name) for name in unique
                 if treatment_names.count(name) > 1}
-    return {"passed": len(unique) >= required, "unique_count": len(unique),
-            "required_count": required, "repeated_treatments": repeated}
+    generic_fallbacks = {"technical_fallback", "semantic_vector_field",
+                         "searchable_record_drawers", "hybrid_retrieval_modules",
+                         "compute_core", "metallic_object_transformation"}
+    repeated_generic = {name: repeated[name] for name in repeated if name in generic_fallbacks}
+    passed = len(unique) >= required and not repeated_generic
+    return {"passed": passed, "unique_count": len(unique),
+            "required_count": required, "repeated_treatments": repeated,
+            "repeated_generic_fallbacks": repeated_generic}
 
 
 def stop(message):
@@ -784,7 +790,21 @@ def main():
                       str(brief_scene.get("on_screen_text", ""))).lower()
         expected = None
         # Specific physical actions take precedence over incidental nouns such as "etched".
-        if ("phone" in brief_text or "smartphone" in brief_text) and any(k in brief_text for k in ("massive", "crushing", "heavy", "too big")):
+        if ("invisible wall" in brief_text or "scatters into" in brief_text) and any(k in brief_text for k in ("laser", "beam")):
+            expected = "blocked_reverse_signal"
+        elif ("block" in brief_text and any(k in brief_text for k in ("laser beam", "laser"))) and any(k in brief_text for k in ("shoots from a to b", "from a to b", "tracks the beam", "travels from a to b")):
+            expected = "directed_relation_blocks"
+        elif "glass slabs" in brief_text and any(k in brief_text for k in ("tom cruise", "mary lee", "light pulse", "opaque black")):
+            expected = "two_slab_information_barrier"
+        elif "neural network node" in brief_text or ("network node" in brief_text and "sphere" in brief_text):
+            expected = "neural_node_data_flow"
+        elif ("digital library" in brief_text or "shelves" in brief_text) and "book" in brief_text:
+            expected = "digital_library_book_reveal"
+        elif "compass" in brief_text and "needle" in brief_text:
+            expected = "directional_compass_reveal"
+        elif ("second" in brief_text and "wire" in brief_text and any(k in brief_text for k in ("connecting b back to a", "circuit glows", "snaps into place"))):
+            expected = "bidirectional_circuit_reveal"
+        elif ("phone" in brief_text or "smartphone" in brief_text) and any(k in brief_text for k in ("massive", "crushing", "heavy", "too big")):
             expected = "phone_overloaded_by_model_cube"
         elif "16-bit" in brief_text or ("floating-point" in brief_text and "weights" in brief_text):
             expected = "high_precision_weight_sphere"
