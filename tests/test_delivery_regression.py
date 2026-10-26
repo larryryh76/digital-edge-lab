@@ -124,5 +124,42 @@ class DeliveryRegressionTests(unittest.TestCase):
         self.assertLess(source.index("video, duration, audio_qa = render(data, wav)"),
                         source.index('(OUT / "channel-memory.json").write_text'))
 
+    def test_visual_diversity_gate_rejects_genuine_repetition(self):
+        from src.pipeline import treatment_diversity_report
+        report = treatment_diversity_report([
+            "metallic_object_transformation", "metallic_object_transformation",
+            "metallic_object_transformation", "pi_sphere_compression",
+            "metallic_object_transformation", "metallic_object_transformation",
+            "metallic_object_transformation"
+        ])
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["unique_count"], 2)
+        self.assertEqual(report["required_count"], 5)
+        self.assertEqual(report["repeated_treatments"]["metallic_object_transformation"], 6)
+
+    def test_visual_diversity_gate_accepts_legitimately_distinct_scenes(self):
+        from src.pipeline import treatment_diversity_report
+        report = treatment_diversity_report([
+            "phone_overloaded_by_model_cube", "high_precision_weight_sphere",
+            "quantized_grid_sphere", "decimal_rounding_gear_track",
+            "memory_volume_compression", "phone_socket_hero_reveal",
+            "phone_socket_hero_reveal"
+        ])
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["unique_count"], 6)
+
+    def test_quantization_scene_briefs_have_specific_renderer_and_qa_treatments(self):
+        renderer = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
+        pipeline = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
+        for treatment in (
+            "phone_overloaded_by_model_cube", "high_precision_weight_sphere",
+            "quantized_grid_sphere", "decimal_rounding_gear_track",
+            "memory_volume_compression", "phone_socket_hero_reveal"
+        ):
+            self.assertIn(treatment, renderer)
+            self.assertIn(treatment, pipeline)
+        # "etched" is descriptive surface detail, not sufficient evidence for a serial-number scene.
+        self.assertIn('("4921","serial number","macro shot")', renderer)
+
 if __name__ == "__main__":
     unittest.main()
