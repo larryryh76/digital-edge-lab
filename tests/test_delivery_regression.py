@@ -110,6 +110,7 @@ class DeliveryRegressionTests(unittest.TestCase):
             self.assertIn(treatment, renderer)
         self.assertIn('label("STRAWBERRY"', renderer)
         self.assertIn('cube("Cyan laser sweep"', renderer)
+        self.assertIn('not any(k in brief_text for k in ("misaligned", "snap back", "gaps", "token gap", "sparks"))', renderer)
         self.assertIn('keyframe_insert(data_path="location", frame=end_frame)', renderer)
 
     def test_blender_scene_deadline_is_bounded(self):

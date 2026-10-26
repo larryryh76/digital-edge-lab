@@ -151,7 +151,8 @@ if "strawberry" in brief_text and ("laser" in brief_text or "sweeps" in brief_te
     for j in range(18):
         sphere("Copper dust mote", ((j-9)*0.34, 0.45+(j%3)*0.13, 1.0+(j%5)*0.33),
                (0.025,0.025,0.025), gold if j%2 else token_cyan)
-elif "straw" in brief_text and any(k in brief_text for k in ("block", "token", "split", "separate")):
+elif ("straw" in brief_text and any(k in brief_text for k in ("block", "token", "split", "separate"))
+      and not any(k in brief_text for k in ("misaligned", "snap back", "gaps", "token gap", "sparks"))):
     story_treatment = "three_token_blocks"
     for j,(word,x) in enumerate((("[STRAW]",-1.22),("[BER]",0.0),("[RY]",1.22))):
         obj=cube("Token block "+word,(x,0.0,1.65),(1.02,0.55,0.78),
