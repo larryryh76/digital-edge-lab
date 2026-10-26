@@ -33,11 +33,14 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install FFmpeg
-        timeout-minutes: 12
+      - name: Install FFmpeg and Blender runtime
+        timeout-minutes: 25
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg blender libegl1 libgl1
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 install -y --no-install-recommends ffmpeg blender libegl1 libgl1
+          ffmpeg -version
+          ffprobe -version
+          blender --version
 
       - name: Install Python dependencies
         timeout-minutes: 5
