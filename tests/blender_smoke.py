@@ -41,10 +41,13 @@ with tempfile.TemporaryDirectory(prefix='del-blender-smoke-') as td:
     if run.returncode:
         print((run.stdout + run.stderr)[-8000:])
         raise SystemExit('FAIL: Blender smoke render process failed')
-    candidates = sorted(p for p in output.parent.glob(output.stem + '*.mp4') if p.is_file())
+    import re
+    suffix_pattern = re.compile(r"^" + re.escape(output.stem) + r"\\d{4,6}-\\d{4,6}\\.mp4$")
+    candidates = sorted(p for p in output.parent.glob(output.stem + "*.mp4")
+                        if p.is_file() and (p == output or suffix_pattern.fullmatch(p.name)))
     print('Blender MP4 candidates:', [(p.name, p.stat().st_size) for p in candidates])
     if not output.exists() and len(candidates) == 1:
-        # Blender versions may append frame-range suffixes; normalize only a unique MP4.
+        # Same strict frame-range suffix normalization contract used by src/pipeline.py.
         candidates[0].replace(output)
     if not output.exists() or output.stat().st_size < 1000:
         print('Expected output:', str(output))

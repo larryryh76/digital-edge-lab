@@ -62,16 +62,31 @@ def diagnostic(stage, details):
     path.write_text(json.dumps(current, indent=2), encoding="utf-8")
 
 
+def record_model_event(operation, event):
+    """Keep model-level history instead of letting TTS overwrite the text request evidence."""
+    path = OUT / "diagnostics.json"
+    try:
+        current = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except Exception:
+        current = {}
+    history = current.setdefault("model_request_history", {}).setdefault(operation, [])
+    history.append(event)
+    current["model_request_history"][operation] = history[-40:]
+    path.write_text(json.dumps(current, indent=2), encoding="utf-8")
+
+
 def ordered_model_candidates(configured, available, audio=False):
     """Prefer current models for the requested task; skip deprecated and image-only models."""
     if audio:
-        eligible = [name for name in available if "tts" in name.lower() and "image" not in name.lower()]
+        eligible = [name for name, methods in available.items()
+                    if "generateContent" in methods and "tts" in name.lower()
+                    and "image" not in name.lower()]
         priority = ("gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts",
                     "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
     else:
-        eligible = [name for name in available
-                    if "flash" in name.lower() and "tts" not in name.lower()
-                    and "image" not in name.lower() and not name.startswith("gemini-2.5-")]
+        eligible = [name for name, methods in available.items()
+                    if "generateContent" in methods and "flash" in name.lower()
+                    and "tts" not in name.lower() and "image" not in name.lower()]
         priority = ("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
                     "gemini-3.5-flash", "gemini-3-flash-preview",
                     "gemini-3.1-flash-lite-preview", "gemini-3.1-flash-lite",
@@ -98,7 +113,7 @@ def request_gemini(model, parts, config=None):
     if not models:
         stop("No API-listed generateContent model suitable for this operation; inspect diagnostics.")
     # A failed model must not consume the entire run. Rotate quickly through alternatives.
-    deadline = time.monotonic() + 300
+    deadline = time.monotonic() + 150
     failures = []
     for name in models[:6]:
         for attempt in range(2):
@@ -123,6 +138,7 @@ def request_gemini(model, parts, config=None):
                             raise ValueError("empty response parts")
                         operation = "tts" if audio else "text"
                         ACTUAL_MODELS[operation] = name
+                        record_model_event(operation, {"status": "success", "model": name})
                         diagnostic("last_model_request", {"status": "success", "model": name, "operation": operation})
                         return output
                     except (ValueError, KeyError, IndexError, TypeError) as exc:
@@ -132,18 +148,25 @@ def request_gemini(model, parts, config=None):
                     detail = response.text[:400]
                     retryable = response.status_code in (429, 500, 502, 503, 504)
             failures.append({"model": name, "status": status, "attempt": attempt + 1, "detail": detail})
+            operation = "tts" if audio else "text"
+            record_model_event(operation, {"status": status, "model": name,
+                "attempt": attempt + 1, "detail": detail[:250]})
             diagnostic("last_model_request", {"status": status, "model": name,
-                "operation": "tts" if audio else "text", "failures": failures[-12:]})
-            if not retryable:
+                "operation": operation, "failures": failures[-12:]})
+            if not retryable or status in ("timeout", "network_error"):
+                # A timed-out model must not consume a second full request window; rotate to the
+                # next API-advertised candidate instead.
                 break
-            # Short retry once, then move to the next model instead of stalling on one model.
-            delay = min(0.8 + random.random() * 0.7, max(0, deadline - time.monotonic()))
+            # Retry one fast transient server/rate-limit failure, then rotate candidates.
+            delay = min(0.6 + random.random() * 0.5, max(0, deadline - time.monotonic()))
             if delay:
                 print("Gemini " + status + " on " + name + "; retrying once in "
                       + str(round(delay, 1)) + "s", flush=True)
                 time.sleep(delay)
     diagnostic("generation_failure", {"configured_model": model, "operation": "tts" if audio else "text",
         "attempted_models": models[:6], "failures": failures})
+    record_model_event("tts" if audio else "text", {"status": "exhausted",
+        "configured_model": model, "attempted_models": models[:6], "failure_count": len(failures)})
     stop("Gemini generation exhausted model fallbacks; diagnostics saved to output/diagnostics.json")
 
 
@@ -470,11 +493,68 @@ def validate_sources(data):
     }
     # Network reachability is advisory: hosted runners may block domains or have transient
     # network failures. Do not abort the entire render for that alone; mark the episode for review.
-    data["source_validation"]["review_required"] = (not checks or reachable == 0)
-    data["source_validation"]["status"] = (
-        "reachable_links_found" if reachable else "manual_review_required"
+    data["source_validation"]["reachability_status"] = (
+        "reachable_links_found" if reachable else "no_reachable_links"
     )
+    data["source_validation"]["source_claim_support_status"] = "HUMAN_REVIEW_REQUIRED"
+    data["source_validation"]["human_editorial_approval"] = "PENDING"
+    data["source_validation"]["review_required"] = True
+    data["source_validation"]["status"] = "HUMAN_REVIEW_REQUIRED"
     return data
+
+def normalize_blender_output(requested_path, scene_index, probe_runner=subprocess.run):
+    """Find only this scene's expected Blender MP4 names, ffprobe them, and normalize one match."""
+    requested = Path(requested_path)
+    # Blender appends a frame-range suffix to animation outputs on some versions:
+    # segment_00.mp4 -> segment_000001-0081.mp4. Do not accept arbitrary MP4s.
+    suffix_pattern = re.compile(
+        r"^" + re.escape(requested.stem) + r"\\d{4,6}-\\d{4,6}\\.mp4$"
+    )
+    candidates = []
+    if requested.is_file():
+        candidates.append(requested)
+    candidates.extend(p for p in requested.parent.glob(requested.stem + "*.mp4")
+                      if p.is_file() and p != requested and suffix_pattern.fullmatch(p.name))
+    candidates = sorted(set(candidates))
+    if len(candidates) != 1:
+        raise RuntimeError(
+            f"Scene {scene_index + 1}: expected exactly one current Blender MP4 for "
+            f"{requested.name}; found {[p.name for p in candidates]}"
+        )
+    candidate = candidates[0]
+    if candidate.stat().st_size < 1000:
+        raise RuntimeError(f"Scene {scene_index + 1}: Blender MP4 is too small ({candidate.stat().st_size} bytes): {candidate.name}")
+    probe = probe_runner(
+        ["ffprobe", "-v", "error", "-show_entries",
+         "format=duration:stream=codec_type,codec_name,width,height",
+         "-of", "json", str(candidate)],
+        check=False, capture_output=True, text=True, timeout=20,
+    )
+    if probe.returncode:
+        raise RuntimeError(f"Scene {scene_index + 1}: ffprobe rejected {candidate.name}: {probe.stderr[-1000:]}")
+    try:
+        payload = json.loads(probe.stdout)
+        videos = [x for x in payload.get("streams", []) if x.get("codec_type") == "video"]
+        duration = float(payload.get("format", {}).get("duration", 0))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise RuntimeError(f"Scene {scene_index + 1}: malformed ffprobe data for {candidate.name}: {exc}") from exc
+    if (len(videos) != 1 or videos[0].get("codec_name") != "h264"
+            or int(videos[0].get("width", 0)) < 100
+            or int(videos[0].get("height", 0)) < 100 or duration <= 0):
+        raise RuntimeError(f"Scene {scene_index + 1}: {candidate.name} is not a valid H.264 video (probe={payload})")
+    if candidate != requested:
+        if requested.exists():
+            raise RuntimeError(f"Scene {scene_index + 1}: refusing to overwrite existing requested output {requested}")
+        candidate.replace(requested)
+    diagnostic("scene_render_output", {
+        "scene_index": scene_index, "requested_path": str(requested),
+        "discovered_path": candidate.name, "normalized_path": str(requested),
+        "size_bytes": requested.stat().st_size, "duration_seconds": duration,
+        "codec": videos[0].get("codec_name"), "width": videos[0].get("width"),
+        "height": videos[0].get("height"), "status": "validated"
+    })
+    return requested
+
 
 def render(data, wav_path):
     probe = subprocess.run(
@@ -497,6 +577,10 @@ def render(data, wav_path):
         if not blender:
             stop("Blender is required for the animated 3D renderer but was not found.")
         blender_log = cards / f"scene_{i:02d}_blender.log"
+        # Delete any exact/suffixed scene outputs before rendering so stale clips cannot pass QA.
+        for stale_clip in clip.parent.glob(clip.stem + "*.mp4"):
+            if stale_clip.is_file():
+                stale_clip.unlink()
         blender_env = os.environ.copy()
         blender_env.update({
             "OMP_NUM_THREADS": "1",
@@ -515,8 +599,16 @@ def render(data, wav_path):
         if result.returncode:
             details = blender_log.read_text(encoding="utf-8", errors="replace")[-5000:]
             stop(f"Animated Blender render failed for scene {i + 1} (exit {result.returncode}). Log tail:\\n{details}")
-        if not clip.exists() or clip.stat().st_size < 10000:
-            stop(f"Blender did not produce a valid animated 3D clip for scene {i + 1}.")
+        try:
+            clip = normalize_blender_output(clip, i)
+        except RuntimeError as exc:
+            details = blender_log.read_text(encoding="utf-8", errors="replace")[-5000:]
+            diagnostic("scene_render_failure", {"scene_index": i, "error": str(exc),
+                "log_tail": details, "candidate_files": [
+                    {"name": p.name, "size_bytes": p.stat().st_size}
+                    for p in cards.parent.glob(clip.stem + "*.mp4") if p.is_file()
+                ]})
+            stop(str(exc) + "\\nBlender log tail:\\n" + details)
 
         # Render captions as a transparent overlay so the underlying 3D action remains visible.
         overlay = cards / f"caption_{i:02d}.png"
@@ -661,7 +753,15 @@ def main():
         "models": {"text": ACTUAL_MODELS["text"] or TEXT_MODEL, "tts": ACTUAL_MODELS["tts"] or TTS_MODEL},
         "source_validation": data.get("source_validation", {}),
         "human_review_required": True,
-        "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented"},
+        "editorial_review": {
+            "source_reachability": data.get("source_validation", {}).get("reachability_status", "unknown"),
+            "source_claim_support": "HUMAN_REVIEW_REQUIRED",
+            "human_fact_check": "PENDING",
+            "publication_ready": False
+        },
+        "output_path": str(video),
+        "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented",
+                       "scheduling": "not_implemented", "analytics": "not_implemented"},
     }
     # Final independent media inspection: stream metadata, dimensions, frame rate and contact sheet.
     probe_full = subprocess.run(
@@ -700,6 +800,10 @@ def main():
     }
     report["human_review_required"] = True
     report["source_validation"]["review_required"] = True
+    report["source_validation"]["source_claim_support_status"] = "HUMAN_REVIEW_REQUIRED"
+    report["source_validation"]["human_editorial_approval"] = "PENDING"
+    report["editorial_review"]["human_fact_check"] = "PENDING"
+    report["editorial_review"]["publication_ready"] = False
     report_path = OUT / "run-report.json"
     report_path.write_text(json.dumps(report, indent=2))
     # Package the actual narration audio and visual inspection aid with the delivery.
