@@ -47,6 +47,25 @@ class DeliveryRegressionTests(unittest.TestCase):
         self.assertNotIn("scene.render.file_format = ", scene)
         self.assertNotIn("s.render.file_format = ", smoke)
 
+
+    def test_gemini_fallback_prioritizes_current_models_and_skips_image_models(self):
+        from src.pipeline import ordered_model_candidates
+        available = {
+            "gemini-3.8-flash": ["generateContent"],
+            "gemini-3.7-flash": ["generateContent"],
+            "gemini-2.5-flash": ["generateContent"],
+            "gemini-3.8-flash-image": ["generateContent"],
+            "gemini-3.8-flash-tts": ["generateContent"],
+            "gemini-3.1-flash-tts-preview": ["generateContent"],
+        }
+        text_models = ordered_model_candidates("gemini-3.8-flash", available, audio=False)
+        self.assertEqual(text_models[:2], ["gemini-3.8-flash", "gemini-3.7-flash"])
+        self.assertNotIn("gemini-2.5-flash", text_models)
+        self.assertNotIn("gemini-3.8-flash-image", text_models)
+        tts_models = ordered_model_candidates("gemini-3.8-flash-tts", available, audio=True)
+        self.assertEqual(tts_models[:2], ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"])
+        self.assertNotIn("gemini-3.8-flash-image", tts_models)
+
     def test_blender_scene_deadline_is_bounded(self):
         source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
         self.assertRegex(source, r"timeout=150")
