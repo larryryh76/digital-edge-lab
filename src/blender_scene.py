@@ -436,7 +436,10 @@ area("Cool key light", (4,-5,6), 1050, (0.42,0.68,1.0), 5)
 area("Warm rim light", (-4,1,4), 1350, (1.0,0.48,0.16) if historical else (0.15,0.38,1.0), 3)
 area("Top softbox", (0,3,6), 900, (0.55,0.7,1.0), 4)
 
-if story_treatment in {"copper_strawberry_word_laser", "three_token_blocks",
+if story_treatment in {"phone_overloaded_by_model_cube", "high_precision_weight_sphere",
+                        "quantized_grid_sphere", "decimal_rounding_gear_track",
+                        "memory_volume_compression", "phone_socket_hero_reveal",
+                        "copper_strawberry_word_laser", "three_token_blocks",
                         "macro_serial_number_reveal", "tokenization_lens_reveal",
                         "pi_sphere_compression", "misaligned_token_reassembly",
                         "brand_cube_reveal"}:
