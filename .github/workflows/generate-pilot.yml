@@ -40,6 +40,12 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
+      - name: Initialize diagnostics
+        if: always()
+        run: |
+          mkdir -p output/diagnostics
+          { date -u +'%Y-%m-%dT%H:%M:%SZ'; echo "run_id=$GITHUB_RUN_ID"; echo "run_attempt=$GITHUB_RUN_ATTEMPT"; echo "commit=$GITHUB_SHA"; } > output/diagnostics/run-context.txt
+
       - name: Python syntax and offline tests
         run: |
           python -m compileall -q src tests
@@ -78,11 +84,12 @@ jobs:
           retention-days: 14
 
       - name: Preserve failure diagnostics
-        if: ${{ always() && (failure() || cancelled()) }}
+        if: ${{ failure() || cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: digital-edge-lab-failure-${{ github.run_number }}
           path: |
+            output/diagnostics/**
             output/**
             !output/delivery/digital-edge-lab-pilot.mp4
           if-no-files-found: warn
