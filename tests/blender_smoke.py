@@ -20,6 +20,7 @@ s.frame_start, s.frame_end = 1, 16
 s.render.file_format = 'FFMPEG'
 s.render.ffmpeg.format = 'MPEG4'; s.render.ffmpeg.codec = 'H264'
 s.render.filepath = str(__import__('pathlib').Path(out).with_suffix(''))
+s.render.use_file_extension = True
 bpy.ops.mesh.primitive_uv_sphere_add(segments=16, ring_count=8, location=(0,0,0))
 o = bpy.context.object
 o.keyframe_insert(data_path='location', frame=1); o.location.x = 1.0; o.keyframe_insert(data_path='location', frame=16)
@@ -40,11 +41,17 @@ with tempfile.TemporaryDirectory(prefix='del-blender-smoke-') as td:
     if run.returncode:
         print((run.stdout + run.stderr)[-8000:])
         raise SystemExit('FAIL: Blender smoke render process failed')
+    candidates = sorted(p for p in output.parent.glob(output.stem + '*.mp4') if p.is_file())
+    print('Blender MP4 candidates:', [(p.name, p.stat().st_size) for p in candidates])
+    if not output.exists() and len(candidates) == 1:
+        # Blender versions may append frame-range suffixes; normalize only a unique MP4.
+        candidates[0].replace(output)
     if not output.exists() or output.stat().st_size < 1000:
-        print((run.stdout + run.stderr)[-8000:])
-        candidates = sorted(str(p) for p in output.parent.glob(output.stem + '*'))
-        print('Blender output candidates:', candidates)
-        raise SystemExit('FAIL: smoke MP4 missing or empty')
+        print('Expected output:', str(output))
+        print('Configured Blender filepath:', str(output.with_suffix('')))
+        print('Blender stdout/stderr tail:\\n' + (run.stdout + run.stderr)[-12000:])
+        print('All output files:', [(str(p), p.stat().st_size) for p in output.parent.rglob('*') if p.is_file()])
+        raise SystemExit('FAIL: smoke MP4 missing or empty; see actual Blender output paths above')
     probe = subprocess.run([FFPROBE, '-v', 'error', '-show_entries', 'stream=codec_type,codec_name,width,height,nb_frames,r_frame_rate', '-show_entries', 'format=duration', '-of', 'json', str(output)], capture_output=True, text=True, timeout=20)
     if probe.returncode:
         raise SystemExit('FAIL: ffprobe rejected smoke MP4: ' + probe.stderr[-1000:])
