@@ -14,7 +14,7 @@ from mathutils import Vector
 out = sys.argv[sys.argv.index('--') + 1]
 s = bpy.context.scene
 s.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in bpy.types.RenderSettings.bl_rna.properties['engine'].enum_items.keys() else 'BLENDER_EEVEE'
-s.render.resolution_x, s.render.resolution_y, s.render.resolution_percentage = 180, 320, 50
+s.render.resolution_x, s.render.resolution_y, s.render.resolution_percentage = 180, 320, 100
 s.render.fps = 8
 s.frame_start, s.frame_end = 1, 16
 s.render.file_format = 'FFMPEG'
