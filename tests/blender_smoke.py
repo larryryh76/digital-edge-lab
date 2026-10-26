@@ -17,7 +17,7 @@ s.render.engine = 'BLENDER_EEVEE_NEXT' if 'BLENDER_EEVEE_NEXT' in bpy.types.Rend
 s.render.resolution_x, s.render.resolution_y, s.render.resolution_percentage = 180, 320, 100
 s.render.fps = 8
 s.frame_start, s.frame_end = 1, 16
-s.render.file_format = 'FFMPEG'
+s.render.image_settings.file_format = 'FFMPEG'
 s.render.ffmpeg.format = 'MPEG4'; s.render.ffmpeg.codec = 'H264'
 s.render.filepath = str(__import__('pathlib').Path(out).with_suffix(''))
 s.render.use_file_extension = True

@@ -39,6 +39,14 @@ class DeliveryRegressionTests(unittest.TestCase):
         smoke = (ROOT / "tests/blender_smoke.py").read_text(encoding="utf-8")
         self.assertIn("with_suffix('')", smoke)
 
+    def test_blender_video_format_uses_image_settings_property(self):
+        scene = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
+        smoke = (ROOT / "tests/blender_smoke.py").read_text(encoding="utf-8")
+        self.assertIn('scene.render.image_settings.file_format = "FFMPEG"', scene)
+        self.assertIn("s.render.image_settings.file_format = 'FFMPEG'", smoke)
+        self.assertNotIn("scene.render.file_format = ", scene)
+        self.assertNotIn("s.render.file_format = ", smoke)
+
     def test_blender_scene_deadline_is_bounded(self):
         source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
         self.assertRegex(source, r"timeout=150")

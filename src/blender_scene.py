@@ -26,7 +26,7 @@ try:
 except Exception:
     pass
 scene.render.fps = 8
-scene.render.file_format = "FFMPEG"
+scene.render.image_settings.file_format = "FFMPEG"
 scene.render.ffmpeg.format = "MPEG4"
 scene.render.ffmpeg.codec = "H264"
 scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
