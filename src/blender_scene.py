@@ -202,7 +202,11 @@ elif "magnifying glass" in brief_text or "no letters inside" in brief_text:
     for j in range(7):
         sphere("Abstract subword particle",((j-3)*0.22,-0.52,1.5+(j%2)*0.12),
                (0.055,0.055,0.055),gold if j%2 else glow)
-elif "balance scale" in brief_text or "alphabet beads" in brief_text:
+elif (("balance scale" in brief_text or "alphabet beads" in brief_text)
+      and "16-bit" not in brief_text
+      and not ("floating-point" in brief_text and "weights" in brief_text)):
+    # Precision-weight scenes take precedence when a generated brief mentions both
+    # a balance metaphor and the explicit high-precision sphere treatment.
     story_treatment = "token_vs_letters_balance"
     cylinder("Scale base",(0,0,0.18),0.72,0.25,steel)
     cylinder("Scale stem",(0,0,1.0),0.09,1.65,gold)
@@ -595,6 +599,32 @@ if laser_obj is not None:
     laser_obj.keyframe_insert(data_path="location", frame=(start_frame+end_frame)//2)
     laser_obj.location.x = end_x
     laser_obj.keyframe_insert(data_path="location", frame=end_frame)
+# Treatment-specific action: precision is shown as a continuous optical mass,
+# with the sphere rotating and expanding while its coordinate markers sweep around it.
+if story_treatment == "high_precision_weight_sphere" and hero_focus is not None:
+    hero_focus.rotation_euler = (0.0, 0.0, 0.0)
+    hero_focus.scale = (0.88, 0.88, 0.88)
+    hero_focus.keyframe_insert(data_path="rotation_euler", frame=start_frame)
+    hero_focus.keyframe_insert(data_path="scale", frame=start_frame)
+    hero_focus.rotation_euler.z = math.tau * 0.72
+    hero_focus.rotation_euler.x = math.radians(24)
+    hero_focus.scale = (1.08, 1.08, 1.08)
+    hero_focus.keyframe_insert(data_path="rotation_euler", frame=(start_frame + end_frame)//2)
+    hero_focus.keyframe_insert(data_path="scale", frame=(start_frame + end_frame)//2)
+    hero_focus.rotation_euler.z = math.tau * 1.4
+    hero_focus.rotation_euler.x = math.radians(-18)
+    hero_focus.scale = (0.96, 0.96, 0.96)
+    hero_focus.keyframe_insert(data_path="rotation_euler", frame=end_frame)
+    hero_focus.keyframe_insert(data_path="scale", frame=end_frame)
+    for marker in [o for o in scene.objects if o.name.startswith("Floating precision coordinate")]:
+        origin = marker.location.copy()
+        marker.keyframe_insert(data_path="location", frame=start_frame)
+        marker.location.x = origin.x * math.cos(math.radians(65)) + (origin.z - 1.75) * math.sin(math.radians(65))
+        marker.location.z = 1.75 - origin.x * math.sin(math.radians(65)) + (origin.z - 1.75) * math.cos(math.radians(65))
+        marker.keyframe_insert(data_path="location", frame=(start_frame + end_frame)//2)
+        marker.location.x = -origin.x
+        marker.location.z = 3.5 - origin.z
+        marker.keyframe_insert(data_path="location", frame=end_frame)
 for action in bpy.data.actions:
     for fcurve in action.fcurves:
         for key in fcurve.keyframe_points:
@@ -604,6 +634,8 @@ scene.render.filepath = str(Path(output_path).resolve().with_suffix(""))
 Path(output_path).with_name(Path(output_path).stem + ".visual.json").write_text(
     json.dumps({"scene_index": index, "treatment": story_treatment,
                 "hero_object": hero_focus.name if hero_focus else None,
-                "laser_action": bool(laser_obj), "brief": brief.get("visual", "")}, indent=2),
+                "laser_action": bool(laser_obj),
+                "treatment_specific_subject_animation": story_treatment == "high_precision_weight_sphere",
+                "brief": brief.get("visual", "")}, indent=2),
     encoding="utf-8")
 bpy.ops.render.render(animation=True)
