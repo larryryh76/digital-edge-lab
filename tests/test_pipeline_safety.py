@@ -52,9 +52,13 @@ class SafetyTests(unittest.TestCase):
 
     def test_failure_report_is_independent_of_delivery_report(self):
         # The workflow's always-on failure artifact must not depend on run-report.json.
-        workflow = open('.github/workflows/generate-pilot.yml', encoding='utf-8').read()
-        self.assertIn('if: failure() || cancelled()', workflow)
+        from pathlib import Path
+        workflow = Path('.github/workflows/generate-pilot.yml').read_text(encoding='utf-8')
+        # Check the YAML expression's intended status semantics, not a brittle spelling.
+        self.assertRegex(workflow, r'if:\s*\$\{\{\s*failure\(\)\s*\|\|\s*cancelled\(\)\s*\}\}')
         self.assertIn('output/**', workflow)
+        self.assertIn('output/diagnostics/**', workflow)
+        self.assertNotIn("hashFiles('output/delivery/run-report.json')", workflow.split('Preserve failure diagnostics', 1)[1])
 
 
 if __name__ == '__main__':
