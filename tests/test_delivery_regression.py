@@ -33,6 +33,12 @@ class DeliveryRegressionTests(unittest.TestCase):
         self.assertIn("output/**", workflow)
         self.assertIn("digital-edge-lab-failure-", workflow)
 
+    def test_blender_ffmpeg_output_path_lets_blender_add_extension(self):
+        source = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
+        self.assertIn('with_suffix("")', source)
+        smoke = (ROOT / "tests/blender_smoke.py").read_text(encoding="utf-8")
+        self.assertIn("with_suffix('')", smoke)
+
     def test_blender_scene_deadline_is_bounded(self):
         source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
         self.assertRegex(source, r"timeout=150")
