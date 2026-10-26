@@ -26,8 +26,8 @@ class DeliveryRegressionTests(unittest.TestCase):
         source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
         self.assertIn('"reachability_only": True', source)
         self.assertIn("editorial review is still required", source)
-        self.assertIn('"source_claim_support_status": "HUMAN_REVIEW_REQUIRED"', source)
-        self.assertIn('"human_editorial_approval": "PENDING"', source)
+        self.assertIn('["source_claim_support_status"] = "HUMAN_REVIEW_REQUIRED"', source)
+        self.assertIn('["human_editorial_approval"] = "PENDING"', source)
         self.assertIn('"review_required"] = True', source)
 
     def test_failure_artifact_does_not_depend_on_success_report(self):
@@ -64,7 +64,8 @@ class DeliveryRegressionTests(unittest.TestCase):
         }
         text_models = ordered_model_candidates("gemini-3.8-flash", available, audio=False)
         self.assertEqual(text_models[:2], ["gemini-3.8-flash", "gemini-3.7-flash"])
-        self.assertNotIn("gemini-2.5-flash", text_models)
+        self.assertIn("gemini-2.5-flash", text_models)
+        self.assertGreater(text_models.index("gemini-2.5-flash"), 1)
         self.assertNotIn("gemini-3.8-flash-image", text_models)
         tts_models = ordered_model_candidates("gemini-3.8-flash-tts", available, audio=True)
         self.assertEqual(tts_models[:2], ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"])

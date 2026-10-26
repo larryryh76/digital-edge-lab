@@ -734,7 +734,23 @@ def main():
     (OUT / "narration.txt").write_text(data["narration"], encoding="utf-8")
     wav = make_narration(data["narration"])
     video, duration, audio_qa = render(data, wav)
-    # Persist candidate editorial history only after render() completes media QA.
+    # Confirm every rendered scene reports the specific treatment used by Blender.
+    visual_traces = []
+    for i, scene in enumerate(data["scenes"]):
+        trace_path = OUT / f"segment_{i:02d}.visual.json"
+        if not trace_path.is_file():
+            stop(f"Scene {i + 1} has no renderer visual trace; refusing to accept unverified scene output.")
+        try:
+            trace = json.loads(trace_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            stop(f"Scene {i + 1} visual trace is unreadable: {exc}")
+        if trace.get("scene_index") != i or not trace.get("treatment") or trace.get("brief") != scene.get("visual", ""):
+            stop(f"Scene {i + 1} visual trace does not match the current scene brief.")
+        visual_traces.append(trace)
+    treatment_names = [x["treatment"] for x in visual_traces]
+    if len(set(treatment_names)) < min(5, len(data["scenes"])):
+        stop("Visual QA rejected the episode: too many scenes share the same generic treatment.")
+    # Persist candidate editorial history only after render, audio/video QA, and scene-treatment QA.
     history = list(memory.get("recent_topics", []))
     history.append({"title": data["title"], "topic": data["topic"],
                     "created_at_utc": datetime.now(timezone.utc).isoformat()})
@@ -760,6 +776,15 @@ def main():
             "publication_ready": False
         },
         "output_path": str(video),
+        "visual_scene_qa": {
+            "automated_treatment_trace": "PASS",
+            "distinct_treatments": len(set(treatment_names)),
+            "scene_count": len(visual_traces),
+            "scenes": [{"scene_index": x["scene_index"], "treatment": x["treatment"],
+                        "hero_object": x.get("hero_object"), "laser_action": x.get("laser_action"),
+                        "brief": x.get("brief")} for x in visual_traces],
+            "semantic_visual_review": "HUMAN_REVIEW_REQUIRED"
+        },
         "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented",
                        "scheduling": "not_implemented", "analytics": "not_implemented"},
     }
@@ -819,6 +844,15 @@ def main():
     shutil.copy2(contact, delivery / "contact-sheet.jpg")
     shutil.copy2(report_path, delivery / "run-report.json")
     shutil.copy2(OUT / "channel-memory.json", delivery / "channel-memory.json")
+    # Bundle the exact per-scene briefs, Blender logs, and treatment traces for human visual review.
+    review_bundle = delivery / "scene-review"
+    review_bundle.mkdir(exist_ok=True)
+    for review_file in cards.glob("scene_*"):
+        if review_file.is_file():
+            shutil.copy2(review_file, review_bundle / review_file.name)
+    for trace_file in OUT.glob("segment_*.visual.json"):
+        if trace_file.is_file():
+            shutil.copy2(trace_file, review_bundle / trace_file.name)
     print(json.dumps(report, indent=2))
     print("Pilot rendered. Inspect sources and media before posting.")
 
