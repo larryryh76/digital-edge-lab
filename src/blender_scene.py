@@ -135,7 +135,7 @@ def label(body, loc, size, mat=ivory):
 def block_label(body, x, z, size=0.22):
     return label(body, (x, -0.315, z), size, ivory)
 
-if "strawberry" in brief_text:
+if "strawberry" in brief_text and ("laser" in brief_text or "sweeps" in brief_text):
     story_treatment = "copper_strawberry_word_laser"
     # A large, legible, extruded copper word is the hero—not a network visualization.
     hero_focus = label("STRAWBERRY", (0, -0.55, 2.05), 0.48, copper)
@@ -273,10 +273,12 @@ for j in range(5):
 
 # Floating title plaque; concise scene phrase is part of the set dressing.
 title = str(brief.get("on_screen_text", brief.get("visual", "THE HIDDEN MECHANISM"))).strip()[:28]
-if story_treatment not in {"copper_strawberry_word_laser", "three_token_blocks",
-                           "macro_serial_number_reveal", "tokenization_lens_reveal",
-                           "pi_sphere_compression", "misaligned_token_reassembly",
-                           "brand_cube_reveal"}:
+if story_treatment in {"copper_strawberry_word_laser", "three_token_blocks",
+                        "macro_serial_number_reveal", "tokenization_lens_reveal",
+                        "pi_sphere_compression", "misaligned_token_reassembly",
+                        "brand_cube_reveal"}:
+    label(title, (0, -0.72, 3.05), 0.18, ivory)
+else:
     text_obj(title, (0, -1.28, 3.15), 0.22, material("Title ivory", (0.83,0.89,0.98), 0.0, 0.6, 0.1))
 
 # Cinematic three-point lighting and a subtle ground pool.

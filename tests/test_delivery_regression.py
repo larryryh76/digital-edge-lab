@@ -1,6 +1,8 @@
 import json
 import re
+import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,7 +88,7 @@ class DeliveryRegressionTests(unittest.TestCase):
             self.assertEqual(normalized, requested)
             self.assertTrue(requested.is_file())
             self.assertFalse(actual.exists())
-            self.assertEqual(calls, [str(requested)])
+            self.assertEqual(calls, [str(actual)])
             self.assertEqual(requested.stat().st_size, 4096)
 
     def test_suffixed_blender_outputs_fail_if_ambiguous(self):

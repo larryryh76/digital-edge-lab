@@ -508,7 +508,7 @@ def normalize_blender_output(requested_path, scene_index, probe_runner=subproces
     # Blender appends a frame-range suffix to animation outputs on some versions:
     # segment_00.mp4 -> segment_000001-0081.mp4. Do not accept arbitrary MP4s.
     suffix_pattern = re.compile(
-        r"^" + re.escape(requested.stem) + r"\\d{4,6}-\\d{4,6}\\.mp4$"
+        r"^" + re.escape(requested.stem) + r"\d{4,6}-\d{4,6}\.mp4$"
     )
     candidates = []
     if requested.is_file():

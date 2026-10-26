@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory(prefix='del-blender-smoke-') as td:
         print((run.stdout + run.stderr)[-8000:])
         raise SystemExit('FAIL: Blender smoke render process failed')
     import re
-    suffix_pattern = re.compile(r"^" + re.escape(output.stem) + r"\\d{4,6}-\\d{4,6}\\.mp4$")
+    suffix_pattern = re.compile(r"^" + re.escape(output.stem) + r"\d{4,6}-\d{4,6}\.mp4$")
     candidates = sorted(p for p in output.parent.glob(output.stem + "*.mp4")
                         if p.is_file() and (p == output or suffix_pattern.fullmatch(p.name)))
     print('Blender MP4 candidates:', [(p.name, p.stat().st_size) for p in candidates])
