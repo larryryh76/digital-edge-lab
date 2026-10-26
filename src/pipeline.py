@@ -234,7 +234,7 @@ punctuation, no generic greeting, no filler, no fake first-person experiments. E
 advance the story or explain what the viewer is seeing. Avoid jargon unless immediately explained.
 Read it aloud mentally: if it sounds like an AI blog post, rewrite it as spoken language. Start with a vivid
 claim, surprising contrast, or specific question—not "Did you know?". End with a satisfying payoff.
-Create 6-8 scene objects with "visual" and "on_screen_text". Each scene must describe a different
+Create exactly 7 scene objects with "visual" and "on_screen_text". Each scene must describe a different
 shot and physical composition that can be rendered as a distinct 3D setup: specify hero object,
 camera distance/angle, movement or action, environment, and lighting. The action must be filmable:
 an object falls, cracks, opens, expands, collides, transforms, flows, is revealed by a cutaway, or
@@ -277,6 +277,9 @@ never imply stock footage or real screenshots were created.
             stop("Generated script still lacks required fields after one repair attempt: " + ", ".join(missing))
     if len(data["narration"].split()) < 80 or len(data["scenes"]) < 5:
         stop("Generated narration or scene plan is too short.")
+    if len(data["scenes"]) != 7:
+        diagnostic("script_schema_failure", {"expected_scene_count": 7, "actual_scene_count": len(data["scenes"])})
+        stop(f"Pilot requires exactly seven distinct scenes; Gemini returned {len(data['scenes'])}. Refusing to silently ship a shorter episode.")
     # Reject generic filler and unsupported pseudo-technical explanations before paying for TTS.
     narration = str(data["narration"]).strip()
     if len(narration.split()) > 145:
