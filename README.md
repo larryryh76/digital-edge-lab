@@ -6,6 +6,21 @@ Digital Edge Lab is a zero-budget-first production workflow for original faceles
 
 **Development / private-pilot stage.** The workflow generates a reviewable video artifact; it does not publish publicly. We will only enable platform publishing after account ownership, permissions, upload tests, and quality checks are verified.
 
+## Verified capability status
+
+| Capability | Status | Evidence / limitation |
+|---|---|---|
+| Gemini script generation and TTS | Implemented; live availability varies | Uses API-key model discovery and bounded requests. The workflow run report records the selected model when generation succeeds. |
+| Procedural 3D rendering | Implemented; visual quality still needs human review | Blender MP4 smoke test and final media checks run in Actions; procedural scenes may still look repetitive. |
+| MP4 encoding and stream/audio QA | Automated checks implemented | H.264 portrait video, frame rate, audio stream, duration alignment and loudness are checked. |
+| Contact sheet and review bundle | Implemented in current pipeline | Successful delivery includes representative frames, narration WAV/text, metadata and run report. |
+| Source URL reachability | Automated partial check | HTTP reachability is not evidence that a source supports a claim; human fact-checking remains required. |
+| Transactional narrator memory | Implemented in pipeline ordering | Candidate memory is written only after render/media QA; workflow commits it only after successful job completion. |
+| Failure diagnostics | Implemented; verify on each failed run | Failure artifact upload is guarded with `always()` and includes available output/log files. |
+| YouTube OAuth/upload/scheduling/analytics | Not implemented | Owner account authorization and private upload testing are separate future milestones. |
+| TikTok authorization/upload/scheduling/analytics | Not implemented | Developer access and platform approval are not verified. |
+| Automatic weekly production at publish quality | Not yet production-ready | A successful render does not replace manual visual, factual, narration and caption review. |
+
 ## Required account setup
 
 ### 1. Google AI Studio (script and narration)
