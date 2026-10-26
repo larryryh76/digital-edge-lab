@@ -48,6 +48,11 @@
       "title": "Why Video Fades to Black: The Hidden Math of Bitrate Crushing",
       "topic": "Video Compression Macroblocks and Adaptive Bitrate Allocation",
       "created_at_utc": "2026-10-25T20:11:46.934721+00:00"
+    },
+    {
+      "title": "The Strawberry Paradox: Why AI Can't Count",
+      "topic": "LLM Tokenization and Subword Encoding",
+      "created_at_utc": "2026-10-26T12:46:51.614497+00:00"
     }
   ],
   "running_context": [
@@ -59,6 +64,7 @@
     "Episode: Why Vector Search Fails on Exact Matches — Hybrid Search: Combining BM25 Lexical Matching with Dense Vector Embeddings",
     "Episode: Why Running Two AI Models is Faster Than One — Speculative Decoding and Inference Latency Optimization in Large Language Models",
     "Episode: Why Your AI Code Agent Keeps Rewriting Working Code — Agentic Loop Hallucination Spirals and Guardrails in Autonomous AI Workflows",
-    "Episode: Why Video Fades to Black: The Hidden Math of Bitrate Crushing — Video Compression Macroblocks and Adaptive Bitrate Allocation"
+    "Episode: Why Video Fades to Black: The Hidden Math of Bitrate Crushing — Video Compression Macroblocks and Adaptive Bitrate Allocation",
+    "Episode: The Strawberry Paradox: Why AI Can't Count — LLM Tokenization and Subword Encoding"
   ]
 }
