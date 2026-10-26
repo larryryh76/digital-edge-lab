@@ -748,6 +748,27 @@ def main():
             stop(f"Scene {i + 1} visual trace does not match the current scene brief.")
         visual_traces.append(trace)
     treatment_names = [x["treatment"] for x in visual_traces]
+    # Distinct labels alone are not visual QA: ensure known concrete briefs select their matching set.
+    for scene_index, (brief_scene, trace) in enumerate(zip(data["scenes"], visual_traces)):
+        brief_text = (str(brief_scene.get("visual", "")) + " " +
+                      str(brief_scene.get("on_screen_text", ""))).lower()
+        expected = None
+        if "strawberry" in brief_text and "10 letters" in brief_text:
+            expected = "copper_strawberry_word_laser"
+        elif "straw" in brief_text and "berry" in brief_text and "laser" in brief_text:
+            expected = "three_token_blocks"
+        elif "38221" in brief_text or "token id" in brief_text:
+            expected = "token_id_cube_reveal"
+        elif "token library" in brief_text or "massive grid" in brief_text:
+            expected = "token_library_grid"
+        elif "magnifying glass" in brief_text or "no letters inside" in brief_text:
+            expected = "magnifying_lens_cutaway"
+        elif "balance scale" in brief_text or "alphabet beads" in brief_text:
+            expected = "token_vs_letters_balance"
+        elif "re-assembles" in brief_text or "flickers between 2 and 3" in brief_text or "blind spot" in brief_text:
+            expected = "strawberry_count_reveal"
+        if expected and trace.get("treatment") != expected:
+            stop(f"Visual QA rejected scene {scene_index + 1}: expected {expected}, got {trace.get('treatment')}.")
     if len(set(treatment_names)) < min(5, len(data["scenes"])):
         stop("Visual QA rejected the episode: too many scenes share the same generic treatment.")
     # Persist candidate editorial history only after render, audio/video QA, and scene-treatment QA.
@@ -795,6 +816,8 @@ def main():
          "-of", "json", str(video)], check=True, capture_output=True, text=True, timeout=25)
     media = json.loads(probe_full.stdout)
     vstreams = [x for x in media.get("streams", []) if x.get("codec_type") == "video"]
+    # Report the actual muxed delivery duration, not the source WAV's pre-render duration.
+    report["duration_seconds"] = round(float(media.get("format", {}).get("duration", duration)), 2)
     astreams = [x for x in media.get("streams", []) if x.get("codec_type") == "audio"]
     if not vstreams or not astreams or vstreams[0].get("codec_name") != "h264":
         stop("Final delivery failed codec/stream QA.")
