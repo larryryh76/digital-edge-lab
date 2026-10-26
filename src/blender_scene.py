@@ -170,6 +170,61 @@ elif ("straw" in brief_text and any(k in brief_text for k in ("block", "token", 
         obj.rotation_euler[1] = math.radians((-7,3,8)[j])
         block_label(word,x,1.67,0.20)
         torus("Token edge ring "+str(j),(x,-0.30,1.65),0.39,0.018,glow)
+elif "38221" in brief_text or "token id" in brief_text:
+    story_treatment = "token_id_cube_reveal"
+    hero_focus=cube("Token ID cube",(0,0,1.65),(1.55,1.15,1.25),token_cyan,0.12)
+    label("38221",(0,-0.59,1.56),0.42,ivory)
+    cylinder("Token pedestal",(0,0.05,0.48),1.0,0.22,steel)
+    for j in range(8):
+        a=j*math.tau/8
+        sphere("Cube orbit particle",(1.35*math.cos(a),0.2,1.65+1.35*math.sin(a)),
+               (0.045,0.045,0.045),glow)
+elif "token library" in brief_text or "massive grid" in brief_text:
+    story_treatment = "token_library_grid"
+    for row in range(4):
+        for col in range(5):
+            x=(col-2)*0.72
+            z=0.75+row*0.52
+            obj=cube("Library token "+str(row)+"-"+str(col),(x,0.55+row*0.22,z),
+                     (0.48,0.32,0.34),token_cyan if (row+col)%4==0 else copper,0.045)
+            if row==1 and col==2:
+                label("TOKEN",(x,-0.05,z),0.12,ivory)
+    ring=torus("Library scanning lens",(0,-0.15,1.65),1.1,0.06,glow)
+    ring.rotation_euler[0]=math.radians(90)
+elif "magnifying glass" in brief_text or "no letters inside" in brief_text:
+    story_treatment = "magnifying_lens_cutaway"
+    hero_focus=cube("Berry token block",(0,0,1.45),(1.5,0.55,0.8),token_cyan,0.09)
+    block_label("BERRY",0,1.45,0.24)
+    ring=torus("Magnifying glass lens",(0.2,-0.45,1.62),0.72,0.075,glow)
+    ring.rotation_euler[0]=math.radians(90)
+    cylinder("Lens handle",(0.75,-0.43,0.9),0.065,0.8,steel)
+    cylinder("Lens pedestal",(0,0.1,0.25),1.05,0.2,navy)
+    for j in range(7):
+        sphere("Abstract subword particle",((j-3)*0.22,-0.52,1.5+(j%2)*0.12),
+               (0.055,0.055,0.055),gold if j%2 else glow)
+elif "balance scale" in brief_text or "alphabet beads" in brief_text:
+    story_treatment = "token_vs_letters_balance"
+    cylinder("Scale base",(0,0,0.18),0.72,0.25,steel)
+    cylinder("Scale stem",(0,0,1.0),0.09,1.65,gold)
+    cylinder("Scale crossbar",(0,0,1.8),0.055,3.2,gold)
+    for side in (-1,1):
+        x=side*1.05
+        cylinder("Scale chain",(x,0,1.42),0.025,0.75,steel)
+        cylinder("Scale pan",(x,0,1.02),0.48,0.07,steel)
+    for j in range(8):
+        x=-1.25+(j%4)*0.17
+        z=1.15+(j//4)*0.12
+        sphere("Alphabet bead",(x,-0.08,z),(0.07,0.07,0.07),gold)
+    cube("Single compressed token",(1.05,-0.03,1.23),(0.6,0.45,0.38),token_cyan,0.07)
+    label("LETTERS",( -1.05,-0.55,0.65),0.16,ivory)
+    label("TOKEN",(1.05,-0.55,0.65),0.16,ivory)
+elif "re-assembles" in brief_text or "flickers between 2 and 3" in brief_text or "blind spot" in brief_text:
+    story_treatment = "strawberry_count_reveal"
+    for j,(word,x) in enumerate((("STRAW",-0.95),("BERRY",0.95))):
+        cube("Reassembled token "+word,(x,0,1.5),(1.45,0.5,0.7),copper if j==0 else token_cyan,0.08)
+        block_label(word,x,1.5,0.22)
+    label("2  /  3",(0,-0.55,2.5),0.48,ivory)
+    laser_obj=cube("Counter glitch spark",(0,-0.48,2.05),(0.85,0.035,0.035),spark_mat,0.005)
 elif any(k in brief_text for k in ("4921","serial number","macro shot","etched")):
     story_treatment = "macro_serial_number_reveal"
     hero_focus=cube("Macro token ingot",(0,0,1.55),(2.7,0.75,1.35),copper,0.15)
@@ -187,7 +242,7 @@ elif "lens" in brief_text or "through the lens" in brief_text:
     ring.scale=(1.0,1.0,1.0)
     for j in range(5):
         cube("Jagged token unit",(-1.55+j*0.75,-0.02,2.2+(j%2)*0.12),(0.58,0.38,0.34),token_cyan if j%2 else copper,0.045)
-elif "3.14159" in brief_text or "pi" in brief_text or "decimal" in brief_text:
+elif "3.14159" in brief_text or "decimal" in brief_text or " pi " in (" " + brief_text + " "):
     story_treatment = "pi_sphere_compression"
     hero_focus=sphere("Pi metallic sphere",(0,0,1.8),(1.15,1.15,1.15),copper)
     label("3.14159",(0,-1.02,1.72),0.32,ivory)
