@@ -298,6 +298,77 @@ elif ("motherboard" in brief_text or "smartphone" in brief_text or "phone frame"
         cube("Socket contact",(x,-0.24,z),(0.08,0.035,0.08),glow,0.01)
     for radius in (0.85,1.08,1.32):
         torus("Device energy pulse",(0,-0.28,1.5),radius,0.018,glow).rotation_euler[0]=math.radians(90)
+elif ("invisible wall" in brief_text or "scatters into" in brief_text) and any(k in brief_text for k in ("laser", "beam")):
+    story_treatment = "blocked_reverse_signal"
+    cube("Source block B",(-1.05,0.0,1.45),(0.9,0.65,0.75),copper,0.08)
+    cube("Destination block A",(1.05,0.0,1.45),(0.9,0.65,0.75),token_cyan,0.08)
+    block_label("B",-1.05,1.43,0.32)
+    block_label("A",1.05,1.43,0.32)
+    cube("Invisible wall barrier",(0,-0.12,1.5),(0.08,0.08,1.55),glow,0.01)
+    laser_obj=cube("Rejected reverse laser",(0.0,-0.38,1.5),(1.25,0.035,0.035),spark_mat,0.006)
+    for j in range(12):
+        a=j*math.tau/12
+        sphere("Reverse signal spark",(0.2*math.cos(a),-0.45,1.5+0.2*math.sin(a)),
+               (0.045,0.045,0.045),gold if j%2 else spark_mat)
+    label("REVERSE BLOCKED",(0,-0.55,2.55),0.19,ivory)
+elif ("block" in brief_text and any(k in brief_text for k in ("laser beam", "laser"))) and any(k in brief_text for k in ("shoots from a to b", "from a to b", "tracks the beam", "travels from a to b")):
+    story_treatment = "directed_relation_blocks"
+    cube("Block A",( -1.05,0.0,1.45),(0.95,0.68,0.78),copper,0.08)
+    cube("Block B",(1.05,0.0,1.45),(0.95,0.68,0.78),token_cyan,0.08)
+    block_label("A",-1.05,1.43,0.32)
+    block_label("B",1.05,1.43,0.32)
+    laser_obj=cube("Forward cyan laser",(0,-0.4,1.5),(2.0,0.035,0.035),glow,0.006)
+    label("A TO B",(0,-0.55,2.25),0.2,ivory)
+elif "glass slabs" in brief_text and any(k in brief_text for k in ("tom cruise", "mary lee", "light pulse", "opaque black")):
+    story_treatment = "two_slab_information_barrier"
+    left=cube("Tom name glass slab",(-1.0,0.0,1.65),(0.82,0.18,1.85),token_cyan,0.07)
+    right=cube("Mary name glass slab",(1.0,0.0,1.65),(0.82,0.18,1.85),steel,0.07)
+    block_label("TOM", -1.0,1.62,0.22)
+    block_label("MARY",1.0,1.62,0.22)
+    laser_obj=sphere("Information pulse",(-1.55,-0.38,1.65),(0.12,0.08,0.12),spark_mat)
+    for j in range(4):
+        cube("Slab data etching",(-1.0+j*0.12,-0.12,0.95),(0.025,0.025,0.55),glow,0.003)
+    label("ONE-WAY ASSOCIATION",(0,-0.45,2.85),0.17,ivory)
+elif "neural network node" in brief_text or ("network node" in brief_text and "sphere" in brief_text):
+    story_treatment = "neural_node_data_flow"
+    hero_focus=sphere("Neural network node",(0,0,1.65),(0.72,0.72,0.72),steel)
+    for j in range(6):
+        a=j*math.tau/6
+        torus("Cyan node vein",(0,0,1.65),0.77,0.025,glow).rotation_euler=(a,0,a*0.5)
+        sphere("Network connector",(1.35*math.cos(a),0.1,1.65+1.35*math.sin(a)),
+               (0.13,0.13,0.13),token_cyan)
+    laser_obj=sphere("Liquid gold data packet",(-1.25,-0.18,1.65),(0.11,0.11,0.11),gold)
+elif ("digital library" in brief_text or "shelves" in brief_text) and "book" in brief_text:
+    story_treatment = "digital_library_book_reveal"
+    for row in range(3):
+        for col in range(4):
+            x=(col-1.5)*0.78
+            z=0.75+row*0.78
+            cube("Library shelf",(x,0.65,z),(0.08,0.45,0.68),steel,0.02)
+            cube("Library volume",(x+0.23,0.35,z),(0.27,0.22,0.58),copper if (row==1 and col==2) else navy,0.025)
+    hero_focus=cube("Flying highlighted book",(0,-0.45,1.75),(0.8,0.12,0.95),gold,0.04)
+    cube("Blank book page",(-0.2,-0.54,1.75),(0.32,0.025,0.72),ivory,0.01)
+    cube("Text-filled cyan page",(0.2,-0.54,1.75),(0.32,0.025,0.72),token_cyan,0.01)
+    for j in range(5):
+        cube("Glowing page line",(0.2,-0.56,1.48+j*0.12),(0.22,0.012,0.012),glow,0.002)
+elif "compass" in brief_text and "needle" in brief_text:
+    story_treatment = "directional_compass_reveal"
+    cylinder("Compass brass housing",(0,0,1.35),1.0,0.22,gold)
+    cylinder("Compass midnight dial",(0,-0.13,1.35),0.88,0.05,navy)
+    torus("Compass rim",(0,-0.17,1.35),0.88,0.045,steel)
+    hero_focus=cube("Compass needle",(0,-0.23,1.42),(1.25,0.045,0.075),glow,0.02)
+    cube("Compass needle tail",( -0.42,-0.25,1.42),(0.36,0.05,0.09),copper,0.02)
+    label("BACKWARD",(0,-0.34,0.3),0.15,ivory)
+    label("FORWARD",(0,-0.34,2.35),0.15,glow)
+elif ("second" in brief_text and "wire" in brief_text and any(k in brief_text for k in ("connecting b back to a", "circuit glows", "snaps into place"))):
+    story_treatment = "bidirectional_circuit_reveal"
+    cube("Circuit block A",(-1.2,0.0,1.45),(0.85,0.62,0.72),copper,0.08)
+    cube("Circuit block B",(1.2,0.0,1.45),(0.85,0.62,0.72),token_cyan,0.08)
+    block_label("A",-1.2,1.43,0.3)
+    block_label("B",1.2,1.43,0.3)
+    cube("Forward cyan wire",(0,-0.28,1.72),(2.4,0.035,0.035),glow,0.005)
+    laser_obj=cube("Returning gold wire",(0,-0.35,1.22),(2.4,0.045,0.045),gold,0.005)
+    label("TWO-WAY LINK",(0,-0.55,2.35),0.2,ivory)
 elif any(k in brief_text for k in ("4921","serial number","macro shot")):
     story_treatment = "macro_serial_number_reveal"
     hero_focus=cube("Macro token ingot",(0,0,1.55),(2.7,0.75,1.35),copper,0.15)
@@ -412,7 +483,10 @@ for j in range(5):
 
 # Floating title plaque; concise scene phrase is part of the set dressing.
 title = str(brief.get("on_screen_text", brief.get("visual", "THE HIDDEN MECHANISM"))).strip()[:28]
-if story_treatment in {"phone_overloaded_by_model_cube", "high_precision_weight_sphere", "quantized_grid_sphere",
+if story_treatment in {"directed_relation_blocks", "blocked_reverse_signal", "two_slab_information_barrier",
+                        "neural_node_data_flow", "digital_library_book_reveal", "directional_compass_reveal",
+                        "bidirectional_circuit_reveal", "phone_overloaded_by_model_cube",
+                        "high_precision_weight_sphere", "quantized_grid_sphere",
                         "decimal_rounding_gear_track", "memory_volume_compression", "phone_socket_hero_reveal",
                         "copper_strawberry_word_laser", "three_token_blocks",
                         "macro_serial_number_reveal", "tokenization_lens_reveal",
@@ -456,7 +530,10 @@ scene.camera = camera
 scene.render.image_settings.color_mode = "RGB"
 scene.render.filepath = str(Path(output_path).resolve().with_suffix(""))
 scene.camera.data.dof.use_dof = story_treatment not in {
-    "phone_overloaded_by_model_cube", "high_precision_weight_sphere", "quantized_grid_sphere",
+    "directed_relation_blocks", "blocked_reverse_signal", "two_slab_information_barrier",
+    "neural_node_data_flow", "digital_library_book_reveal", "directional_compass_reveal",
+    "bidirectional_circuit_reveal", "phone_overloaded_by_model_cube",
+    "high_precision_weight_sphere", "quantized_grid_sphere",
     "decimal_rounding_gear_track", "memory_volume_compression", "phone_socket_hero_reveal",
     "copper_strawberry_word_laser", "three_token_blocks", "macro_serial_number_reveal",
     "tokenization_lens_reveal", "pi_sphere_compression", "misaligned_token_reassembly",
