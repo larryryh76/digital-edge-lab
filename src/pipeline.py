@@ -21,6 +21,7 @@ API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.8-flash")
 TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 W, H, FPS = 720, 1280, 24
+ACTUAL_MODELS = {"text": None, "tts": None}
 
 
 def stop(message):
@@ -99,7 +100,9 @@ def request_gemini(model, parts, config=None):
                         output = payload["candidates"][0]["content"]["parts"]
                         if not isinstance(output, list) or not output:
                             raise ValueError("empty response parts")
-                        diagnostic("last_model_request", {"status": "success", "model": name, "operation": "tts" if audio else "text"})
+                        operation = "tts" if audio else "text"
+                        ACTUAL_MODELS[operation] = name
+                        diagnostic("last_model_request", {"status": "success", "model": name, "operation": operation})
                         return output
                     except (ValueError, KeyError, IndexError, TypeError) as exc:
                         status, retryable, detail = "malformed_response", False, str(exc)[:250]
@@ -631,7 +634,7 @@ def main():
         "video_file": video.name, "duration_seconds": round(duration, 2),
         "status": "rendered_not_published",
         "audio_qa": audio_qa,
-        "models": {"text": TEXT_MODEL, "tts": TTS_MODEL},
+        "models": {"text": ACTUAL_MODELS["text"] or TEXT_MODEL, "tts": ACTUAL_MODELS["tts"] or TTS_MODEL},
         "source_validation": data.get("source_validation", {}),
         "human_review_required": True,
         "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented"},
