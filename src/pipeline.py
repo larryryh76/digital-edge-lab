@@ -208,7 +208,7 @@ graphics. Never invent statistics, promise income, or claim the brand personally
 an abstract AI-workflow topic merely because it sounds technical. Prefer a vivid, physical, surprising
 question with an answer that can be demonstrated on screen in 30-50 seconds. The narration must be
 factually coherent to a general audience: define any necessary technical term in plain English,
-avoid invented mechanisms and grandiose claims, and never confuse a metaphor with a literal process.
+avoid invented mechanisms and grandiose claims, and never confuse a metaphor with a literal process. For tokenization, never imply all models split a word identically, never invent token IDs, and never claim tokenization alone makes a task impossible; verify any exact split against a named tokenizer or explain that splits vary by model. Distinguish a useful metaphor from the actual mechanism.
 If the topic needs nuance, narrow the claim rather than bluffing.
 Include 2-3 reputable source URLs you believe are real; prefer primary research, official docs, and
 original product documentation. Do not invent URLs or overstate what a source proves. If uncertain,
