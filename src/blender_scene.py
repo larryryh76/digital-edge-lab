@@ -235,7 +235,7 @@ camera.rotation_euler = (Vector((0,0,1.25))-camera.location).to_track_quat("-Z",
 camera.data.lens = 48
 scene.camera = camera
 scene.render.image_settings.color_mode = "RGB"
-scene.render.filepath = str(Path(output_path).resolve())
+scene.render.filepath = str(Path(output_path).resolve().with_suffix(""))
 scene.camera.data.dof.use_dof = True
 scene.camera.data.dof.focus_object = bpy.data.objects.get("Core") or bpy.data.objects.get("Helmet crown")
 scene.camera.data.dof.aperture_fstop = 5.6
@@ -253,7 +253,7 @@ scene.camera.data.lens = 55
 scene.render.fps = 12
 scene.frame_start = 1
 scene.frame_end = max(24, int(shot_seconds * scene.render.fps))
-scene.render.filepath = str(Path(output_path).resolve())
+scene.render.filepath = str(Path(output_path).resolve().with_suffix(""))
 
 # Real 3D animation: hero geometry has subtle independent motion, while the camera
 # pushes and arcs through the set. This is rendered frame-by-frame, not a still-image zoom.
@@ -288,5 +288,5 @@ for action in bpy.data.actions:
     for fcurve in action.fcurves:
         for key in fcurve.keyframe_points:
             key.interpolation = "BEZIER"
-scene.render.filepath = str(Path(output_path).resolve())
+scene.render.filepath = str(Path(output_path).resolve().with_suffix(""))
 bpy.ops.render.render(animation=True)
