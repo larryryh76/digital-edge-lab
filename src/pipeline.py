@@ -636,18 +636,56 @@ def main():
         "human_review_required": True,
         "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented"},
     }
+    # Final independent media inspection: stream metadata, dimensions, frame rate and contact sheet.
+    probe_full = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries",
+         "format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,duration,sample_rate,channels,nb_frames",
+         "-of", "json", str(video)], check=True, capture_output=True, text=True, timeout=25)
+    media = json.loads(probe_full.stdout)
+    vstreams = [x for x in media.get("streams", []) if x.get("codec_type") == "video"]
+    astreams = [x for x in media.get("streams", []) if x.get("codec_type") == "audio"]
+    if not vstreams or not astreams or vstreams[0].get("codec_name") != "h264":
+        stop("Final delivery failed codec/stream QA.")
+    if (int(vstreams[0].get("width", 0)) != W or int(vstreams[0].get("height", 0)) != H
+            or vstreams[0].get("r_frame_rate") != f"{FPS}/1"):
+        stop("Final delivery failed portrait resolution or FPS QA.")
+    contact = OUT / "contact-sheet.jpg"
+    sample = subprocess.run(
+        ["ffmpeg", "-y", "-i", str(video), "-vf",
+         "fps=1/5,scale=180:320,tile=3x3", "-frames:v", "1", str(contact)],
+        capture_output=True, text=True, timeout=45)
+    if sample.returncode or not contact.exists() or contact.stat().st_size < 1000:
+        stop("Could not create visual contact sheet; see renderer/ffmpeg diagnostics.")
+    report["media_qa"] = {
+        "status": "PASS", "video_codec": vstreams[0].get("codec_name"),
+        "width": vstreams[0].get("width"), "height": vstreams[0].get("height"),
+        "fps": vstreams[0].get("r_frame_rate"), "video_frames": vstreams[0].get("nb_frames"),
+        "audio_codec": astreams[0].get("codec_name"),
+        "audio_sample_rate_hz": astreams[0].get("sample_rate"),
+        "audio_channels": astreams[0].get("channels"),
+        "contact_sheet": contact.name
+    }
+    report["checks"] = {
+        "video_audio_streams": "PASS", "audio_not_near_silent": "PASS",
+        "duration_alignment": "PASS", "portrait_720x1280": "PASS",
+        "fps_24": "PASS", "contact_sheet_created": "PASS",
+        "source_claim_support": "HUMAN_REVIEW_REQUIRED"
+    }
+    report["human_review_required"] = True
+    report["source_validation"]["review_required"] = True
     report_path = OUT / "run-report.json"
     report_path.write_text(json.dumps(report, indent=2))
-    # Keep silent intermediate renders and raw PCM out of the downloadable artifact.
+    # Package the actual narration audio and visual inspection aid with the delivery.
     delivery = OUT / "delivery"
     delivery.mkdir(exist_ok=True)
     for stale in delivery.iterdir():
         if stale.is_file():
             stale.unlink()
-    import shutil
     shutil.copy2(video, delivery / video.name)
     shutil.copy2(OUT / "metadata.json", delivery / "metadata.json")
     shutil.copy2(OUT / "narration.txt", delivery / "narration.txt")
+    shutil.copy2(wav, delivery / "narration.wav")
+    shutil.copy2(contact, delivery / "contact-sheet.jpg")
     shutil.copy2(report_path, delivery / "run-report.json")
     shutil.copy2(OUT / "channel-memory.json", delivery / "channel-memory.json")
     print(json.dumps(report, indent=2))
