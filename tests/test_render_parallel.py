@@ -91,7 +91,7 @@ class ParallelRenderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             work = Path(d)
             fake = work / "fake-blender"
-            fake.write_text("#!/usr/bin/env python3\\nimport sys\\nprint('synthetic Blender crash marker', flush=True)\\nsys.exit(7)\\n")
+            fake.write_text("#!/usr/bin/env python3\nimport sys\nprint('synthetic Blender crash marker', flush=True)\nsys.exit(7)\n")
             fake.chmod(0o755)
             stale = work / "segment_00.mp4"
             stale.write_bytes(b"stale")
@@ -101,7 +101,7 @@ class ParallelRenderTests(unittest.TestCase):
             episode = {"scenes": [scene]}
             window = {"frames": 12, "duration": 0.5}
             diag = pipeline.Diagnostics(work / "diagnostics.json")
-            with mock.patch.object(pipeline.shutil, "which", return_value=str(fake)), \\
+            with mock.patch.object(pipeline.shutil, "which", return_value=str(fake)), \
                  mock.patch.object(pipeline.scene_spec, "template_id", return_value="test-treatment"):
                 with self.assertRaisesRegex(RuntimeError, "synthetic Blender crash marker"):
                     pipeline.render_scene(episode, scene, window, work, diag)
