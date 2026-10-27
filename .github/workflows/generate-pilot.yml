@@ -332,7 +332,15 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           REQUESTED_MODE: ${{ github.event.inputs.mode }}
         run: |
-          requested="${REQUESTED_MODE:-auto}"
+          requested="${REQUESTED_MODE:-}"
+          if [ -z "$requested" ]; then
+            # Pull-request and push builds verify the engine deterministically; the
+            # generated path (Gemini script + hosted voice) runs on dispatch/nightly.
+            case "${GITHUB_EVENT_NAME}" in
+              workflow_dispatch|schedule) requested=generated ;;
+              *) requested=offline ;;
+            esac
+          fi
           if [ "$requested" = "auto" ]; then
             if [ -n "${GEMINI_API_KEY:-}" ]; then requested=generated; else requested=offline; fi
           fi
@@ -347,12 +355,17 @@ jobs:
         if: steps.mode.outputs.mode == 'generated'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python src/pipeline.py
+        run: |
+          python src/pipeline.py --fallback-plan plans/quantization-on-device.json
 
       - name: Produce pilot (deterministic offline plan, local voice)
         if: steps.mode.outputs.mode == 'offline'
         run: |
           python src/pipeline.py --offline --plan plans/quantization-on-device.json
+
+      - name: Publish run summary
+        if: always()
+        run: python src/run_summary.py >> "$GITHUB_STEP_SUMMARY"
 
       - name: Save narrator memory for the next episode
         if: success() && github.ref == 'refs/heads/main'

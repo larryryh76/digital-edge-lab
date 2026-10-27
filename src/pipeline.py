@@ -455,6 +455,9 @@ def main(argv=None):
     parser.add_argument("--plan", help="checked-in JSON episode plan (deterministic)")
     parser.add_argument("--offline", action="store_true",
                         help="no API calls; requires --plan and a local voice")
+    parser.add_argument("--fallback-plan",
+                        help="checked-in plan used only when the API is unavailable; the "
+                             "report is then labelled degraded, never generated")
     parser.add_argument("--keep-output", action="store_true")
     args = parser.parse_args(argv)
 
@@ -491,21 +494,50 @@ def main(argv=None):
                  diagnostics)
         client = GeminiClient(api_key, log=lambda event: diagnostics.append("gemini", event))
 
+    degraded = None
     try:
         episode = load_plan(args.plan) if args.plan else generate_episode(client, memory, diagnostics)
     except (RuntimeError, GeminiError) as exc:
-        fail(f"plan generation failed: {exc}", diagnostics)
+        if args.plan or not args.fallback_plan:
+            fail(f"plan generation failed: {exc}", diagnostics)
+        # The API is unavailable (quota, outage, rejected plan). Delivering the
+        # curated plan is honest only if the run says so: this is labelled
+        # degraded everywhere, and the local voice is used because the same
+        # outage would take the hosted voice with it.
+        degraded = {"stage": "plan_generation", "reason": str(exc)[:600],
+                    "plan": Path(args.fallback_plan).name}
+        diagnostics.append("plan_fallback", degraded)
+        print("[plan] Gemini unavailable; building the checked-in fallback plan with the "
+              "local voice. This delivery is DEGRADED, not a generated episode.", flush=True)
+        try:
+            episode = load_plan(args.fallback_plan)
+        except RuntimeError as plan_exc:
+            fail(f"fallback plan failed validation: {plan_exc}", diagnostics)
     (OUT / "episode-plan.json").write_text(json.dumps(episode, indent=2, ensure_ascii=False),
                                            encoding="utf-8")
     print(f"[plan] {episode['title']} ({len(episode['scenes'])} scenes, "
           f"{len(episode['narration'].split())} words, origin={episode['origin']})", flush=True)
 
+    def narrate(offline_voice):
+        return narration_mod.synthesize(episode, work / "narration", client=client,
+                                        tts_model=TTS_MODEL, offline=offline_voice)
+
     try:
-        wav, windows, narration_report = narration_mod.synthesize(
-            episode, work / "narration", client=client, tts_model=TTS_MODEL,
-            offline=args.offline)
+        wav, windows, narration_report = narrate(args.offline or degraded is not None)
     except narration_mod.NarrationError as exc:
-        fail(f"narration failed: {exc}", diagnostics)
+        if args.offline or (degraded is None and not args.fallback_plan):
+            fail(f"narration failed: {exc}", diagnostics)
+        degraded = degraded or {"stage": "narration", "reason": str(exc)[:600],
+                                "plan": episode["origin"]}
+        degraded["voice_fallback"] = True
+        diagnostics.append("narration_fallback", degraded)
+        print(f"[narration] hosted voice unavailable ({exc}); using the local voice. "
+              "This delivery is DEGRADED.", flush=True)
+        try:
+            wav, windows, narration_report = narrate(True)
+        except narration_mod.NarrationError as fallback_exc:
+            fail(f"narration failed and the local voice also failed: {fallback_exc}",
+                 diagnostics)
     diagnostics.set("narration", narration_report)
     (OUT / "narration.txt").write_text(episode["narration"], encoding="utf-8")
     total_audio = windows[-1]["end"]
@@ -571,9 +603,16 @@ def main(argv=None):
     failed_gates = decide_failures(scene_summary, diversity, captions, delivery_qa,
                                    final_motion)
 
+    if failed_gates:
+        status = "failed_qa"
+    elif degraded:
+        status = "verified_degraded_delivery"
+    else:
+        status = "verified_delivery"
     report = {
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "status": "failed_qa" if failed_gates else "verified_delivery",
+        "status": status,
+        "degraded": degraded,
         "title": episode["title"],
         "topic": episode["topic"],
         "origin": episode["origin"],
@@ -628,6 +667,16 @@ def main(argv=None):
                          ("contact-sheet.jpg", contact)):
         if path.exists():
             shutil.copy2(path, delivery / public)
+    if degraded:
+        # Never let a degraded build travel without the label attached.
+        (delivery / "DEGRADED_DELIVERY.txt").write_text(
+            "DEGRADED DELIVERY — not a generated episode.\n\n"
+            f"stage: {degraded.get('stage')}\n"
+            f"reason: {degraded.get('reason', '')[:1500]}\n\n"
+            "The scenes come from the checked-in fallback plan and the narration uses the "
+            "local espeak voice, because the Gemini pipeline was unavailable. The media "
+            "integrity, animation and timing gates below were still enforced.\n",
+            encoding="utf-8")
 
     report["delivery_path"] = str(delivery)
     (OUT / "run-report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False),
@@ -642,7 +691,8 @@ def main(argv=None):
           flush=True)
     if failed_gates:
         fail("delivery rejected by QA: " + ", ".join(failed_gates), diagnostics)
-    diagnostics.set("run", dict(diagnostics.data["run"], status="verified_delivery"))
+    diagnostics.set("run", dict(diagnostics.data["run"], status=report["status"],
+                                 degraded=bool(degraded)))
 
     # Candidate narrator memory is written only after every gate passed.
     candidate = dict(memory)

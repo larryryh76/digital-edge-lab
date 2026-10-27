@@ -13,6 +13,7 @@ import narration  # noqa: E402
 import pipeline  # noqa: E402
 
 WORKFLOW = ROOT / ".github" / "workflows" / "generate-pilot.yml"
+PIPELINE = (ROOT / "src" / "pipeline.py").read_text(encoding="utf-8")
 
 
 class CaptionTests(unittest.TestCase):
@@ -58,6 +59,45 @@ class CaptionTests(unittest.TestCase):
         result = media_qa.caption_alignment(cards, windows, beats)
         self.assertFalse(result["passed"])
         self.assertTrue(any("stop at" in failure for failure in result["failures"]))
+
+
+class DegradedDeliveryTests(unittest.TestCase):
+    def _report(self, **overrides):
+        report = {
+            "status": "verified_delivery",
+            "origin": "gemini:gemini-3.6-flash",
+            "scene_count": 7,
+            "narration": {"engine": "gemini-tts", "publication_quality_voice": True},
+            "delivery_media": {"duration_seconds": 42.0, "width": 720, "height": 1280,
+                               "fps": "24/1"},
+            "scene_diversity": {"distinct_templates": 7},
+            "failed_gates": [],
+            "degraded": None,
+        }
+        report.update(overrides)
+        return report
+
+    def test_generated_run_summary_says_nothing_about_degradation(self):
+        import run_summary
+
+        text = run_summary.summary(self._report())
+        self.assertIn("verified_delivery", text)
+        self.assertNotIn("DEGRADED", text)
+
+    def test_degraded_run_summary_is_explicit(self):
+        import run_summary
+
+        report = self._report(status="verified_degraded_delivery",
+                              degraded={"stage": "plan_generation",
+                                        "reason": "http_429 on every model"})
+        text = run_summary.summary(report)
+        self.assertIn("DEGRADED DELIVERY", text)
+        self.assertIn("http_429", text)
+
+    def test_pipeline_can_fall_back_but_labels_it(self):
+        self.assertIn("--fallback-plan", PIPELINE)
+        self.assertIn("verified_degraded_delivery", PIPELINE)
+        self.assertIn("DEGRADED_DELIVERY.txt", PIPELINE)
 
 
 class GateTests(unittest.TestCase):
