@@ -69,6 +69,28 @@ class OperatorTests(unittest.TestCase):
             finally:
                 operator.DB_PATH = old
 
+    def test_latest_artifact_requires_report_and_nonempty_mp4(self):
+        old_root = operator.ROOT
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            delivery = root / "output" / "delivery"
+            delivery.mkdir(parents=True)
+            video = delivery / "pilot.mp4"
+            video.write_bytes(b"not a real encoded MP4, path resolution test only")
+            report = root / "output" / "run-report.json"
+            report.write_text(json.dumps({"status": "verified_delivery",
+                "video_file": "output/delivery/pilot.mp4"}), encoding="utf-8")
+            operator.ROOT = root
+            try:
+                path, loaded = operator._latest_verified_video()
+                self.assertEqual(path, video.resolve())
+                self.assertEqual(loaded["status"], "verified_delivery")
+                video.unlink()
+                with self.assertRaisesRegex(RuntimeError, "missing or empty"):
+                    operator._latest_verified_video()
+            finally:
+                operator.ROOT = old_root
+
 
 if __name__ == "__main__":
     unittest.main()
