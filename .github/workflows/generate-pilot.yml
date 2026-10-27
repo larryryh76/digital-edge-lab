@@ -56,16 +56,48 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      - name: Install FFmpeg, Blender, local voice and fonts
-        timeout-minutes: 25
+      - name: Restore cached Blender
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/blender
+          key: blender-4.2.11-linux-x64
+
+      - name: Install FFmpeg, local voice and fonts
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
           APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::LowSpeedLimit=2000 -o Acquire::LowSpeedTime=25"
-          timeout 600 sudo apt-get $APT update
-          timeout 900 sudo apt-get $APT install -y --no-install-recommends \
+          timeout 480 sudo apt-get $APT update
+          timeout 600 sudo apt-get $APT install -y --no-install-recommends \
             -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-            ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+            ffmpeg espeak-ng fonts-dejavu-core libegl1 libgl1 \
+            libx11-6 libxi6 libxxf86vm1 libxfixes3 libxrender1 \
+            libsm6 libice6 libxext6 libgomp1
+          ffmpeg -version | head -1
+
+      - name: Install pinned Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          URL=https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz
+          for attempt in 1 2 3; do
+            if curl -sS --fail --connect-timeout 20 --max-time 420 -o /tmp/blender.tar.xz "$URL"; then
+              break
+            fi
+            echo "download attempt $attempt failed; retrying"; sleep 5
+          done
+          sudo mkdir -p /opt/blender
+          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+          rm -f /tmp/blender.tar.xz
+          blender --version | head -1
+
+      - name: Verify render toolchain
+        run: |
+          set -euo pipefail
           command -v ffmpeg
           command -v blender
           ffmpeg -version | head -1
@@ -100,16 +132,48 @@ jobs:
           cache: pip
           cache-dependency-path: requirements.txt
 
-      - name: Install FFmpeg, Blender, local voice and fonts
-        timeout-minutes: 25
+      - name: Restore cached Blender
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/blender
+          key: blender-4.2.11-linux-x64
+
+      - name: Install FFmpeg, local voice and fonts
+        timeout-minutes: 12
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
           APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::LowSpeedLimit=2000 -o Acquire::LowSpeedTime=25"
-          timeout 600 sudo apt-get $APT update
-          timeout 900 sudo apt-get $APT install -y --no-install-recommends \
+          timeout 480 sudo apt-get $APT update
+          timeout 600 sudo apt-get $APT install -y --no-install-recommends \
             -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-            ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+            ffmpeg espeak-ng fonts-dejavu-core libegl1 libgl1 \
+            libx11-6 libxi6 libxxf86vm1 libxfixes3 libxrender1 \
+            libsm6 libice6 libxext6 libgomp1
+          ffmpeg -version | head -1
+
+      - name: Install pinned Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          URL=https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz
+          for attempt in 1 2 3; do
+            if curl -sS --fail --connect-timeout 20 --max-time 420 -o /tmp/blender.tar.xz "$URL"; then
+              break
+            fi
+            echo "download attempt $attempt failed; retrying"; sleep 5
+          done
+          sudo mkdir -p /opt/blender
+          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+          rm -f /tmp/blender.tar.xz
+          blender --version | head -1
+
+      - name: Verify render toolchain
+        run: |
+          set -euo pipefail
           command -v ffmpeg
           command -v blender
           ffmpeg -version | head -1
