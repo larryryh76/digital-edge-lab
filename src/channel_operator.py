@@ -198,7 +198,8 @@ def execute_generated_episode(job_id, topic, series_id, episode_id):
         else:
             update_job(job_id, status="failed", stage="failed or QA rejected", pid=None,
                        error=tail[-6000:] or "Pipeline exited without a QA-passed run-report.",
-                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail}))
+                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail,
+                                                "series_id": series_id, "episode_id": episode_id}))
             conversation("assistant", "Episode generation failed or did not pass delivery QA. No completed episode was claimed.", job_id)
     except Exception as exc:
         update_job(job_id, status="failed", stage="failed to launch", pid=None, error=str(exc)[:6000])
