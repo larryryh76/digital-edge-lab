@@ -30,7 +30,7 @@ on:
 
 concurrency:
   group: digital-edge-lab-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: write
