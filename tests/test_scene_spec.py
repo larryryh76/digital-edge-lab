@@ -101,7 +101,7 @@ class DeterminismTests(unittest.TestCase):
                     "rotation_degrees_min", "scale_ratio_max", "scale_ratio_min",
                     "translate_down_min", "translate_min", "parts_moved_min",
                     "parts_removed_min", "stepped_positions_min", "partner_part_moves",
-                    "any_part_shrink_below",
+                    "any_part_shrink_below", "any_part_height_shrink_below",
                 }, f"{action} uses unchecked requirement {key}")
 
 

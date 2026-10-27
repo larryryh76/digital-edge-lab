@@ -223,6 +223,13 @@ def compare_motion(requirement, measured, part_measurements=None):
             failures.append(
                 f"no part was visibly deformed (best shrink ratio "
                 f"{min(ratios) if ratios else 1.0:.2f} > allowed {limit})")
+    if "any_part_height_shrink_below" in requirement:
+        limit = requirement["any_part_height_shrink_below"]
+        ratios = [p.get("height_ratio_min", 1.0) for p in part_measurements.values()]
+        if not ratios or min(ratios) > limit:
+            failures.append(
+                f"nothing was flattened (best height ratio "
+                f"{min(ratios) if ratios else 1.0:.2f} > allowed {limit})")
 
     floor = requirement.get("subject_displacement_min", 0.0)
     if measured.get("displacement", 0.0) < floor:
@@ -312,8 +319,9 @@ def evaluate_scene(scene, window, segment_path, trace, spec_module):
         "built_parts": sorted(built),
         "measured": {k: measured.get(k) for k in
                      ("displacement", "translate_down", "screen_pixels", "rotation_degrees",
-                      "scale_ratio_min", "scale_ratio_max", "distinct_positions",
-                      "parts_moved", "parts_removed", "start_world", "end_world")},
+                      "scale_ratio_min", "scale_ratio_max", "height_ratio_min",
+                      "distinct_positions", "parts_moved", "parts_removed",
+                      "start_world", "end_world")},
         "requirement": requirement,
         "encoded_motion": stats,
         "centre_motion": hero_energy,

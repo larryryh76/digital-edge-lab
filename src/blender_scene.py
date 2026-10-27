@@ -549,11 +549,6 @@ def key(obj, data_path, frame, value=None):
     return obj
 
 
-def hold(obj, data_path, frame):
-    obj.keyframe_insert(data_path=data_path, frame=frame)
-    return obj
-
-
 class Ctx:
     def __init__(self, studio, spec, hero, mover, parts, mats):
         self.studio = studio
@@ -579,9 +574,6 @@ class Ctx:
             if obj.name.startswith(name):
                 return obj
         return None
-
-
-ACT_KEYED_PATHS = ("location", "rotation_euler", "scale")
 
 
 def act_spin(ctx):
@@ -687,6 +679,12 @@ def act_collide(ctx):
               if o is not hero and o.name.startswith(("block_a", "slab_right", "mountain_voxel",
                                                        "pipe_merged", "node_satellite"))]
     partner = others[0] if others else None
+    if partner is None:
+        # Every collision needs a visible reaction: build the target it hits.
+        partner = ctx.add(ctx.studio.box(
+            "collision_target", (hero.location.x * 0.35, hero.location.y,
+                                 hero.location.z), (1.1, 0.9, 1.0),
+            ctx.mats["steel"], 0.05), part=None)
     start = hero.location.copy()
     key(hero, "location", ctx.start, (start.x * 1.9, start.y, start.z))
     key(hero, "location", int(ctx.end * 0.55), (start.x * 0.95, start.y, start.z))
@@ -728,6 +726,11 @@ def act_snap_to_grid(ctx):
 def act_dissolve(ctx):
     victims = ctx.parts.get("_all_pipes") or ctx.parts.get("voxel_cell") or []
     victims = [v for v in victims if v is not ctx.mover]
+    if len(victims) < 2:
+        raise RuntimeError(
+            f"dissolve is not filmable for subject {ctx.spec['subject']['kind']}: "
+            "no parallel parts to remove"
+        )
     for j, victim in enumerate(victims[:3]):
         key(victim, "scale", ctx.start + int((ctx.end - ctx.start) * 0.2 * j), (1, 1, 1))
         key(victim, "scale", ctx.start + int((ctx.end - ctx.start) * (0.5 + 0.15 * j)),
@@ -742,6 +745,15 @@ def act_dissolve(ctx):
 def act_collapse_to_one(ctx):
     pipes = ctx.parts.get("_all_pipes") or []
     merged = ctx.parts.get("pipe_merged", [None])[0]
+    if not pipes:
+        # A chip die collapses its cores instead of pipes.
+        pipes = [p for p in (ctx.parts.get("chip_core_b", [None])[0],
+                             ctx.parts.get("chip_core_c", [None])[0]) if p is not None]
+        merged = ctx.parts.get("chip_core_a", [None])[0]
+    if not pipes or merged is None:
+        raise RuntimeError(
+            f"collapse_to_one is not filmable for subject {ctx.spec['subject']['kind']}"
+        )
     for j, pipe in enumerate(pipes):
         key(pipe, "location", ctx.start, (pipe.location.x, pipe.location.y, pipe.location.z))
         key(pipe, "location", int(ctx.end * 0.65),
@@ -870,6 +882,14 @@ def act_compare_pan(ctx):
     left = ctx.parts.get("mountain_smooth", [None])[0]
     right = ctx.parts.get("mountain_voxel", [None])
     right_obj = right[0] if right else None
+    if left is None or right_obj is None:
+        # The balance scale compares two pans instead of two terrains.
+        left = ctx.parts.get("scale_pan_left", [None])[0]
+        right_obj = ctx.parts.get("scale_pan_right", [None])[0]
+        beam = ctx.parts.get("scale_beam", [None])[0]
+        if beam is not None:
+            key(beam, "rotation_euler", ctx.start, (0, 0, 0))
+            key(beam, "rotation_euler", ctx.end, (0, math.radians(14), 0))
     for obj, sign in ((left, -1), (right_obj, 1)):
         if obj is None:
             continue
@@ -1019,12 +1039,17 @@ def measure(camera, tracked):
                     points.append([round(corner.x, 4), round(corner.y, 4), round(corner.z, 4)])
                     sp = screen_point(camera, corner)
                     screen.append([round(sp.x, 3), round(sp.y, 3)])
+            xs = [p[0] for p in points] or [0.0]
+            ys = [p[1] for p in points] or [0.0]
+            zs = [p[2] for p in points] or [0.0]
             quat = objs[0].rotation_euler.to_quaternion()
             series.append({
                 "frame": frame,
                 "points": points,
                 "screen": screen,
                 "centroid": [round(v, 4) for v in world_center(objs)],
+                "extent": [round(max(xs) - min(xs), 4), round(max(ys) - min(ys), 4),
+                           round(max(zs) - min(zs), 4)],
                 "scale": round(sum(o.scale.length for o in objs) / len(objs), 4),
                 "quaternion": [round(v, 6) for v in quat],
             })
@@ -1065,6 +1090,9 @@ def summarize(series):
     first_scale = first["scale"] or 1.0
     distinct = len({(round(s["centroid"][0], 2), round(s["centroid"][2], 2))
                     for s in series})
+    first_extent = first.get("extent") or [1.0, 1.0, 1.0]
+    height_ratio = min((s.get("extent") or first_extent)[2] for s in series) / \
+        (first_extent[2] or 1.0)
     return {
         "displacement": round(displacement, 4),
         "centroid_displacement": round(max(math.dist(first["centroid"], s["centroid"])
@@ -1073,6 +1101,7 @@ def summarize(series):
         "screen_pixels": round(screen_delta, 2),
         "scale_ratio_max": round(max(s["scale"] for s in series) / first_scale, 4),
         "scale_ratio_min": round(min(s["scale"] for s in series) / first_scale, 4),
+        "height_ratio_min": round(height_ratio, 4),
         "rotation_degrees": round(rotation, 2),
         "distinct_positions": distinct,
         "final_scale": round(last["scale"], 4),
@@ -1126,8 +1155,6 @@ title = spec.get("on_screen_text") or spec["subject"].get("label") or ""
 if title:
     studio.label("scene_title", title, (0, -0.9, 0.32), 0.17, mats["ivory"])
 
-for fcurve in []:  # placeholder keeps keyframe normalisation in one place
-    pass
 for action in bpy.data.actions:
     for fcurve in action.fcurves:
         for kp in fcurve.keyframe_points:

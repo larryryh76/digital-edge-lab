@@ -53,7 +53,7 @@ ACTIONS = {
     "squeeze": {
         "summary": "clamp jaws close and the subject deforms between them",
         "motion": {"translate_min": 0.55, "partner_part_moves": True,
-                   "any_part_shrink_below": 0.80},
+                   "any_part_height_shrink_below": 0.72},
     },
     "descend": {
         "summary": "subject travels downward toward a target object",
@@ -121,7 +121,7 @@ SUBJECT_KINDS = {
     "glass_sphere": {
         "summary": "large translucent sphere with a glowing rim",
         "parts": ("sphere_core", "sphere_rim"),
-        "actions": ("compress", "expand", "descend", "collide", "spin", "dissolve", "pulse", "sweep", "fall"),
+        "actions": ("compress", "expand", "descend", "collide", "spin", "pulse", "sweep", "fall"),
         "keywords": ("sphere", "orb", "ball", "weights", "model"),
     },
     "metal_sphere": {
@@ -145,19 +145,19 @@ SUBJECT_KINDS = {
     "clamp": {
         "summary": "two heavy jaws and a screw applying pressure",
         "parts": ("clamp_jaw_upper", "clamp_jaw_lower", "clamp_screw"),
-        "actions": ("squeeze", "compress", "assemble"),
+        "actions": ("squeeze", "compress"),
         "keywords": ("clamp", "vise", "press", "crusher"),
     },
     "smartphone": {
         "summary": "recognisable phone chassis with screen and camera notch",
         "parts": ("phone_chassis", "phone_screen", "phone_notch"),
-        "actions": ("descend", "collide", "transform", "pulse", "reveal"),
+        "actions": ("descend", "collide", "transform", "pulse"),
         "keywords": ("phone", "smartphone", "mobile", "handset"),
     },
     "mountain_pair": {
         "summary": "two side-by-side terrain models, one smooth and one blocky",
         "parts": ("mountain_smooth", "mountain_voxel"),
-        "actions": ("compare_pan", "transform", "reveal", "sweep"),
+        "actions": ("compare_pan", "transform", "sweep"),
         "keywords": ("mountain", "terrain", "peak", "landscape"),
     },
     "pipe_bundle": {
@@ -169,7 +169,7 @@ SUBJECT_KINDS = {
     "chip_die": {
         "summary": "processor die with visible cores and traces",
         "parts": ("chip_substrate", "chip_core_a", "chip_core_b", "chip_core_c"),
-        "actions": ("collapse_to_one", "flow", "pulse", "reveal"),
+        "actions": ("collapse_to_one", "flow", "pulse"),
         "keywords": ("chip", "die", "processor", "silicon", "core"),
     },
     "weight_grid": {
@@ -181,7 +181,7 @@ SUBJECT_KINDS = {
     "block_pair": {
         "summary": "two labelled blocks connected (or not) by a link",
         "parts": ("block_a", "block_b", "block_link"),
-        "actions": ("flow", "collide", "reveal", "assemble"),
+        "actions": ("flow", "collide"),
         "keywords": ("two blocks", "relation", "link", "connection", "pair"),
     },
     "glass_slab": {
@@ -199,19 +199,19 @@ SUBJECT_KINDS = {
     "bookshelf": {
         "summary": "shelved volumes with one hero book pulled out",
         "parts": ("shelf_frame", "book_hero"),
-        "actions": ("reveal", "assemble", "scan"),
+        "actions": ("reveal", "scan"),
         "keywords": ("book", "library", "shelf", "volume"),
     },
     "compass": {
         "summary": "brass compass housing with a swinging needle",
         "parts": ("compass_body", "compass_needle"),
-        "actions": ("spin", "reveal"),
+        "actions": ("spin",),
         "keywords": ("compass", "needle", "direction"),
     },
     "lens": {
         "summary": "magnifying ring and glass that inspects the subject",
         "parts": ("lens_ring", "lens_glass"),
-        "actions": ("scan", "sweep", "reveal"),
+        "actions": ("scan", "sweep"),
         "keywords": ("lens", "magnify", "inspect", "zoom"),
     },
     "balance_scale": {
@@ -223,13 +223,13 @@ SUBJECT_KINDS = {
     "data_block": {
         "summary": "single chunky data block",
         "parts": ("block_core",),
-        "actions": ("compress", "fall", "collide", "transform", "dissolve"),
+        "actions": ("compress", "fall", "collide", "transform"),
         "keywords": ("block", "cube", "chunk", "data"),
     },
     "plinth_stack": {
         "summary": "stacked slabs on a plinth",
         "parts": ("plinth_base", "stack_lower", "stack_upper"),
-        "actions": ("assemble", "fall", "collide"),
+        "actions": ("fall", "collide"),
         "keywords": ("stack", "layers", "plinth", "tower"),
     },
     # Honest, clearly-labelled last resort. QA flags any episode that needs it.
