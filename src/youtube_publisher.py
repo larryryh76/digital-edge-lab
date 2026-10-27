@@ -30,7 +30,10 @@ def validate_metadata(metadata):
     return {"title": title, "description": description, "tags": tags[:500],
             "categoryId": str(metadata.get("category_id", "28")),
             "privacyStatus": str(metadata.get("privacy_status", "private")),
-            "madeForKids": bool(metadata.get("made_for_kids", False))}
+            "madeForKids": bool(metadata.get("made_for_kids", False)),
+            "publishAt": str(metadata.get("publish_at", metadata.get("publishAt", ""))).strip(),
+            "playlistId": str(metadata.get("playlist_id", metadata.get("playlistId", ""))).strip(),
+            "thumbnailPath": str(metadata.get("thumbnail_path", metadata.get("thumbnailPath", ""))).strip()}
 
 
 def content_fingerprint(video_path, metadata):
