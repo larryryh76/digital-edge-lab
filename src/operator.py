@@ -207,6 +207,35 @@ def interpret(message):
         thread = threading.Thread(target=execute_pilot, args=(job["id"], text), daemon=True)
         thread.start()
         result = {"ok": True, "message": "Started the repository's real offline pilot. Progress will reflect subprocess output.", "job": job_get(job["id"])}
+    elif low.startswith("continue"):
+        from channel_memory import ChannelMemory
+        memory = ChannelMemory(MEMORY_PATH)
+        data = memory.load()
+        match = re.search(r"continue\\s+series\\s+([a-z0-9-]+)", low)
+        series_id = match.group(1) if match else None
+        if series_id:
+            series = data.get("series", {}).get(series_id)
+        else:
+            active = [s for s in data.get("series", {}).values() if s.get("status") == "active"]
+            series = sorted(active, key=lambda s: s.get("created_at", ""))[-1] if active else None
+            series_id = series.get("series_id") if series else None
+        if not series:
+            result = {"ok": False, "message": "No active series found. Use 'create a new series about TOPIC' first, or specify 'continue series SERIES_ID'."}
+        elif not os.getenv("GEMINI_API_KEY"):
+            job = job_create("generated_episode", text, status="blocked", stage="missing GEMINI_API_KEY")
+            update_job(job["id"], result_json=json.dumps({"series_id": series_id, "blocked_reason": "Set GEMINI_API_KEY locally to enable topic-directed generation."}))
+            result = {"ok": False, "message": "Series found, but episode generation is blocked until GEMINI_API_KEY is configured.", "series": series, "job": job_get(job["id"])}
+        else:
+            episode_number = len(series.get("episode_ids", [])) + 1
+            episode_id = f"{series_id}-e{episode_number:02d}"
+            memory.create_episode(episode_id, title=f"{series.get('title', series_id)} — Episode {episode_number}",
+                                  topic=series.get("title", series_id), series_id=series_id,
+                                  episode_number=episode_number)
+            job = job_create("generated_episode", text)
+            threading.Thread(target=execute_generated_episode,
+                args=(job["id"], series.get("title", series_id), series_id, episode_id),
+                daemon=True).start()
+            result = {"ok": True, "message": "Continuation queued with this series' completed-episode memory. The real production subprocess will report progress and QA.", "series": memory.load()["series"][series_id], "job": job_get(job["id"])}
     elif "create a new series about " in low or "create new series about " in low:
         from channel_memory import ChannelMemory
         match = re.search(r"series about\s+(.+)$", text, re.I)
