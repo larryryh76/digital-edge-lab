@@ -1,0 +1,104 @@
+"""Renderer smoke test: render real scenes with Blender and gate them on motion.
+
+Run: python tests/render_smoke.py
+Needs Blender and ffmpeg on PATH; exits non-zero when a scene is static, when the
+wrong subject is built, or when the encoded pixels show no motion.
+"""
+
+import json
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+import media_qa  # noqa: E402
+import scene_spec  # noqa: E402
+
+SECONDS = 2.75
+SCENES = [  # (subject, action) — one per action family the engine relies on
+    ("glass_sphere", "compress"),
+    ("dial", "spin"),
+    ("pipe_bundle", "collapse_to_one"),
+    ("mountain_pair", "compare_pan"),
+]
+
+
+def main():
+    blender = shutil.which("blender")
+    if not blender:
+        print("SKIP: blender not available", file=sys.stderr)
+        return 2
+    if not shutil.which("ffmpeg") or not shutil.which("ffprobe"):
+        print("SKIP: ffmpeg not available", file=sys.stderr)
+        return 2
+
+    work = Path(tempfile.mkdtemp(prefix="del-smoke-"))
+    failures = []
+    frames = int(round(SECONDS * 24))
+    for i, (subject, action) in enumerate(SCENES):
+        if action not in scene_spec.SUBJECT_KINDS[subject]["actions"]:
+            failures.append(f"{subject}/{action}: action not allowed by registry")
+            continue
+        scene = scene_spec.normalize_scene({
+            "beat_id": "b1",
+            "subject": {"kind": subject, "material": "metal", "color": "cyan"},
+            "action": {"kind": action, "intensity": 0.8},
+            "environment": {"kind": "studio_plinth"},
+            "camera": {"framing": "medium", "move": "push_in"},
+            "lighting": {"mood": "cool"},
+            "on_screen_text": "SMOKE",
+        }, i, {"b1"})
+        spec_path = work / f"scene_{i:02d}.json"
+        spec_path.write_text(json.dumps(scene), encoding="utf-8")
+        out = work / f"segment_{i:02d}.mp4"
+        log = work / f"scene_{i:02d}.log"
+        print(f"[smoke] rendering {subject}/{action} -> {out.name}", flush=True)
+        with log.open("w", encoding="utf-8") as handle:
+            result = subprocess.run(
+                [blender, "-b", "-t", "2", "--python", str(ROOT / "src" / "blender_scene.py"),
+                 "--", str(spec_path), str(out), str(i), str(len(SCENES)),
+                 f"{SECONDS:.3f}"],
+                stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=600)
+        if result.returncode:
+            failures.append(f"{subject}/{action}: blender exit {result.returncode}\n"
+                            + log.read_text(encoding="utf-8", errors="replace")[-2500:])
+            continue
+        produced = sorted(out.parent.glob(out.stem + "*.mp4"))
+        if len(produced) != 1:
+            failures.append(f"{subject}/{action}: expected one mp4, got "
+                            f"{[p.name for p in produced]}")
+            continue
+        clip = produced[0]
+        if clip != out:
+            clip.replace(out)
+        trace_path = out.with_name(out.stem + ".visual.json")
+        if not trace_path.is_file():
+            failures.append(f"{subject}/{action}: no visual trace")
+            continue
+        trace = json.loads(trace_path.read_text(encoding="utf-8"))
+        window = {"index": i, "start": 0.0, "end": SECONDS, "duration": SECONDS,
+                  "frames": frames, "narration": "smoke test line"}
+        report = media_qa.evaluate_scene(scene, window, out, trace, scene_spec)
+        status = "PASS" if report["passed"] else "FAIL"
+        print(f"[smoke] {subject}/{action} {status} "
+              f"motion={report['measured']['displacement']} "
+              f"screen={report['measured']['screen_pixels']}px "
+              f"encoded={report['encoded_motion']['mean']}", flush=True)
+        if not report["passed"]:
+            failures.append(f"{subject}/{action}: {report['failures']}")
+
+    if failures:
+        print(json.dumps({"passed": False, "failures": failures}, indent=2), file=sys.stderr)
+        print(f"ARTIFACTS: {work}", file=sys.stderr)
+        return 1
+    print(f"render smoke: {len(SCENES)} scenes passed on real rendered media")
+    shutil.rmtree(work, ignore_errors=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

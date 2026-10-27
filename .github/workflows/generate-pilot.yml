@@ -1,28 +1,50 @@
-name: Digital Edge Lab — Generate pilot
+name: Digital Edge Lab — Produce verified pilot
 
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "generated = Gemini script + voice; offline = checked-in plan + local voice"
+        type: choice
+        default: generated
+        options:
+          - generated
+          - offline
   push:
     branches: [main]
     paths:
       - "src/**"
       - "tests/**"
+      - "plans/**"
+      - ".github/workflows/generate-pilot.yml"
+      - "requirements.txt"
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "plans/**"
       - ".github/workflows/generate-pilot.yml"
       - "requirements.txt"
   schedule:
     - cron: "0 10 * * *"
 
 concurrency:
-  group: digital-edge-lab-pilot-${{ github.ref }}
+  group: digital-edge-lab-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
   contents: write
 
+env:
+  PYTHONUNBUFFERED: "1"
+  GEMINI_TEXT_MODEL: gemini-3.8-flash
+  GEMINI_TTS_MODEL: gemini-3.8-flash-tts
+
 jobs:
-  generate:
+  verify:
+    name: Offline checks and renderer smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 40
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -32,45 +54,104 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
+          cache-dependency-path: requirements.txt
 
-      - name: Install FFmpeg and Blender runtime
+      - name: Install FFmpeg, Blender, local voice and fonts
         timeout-minutes: 25
         run: |
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 update
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 -o Acquire::https::Timeout=45 install -y --no-install-recommends ffmpeg blender libegl1 libgl1
-          ffmpeg -version
-          ffprobe -version
-          blender --version
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 install -y \
+            --no-install-recommends ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+          ffmpeg -version | head -1
+          blender --version | head -1
 
       - name: Install Python dependencies
         timeout-minutes: 5
-        run: pip install --disable-pip-version-check -r requirements.txt
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
 
-      - name: Initialize diagnostics
-        if: always()
+      - name: Compile and run offline unit tests
         run: |
-          mkdir -p output/diagnostics
-          { date -u +'%Y-%m-%dT%H:%M:%SZ'; echo "run_id=$GITHUB_RUN_ID"; echo "run_attempt=$GITHUB_RUN_ATTEMPT"; echo "commit=$GITHUB_SHA"; } > output/diagnostics/run-context.txt
-
-      - name: Python syntax and offline tests
-        run: |
+          set -euo pipefail
           python -m compileall -q src tests
           python -m unittest discover -s tests -v
 
-      - name: Blender smoke test
-        run: python tests/blender_smoke.py
+      - name: Renderer smoke test on real Blender output
+        run: python tests/render_smoke.py
 
-      - name: Generate pilot video
+  pilot:
+    name: Render and verify one complete pilot
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install FFmpeg, Blender, local voice and fonts
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 update
+          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 install -y \
+            --no-install-recommends ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+          ffmpeg -version | head -1
+          blender --version | head -1
+
+      - name: Install Python dependencies
+        timeout-minutes: 5
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Record run context
+        if: always()
+        run: |
+          mkdir -p output/diagnostics
+          {
+            date -u +'%Y-%m-%dT%H:%M:%SZ'
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "commit=$GITHUB_SHA"
+            echo "ref=$GITHUB_REF"
+            echo "mode=${{ github.event.inputs.mode || 'generated' }}"
+          } > output/diagnostics/run-context.txt
+
+      - name: Resolve production mode
+        id: mode
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_TEXT_MODEL: gemini-3.8-flash
-          GEMINI_TTS_MODEL: gemini-3.8-flash-tts
+          REQUESTED_MODE: ${{ github.event.inputs.mode }}
+        run: |
+          requested="${REQUESTED_MODE:-auto}"
+          if [ "$requested" = "auto" ]; then
+            if [ -n "${GEMINI_API_KEY:-}" ]; then requested=generated; else requested=offline; fi
+          fi
+          if [ "$requested" = "generated" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
+            echo "::error::GEMINI_API_KEY is not configured. Add it in Settings → Secrets, or select mode=offline."
+            exit 1
+          fi
+          echo "mode=$requested" >> "$GITHUB_OUTPUT"
+          echo "Resolved production mode: $requested"
+
+      - name: Produce pilot (Gemini script and narration)
+        if: steps.mode.outputs.mode == 'generated'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python src/pipeline.py
 
+      - name: Produce pilot (deterministic offline plan, local voice)
+        if: steps.mode.outputs.mode == 'offline'
+        run: |
+          python src/pipeline.py --offline --plan plans/quantization-on-device.json
+
       - name: Save narrator memory for the next episode
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
+        if: success() && github.ref == 'refs/heads/main'
         run: |
           cp output/channel-memory.json memory/channel-memory.json
           if ! git diff --quiet -- memory/channel-memory.json; then
@@ -78,19 +159,27 @@ jobs:
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add memory/channel-memory.json
             git commit -m "Update Digital Edge Lab narrator memory"
-            # Source fixes may land while a long render is running. Rebase the memory-only
-            # commit onto the latest main before pushing instead of failing on non-fast-forward.
             git fetch origin main
             git -c rebase.autoStash=true rebase origin/main
             git push origin HEAD:main
           fi
 
-      - name: Upload successful delivery
-        if: success() && hashFiles('output/delivery/run-report.json') != ''
+      - name: Upload verified delivery
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: digital-edge-lab-pilot
           path: output/delivery/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload renderer review frames
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-edge-lab-scene-review
+          path: output/delivery/scene-review/
+          if-no-files-found: warn
           retention-days: 14
 
       - name: Preserve failure diagnostics
@@ -99,8 +188,7 @@ jobs:
         with:
           name: digital-edge-lab-failure-${{ github.run_number }}
           path: |
-            output/diagnostics/**
             output/**
-            !output/delivery/digital-edge-lab-pilot.mp4
+            !output/delivery/*.mp4
           if-no-files-found: warn
           retention-days: 14
