@@ -20,6 +20,7 @@ import subprocess
 import sys
 import textwrap
 import time
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +32,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import media_qa  # noqa: E402
 import narration as narration_mod  # noqa: E402
 import scene_spec  # noqa: E402
+import render_parallel  # noqa: E402
 from gemini_client import GeminiClient, GeminiError  # noqa: E402
 
 OUT = ROOT / "output"
@@ -44,6 +46,7 @@ class Diagnostics:
     def __init__(self, path):
         self.path = Path(path)
         self.data = {}
+        self._lock = threading.RLock()
         if self.path.exists():
             try:
                 self.data = json.loads(self.path.read_text(encoding="utf-8"))
@@ -51,17 +54,22 @@ class Diagnostics:
                 self.data = {}
 
     def set(self, key, value):
-        self.data[key] = value
-        self.flush()
+        with self._lock:
+            self.data[key] = value
+            self.flush()
 
     def append(self, key, value):
-        self.data.setdefault(key, []).append(value)
-        self.data[key] = self.data[key][-40:]
-        self.flush()
+        with self._lock:
+            self.data.setdefault(key, []).append(value)
+            self.data[key] = self.data[key][-40:]
+            self.flush()
 
     def flush(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+        with self._lock:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            temp = self.path.with_suffix(self.path.suffix + ".tmp")
+            temp.write_text(json.dumps(self.data, indent=2), encoding="utf-8")
+            temp.replace(self.path)
 
 
 def fail(message, diagnostics=None, code=1):
@@ -308,62 +316,95 @@ def normalize_blender_output(requested, index):
     return requested
 
 
-# Software-rendered EEVEE costs ~2.1s per frame on a 4-core hosted runner; the
-# budget is measured, not guessed, and scales with the scene so a legitimately
-# long beat cannot be reported as a renderer failure.
-SECONDS_PER_FRAME_BUDGET = 4.0
-RENDER_STARTUP_SECONDS = 120
+# The full-pilot render phase has its own hard deadline. A scene timeout is
+# bounded by remaining budget; it is not used as a substitute for an episode deadline.
+SECONDS_PER_FRAME_BUDGET = float(os.getenv("DEL_RENDER_SECONDS_PER_FRAME", "4.0"))
+RENDER_STARTUP_SECONDS = int(os.getenv("DEL_RENDER_STARTUP_SECONDS", "120"))
+RENDER_PHASE_BUDGET_SECONDS = int(os.getenv("DEL_RENDER_PHASE_BUDGET_SECONDS", "2700"))
+RENDER_MAX_WORKERS = min(2, max(1, int(os.getenv("DEL_RENDER_WORKERS", "2"))))
 
 
 def render_timeout(frames, override=None):
     if override:
-        return override
+        return int(override)
     return int(RENDER_STARTUP_SECONDS + frames * SECONDS_PER_FRAME_BUDGET)
 
 
-def render_scene(episode, scene, window, work, diagnostics):
+def render_scene(episode, scene, window, work, diagnostics, cancel_event=None, deadline=None):
     index = scene["index"]
     spec = dict(scene)
     spec["on_screen_text"] = scene.get("on_screen_text", "")
     spec_path = work / f"scene_{index:02d}.json"
     spec_path.write_text(json.dumps(spec, indent=2), encoding="utf-8")
     raw = work / f"segment_{index:02d}.mp4"
+    # Remove only this scene's stale products before starting a fresh render.
     for stale in raw.parent.glob(raw.stem + "*"):
-        stale.unlink()
+        if stale.is_file():
+            stale.unlink()
     blender = shutil.which("blender")
     if not blender:
         raise RuntimeError("Blender is required but was not found on PATH")
     log_path = work / f"scene_{index:02d}_blender.log"
     env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
                MKL_NUM_THREADS="1", OPENCV_OPENCL_RUNTIME="disabled",
-               # No GPU on CI: make Mesa's software rasteriser the deterministic path.
                LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe")
     seconds = window["frames"] / FPS
     started = time.monotonic()
-    with log_path.open("w", encoding="utf-8") as log:
-        result = subprocess.run(
-            [blender, "-b", "-t", "2", "--python-exit-code", "1",
-             "--python", str(ROOT / "src" / "blender_scene.py"),
-             "--", str(spec_path), str(raw), str(index), str(len(episode["scenes"])),
-             f"{seconds:.4f}"],
-            stdout=log, stderr=subprocess.STDOUT, text=True, env=env,
-            timeout=render_timeout(window["frames"]),
-        )
-    if result.returncode:
-        tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-        raise RuntimeError(f"Blender failed for scene {index + 1} "
-                           f"(exit {result.returncode}):\n{tail}")
+    timeout_s = render_timeout(window["frames"])
+    if deadline is not None:
+        timeout_s = min(timeout_s, max(1, int(deadline - time.monotonic())))
+    argv = [blender, "-b", "-t", "1", "--python-exit-code", "1",
+            "--python", str(ROOT / "src" / "blender_scene.py"),
+            "--", str(spec_path), str(raw), str(index), str(len(episode["scenes"])),
+            f"{seconds:.4f}"]
+    outcome = "not_started"
+    proc = None
+    try:
+        with log_path.open("w", encoding="utf-8") as log:
+            proc = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, text=True, env=env)
+            outcome = "running"
+            while proc.poll() is None:
+                now = time.monotonic()
+                if cancel_event is not None and cancel_event.is_set():
+                    outcome = "cancelled_due_to_peer_failure"
+                    proc.terminate()
+                    try: proc.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        proc.kill(); proc.wait()
+                    raise RuntimeError("cancelled because another scene failed")
+                if deadline is not None and now >= deadline:
+                    outcome = "render_phase_deadline"
+                    proc.terminate()
+                    try: proc.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        proc.kill(); proc.wait()
+                    raise render_parallel.RenderDeadlineExceeded("render-phase deadline expired")
+                if now - started >= timeout_s:
+                    outcome = "scene_timeout"
+                    proc.terminate()
+                    try: proc.wait(timeout=8)
+                    except subprocess.TimeoutExpired:
+                        proc.kill(); proc.wait()
+                    raise TimeoutError(f"scene timeout after {timeout_s}s")
+                time.sleep(0.5)
+        if proc.returncode:
+            outcome = f"exit_{proc.returncode}"
+            raise RuntimeError(f"Blender exited with code {proc.returncode}")
+    except BaseException as exc:
+        elapsed = time.monotonic() - started
+        tail = log_path.read_text(encoding="utf-8", errors="replace")[-5000:] if log_path.exists() else ""
+        diagnostics.append("scene_render_failure", {
+            "scene_index": index, "scene_id": scene.get("id"),
+            "frames": window["frames"], "elapsed_seconds": round(elapsed, 2),
+            "subprocess_outcome": outcome, "error": str(exc), "log_path": str(log_path),
+            "log_tail": tail})
+        raise RuntimeError(f"scene {index + 1} ({scene_spec.template_id(scene)}), "
+                           f"{window['frames']} frames, elapsed={elapsed:.1f}s, "
+                           f"subprocess={outcome}: {exc}\nBlender log tail:\n{tail}") from exc
     elapsed = time.monotonic() - started
     print(f"[render] scene {index + 1} rendered {window['frames']} frames "
-          f"in {elapsed:.1f}s ({elapsed / max(window['frames'], 1):.2f}s/frame)",
-          flush=True)
-    try:
-        clip = normalize_blender_output(raw, index)
-    except RuntimeError as exc:
-        tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-        diagnostics.append("scene_render_failure",
-                           {"scene_index": index, "error": str(exc), "log_tail": tail})
-        raise
+          f"in {elapsed:.1f}s ({elapsed / max(window['frames'], 1):.2f}s/frame)", flush=True)
+    clip = normalize_blender_output(raw, index)
     trace_path = clip.with_name(clip.stem + ".visual.json")
     if not trace_path.is_file():
         raise RuntimeError(f"scene {index + 1}: renderer produced no visual trace")
@@ -372,23 +413,49 @@ def render_scene(episode, scene, window, work, diagnostics):
 
 
 def render_episode(episode, windows, work, diagnostics):
-    segments, traces = [], []
-    for scene, window in zip(episode["scenes"], windows):
+    started = time.monotonic()
+    deadline_seconds = RENDER_PHASE_BUDGET_SECONDS
+    print(f"[render] parallelism={RENDER_MAX_WORKERS}; render-phase deadline={deadline_seconds}s",
+          flush=True)
+    items = list(zip(episode["scenes"], windows))
+
+    def render_one(item_index, item, cancel_event, deadline):
+        scene, window = item
+        if time.monotonic() >= deadline:
+            raise render_parallel.RenderDeadlineExceeded(
+                f"scene {scene['index'] + 1}: no render budget remains")
         print(f"[render] scene {scene['index'] + 1}/{len(episode['scenes'])} "
               f"{scene_spec.template_id(scene)} ({window['duration']:.2f}s)", flush=True)
-        clip, trace = render_scene(episode, scene, window, work, diagnostics)
+        clip, trace = render_scene(episode, scene, window, work, diagnostics,
+                                   cancel_event=cancel_event, deadline=deadline)
         cards = narration_mod.caption_cards(window["narration"], window["duration"])
         final = work / f"final_segment_{scene['index']:02d}.mp4"
+        if final.exists():
+            final.unlink()
         encode_segment(clip, cards, window["duration"], final, work)
-        segments.append(final)
-        traces.append(trace)
         diagnostics.append("scene_rendered", {
             "scene_index": scene["index"], "template": trace.get("template"),
             "duration": window["duration"], "frames": window["frames"],
+            "elapsed_seconds": round(time.monotonic()-started, 2),
             "displacement": trace.get("measured", {}).get("mover", {}).get("displacement"),
             "screen_pixels": trace.get("measured", {}).get("mover", {}).get("screen_pixels"),
         })
-    return segments, traces
+        return final, trace
+
+    try:
+        ordered = render_parallel.run_parallel(items, render_one,
+                    max_workers=RENDER_MAX_WORKERS, deadline_seconds=deadline_seconds)
+    except BaseException as exc:
+        diagnostics.set("render_phase", {
+            "passed": False, "elapsed_seconds": round(time.monotonic()-started, 2),
+            "deadline_seconds": deadline_seconds, "parallelism": RENDER_MAX_WORKERS,
+            "error": str(exc)})
+        raise
+    diagnostics.set("render_phase", {
+        "passed": True, "elapsed_seconds": round(time.monotonic()-started, 2),
+        "deadline_seconds": deadline_seconds, "parallelism": RENDER_MAX_WORKERS,
+        "scene_count": len(ordered)})
+    return [result[0] for result in ordered], [result[1] for result in ordered]
 
 
 def concat_video(segments, out_path):
