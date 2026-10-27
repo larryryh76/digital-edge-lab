@@ -139,23 +139,26 @@ jobs:
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
           sudo ln -sf /opt/blender/blender /usr/local/bin/blender
-          if ldd /opt/blender/blender | grep -q "not found"; then
-            echo "Runner image is missing Blender shared libraries:"
-            ldd /opt/blender/blender | grep "not found"
-            APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
-            timeout 360 sudo apt-get $APT install -y --no-install-recommends \
-              -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-              libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 libice6 libxext6 \
-              libgomp1 libegl1 libgl1 libxkbcommon0 libxrandr2 libxinerama1
-          else
-            echo "All Blender shared libraries resolve on this runner image."
-          fi
+          # EEVEE needs a working OpenGL context even in --background mode. The
+          # hosted image ships libGLX but no EGL loader or Mesa software driver,
+          # and Blender dlopen()s libEGL so ldd cannot discover the gap.
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          timeout 420 sudo apt-get $APT install -y --no-install-recommends \
+            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+            libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri libxkbcommon0 \
+            libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 libice6 libxext6 libgomp1 \
+            libxrandr2 libxinerama1
           if ldd /opt/blender/blender | grep -q "not found"; then
             ldd /opt/blender/blender | grep "not found"
             echo "::error::Blender has unresolved shared libraries"
             exit 1
           fi
           blender --version | head -1
+          # Fail here, with a clear message, if the GPU backend cannot start.
+          LIBGL_ALWAYS_SOFTWARE=1 blender -b --factory-startup --python-expr \
+            "import gpu; print('GPU_RENDERER=' + gpu.platform.renderer_get()); print('GPU_BACKEND=' + gpu.platform.backend_type_get())" \
+            | tee /tmp/gpu-check.txt
+          grep -q "GPU_RENDERER=" /tmp/gpu-check.txt
 
       - name: Verify render toolchain
         run: |
@@ -273,23 +276,26 @@ jobs:
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
           sudo ln -sf /opt/blender/blender /usr/local/bin/blender
-          if ldd /opt/blender/blender | grep -q "not found"; then
-            echo "Runner image is missing Blender shared libraries:"
-            ldd /opt/blender/blender | grep "not found"
-            APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
-            timeout 360 sudo apt-get $APT install -y --no-install-recommends \
-              -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-              libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 libice6 libxext6 \
-              libgomp1 libegl1 libgl1 libxkbcommon0 libxrandr2 libxinerama1
-          else
-            echo "All Blender shared libraries resolve on this runner image."
-          fi
+          # EEVEE needs a working OpenGL context even in --background mode. The
+          # hosted image ships libGLX but no EGL loader or Mesa software driver,
+          # and Blender dlopen()s libEGL so ldd cannot discover the gap.
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          timeout 420 sudo apt-get $APT install -y --no-install-recommends \
+            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+            libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri libxkbcommon0 \
+            libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 libice6 libxext6 libgomp1 \
+            libxrandr2 libxinerama1
           if ldd /opt/blender/blender | grep -q "not found"; then
             ldd /opt/blender/blender | grep "not found"
             echo "::error::Blender has unresolved shared libraries"
             exit 1
           fi
           blender --version | head -1
+          # Fail here, with a clear message, if the GPU backend cannot start.
+          LIBGL_ALWAYS_SOFTWARE=1 blender -b --factory-startup --python-expr \
+            "import gpu; print('GPU_RENDERER=' + gpu.platform.renderer_get()); print('GPU_BACKEND=' + gpu.platform.backend_type_get())" \
+            | tee /tmp/gpu-check.txt
+          grep -q "GPU_RENDERER=" /tmp/gpu-check.txt
 
       - name: Verify render toolchain
         run: |

@@ -322,7 +322,9 @@ def render_scene(episode, scene, window, work, diagnostics):
         raise RuntimeError("Blender is required but was not found on PATH")
     log_path = work / f"scene_{index:02d}_blender.log"
     env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
-               MKL_NUM_THREADS="1", OPENCV_OPENCL_RUNTIME="disabled")
+               MKL_NUM_THREADS="1", OPENCV_OPENCL_RUNTIME="disabled",
+               # No GPU on CI: make Mesa's software rasteriser the deterministic path.
+               LIBGL_ALWAYS_SOFTWARE="1", GALLIUM_DRIVER="llvmpipe")
     seconds = window["frames"] / FPS
     started = time.monotonic()
     with log_path.open("w", encoding="utf-8") as log:

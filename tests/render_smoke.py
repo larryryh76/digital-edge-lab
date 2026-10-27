@@ -6,6 +6,7 @@ wrong subject is built, or when the encoded pixels show no motion.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -65,15 +66,17 @@ def main():
                  "--python", str(ROOT / "src" / "blender_scene.py"),
                  "--", str(spec_path), str(out), str(i), str(len(SCENES)),
                  f"{SECONDS:.3f}"],
-                stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=600)
+                stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=900,
+                env=dict(os.environ, LIBGL_ALWAYS_SOFTWARE="1",
+                         GALLIUM_DRIVER="llvmpipe"))
         log_tail = log.read_text(encoding="utf-8", errors="replace")
         elapsed = time.monotonic() - started
-        print(f"[smoke] rendered {frames} frames in {elapsed:.1f}s "
-              f"({elapsed / max(frames, 1):.2f}s/frame)", flush=True)
         if result.returncode:
             failures.append(f"{subject}/{action}: blender exit {result.returncode}\n"
                             + log_tail[-2500:])
             continue
+        print(f"[smoke] rendered {frames} frames in {elapsed:.1f}s "
+              f"({elapsed / max(frames, 1):.2f}s/frame)", flush=True)
         produced = sorted(out.parent.glob(out.stem + "*.mp4"))
         if len(produced) != 1:
             failures.append(f"{subject}/{action}: expected one mp4, got "
