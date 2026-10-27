@@ -200,7 +200,7 @@ def main():
     work.mkdir(parents=True,exist_ok=True)
     voice = work / "narration.wav"
     full_script = " ".join(narration)
-    subprocess.run([voice_bin,"-v","en-us+f3","-s","178","-p","44","-a","165","-w",str(voice),full_script],check=True,timeout=90)
+    subprocess.run([voice_bin,"-v","en-us+f3","-s","194","-p","44","-a","165","-w",str(voice),full_script],check=True,timeout=90)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     mp4 = OUT / f"digital-edge-lab-{stamp}.mp4"
     # Stream raw frames to ffmpeg: fast, deterministic, genuinely animated, no Blender/GPU.
