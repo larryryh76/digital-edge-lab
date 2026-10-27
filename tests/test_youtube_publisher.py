@@ -5,7 +5,7 @@ import types
 from unittest.mock import patch
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from youtube_publisher import validate_metadata, PublishingError, upload_video, content_fingerprint
+from youtube_publisher import (validate_metadata, PublishingError, upload_video, content_fingerprint,\n                              fetch_video_analytics, build_youtube_analytics_service)
 
 
 class YouTubePublisherTests(unittest.TestCase):
@@ -52,6 +52,36 @@ class YouTubePublisherTests(unittest.TestCase):
                     upload_video(path, {"title": "Episode"}, service=Service(), state_file=state)
                 with self.assertRaisesRegex(PublishingError, "duplicate upload blocked"):
                     upload_video(path, {"title": "Episode"}, service=Service(), state_file=state)
+
+    def test_analytics_uses_real_query_result_and_validates_date_range(self):
+        class Query:
+            def execute(self):
+                return {"rows": [[12, 3, 1, 8.5]], "columnHeaders": [
+                    {"name": "views"}, {"name": "likes"}, {"name": "comments"},
+                    {"name": "estimatedMinutesWatched"}]}
+        class Reports:
+            def query(self, **kwargs):
+                self.kwargs = kwargs
+                return Query()
+        class Service:
+            def __init__(self):
+                self.report_api = Reports()
+            def reports(self):
+                return self.report_api
+        service = Service()
+        result = fetch_video_analytics("video123", "2026-10-01", "2026-10-10",
+                                       analytics_service=service)
+        self.assertEqual(result["rows"][0][0], 12)
+        self.assertEqual(service.report_api.kwargs["filters"], "video==video123")
+        with self.assertRaisesRegex(ValueError, "cannot end in the future"):
+            fetch_video_analytics("video123", "2026-10-01", "2099-01-01",
+                                  analytics_service=service)
+
+    def test_analytics_oauth_missing_client_is_a_clear_blocker(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(PublishingError, "OAuth client file missing"):
+                build_youtube_analytics_service(client_secret_file=Path(temp) / "missing.json",
+                                                token_file=Path(temp) / "token.json")
 
     def test_missing_video_and_non_private_requires_approval(self):
         with tempfile.TemporaryDirectory() as temp:
