@@ -53,10 +53,7 @@ class ParallelRenderTests(unittest.TestCase):
         def worker(i, item, cancel, deadline):
             if item == 2:
                 raise RuntimeError("synthetic Blender failure")
-            while not cancel.is_set():
-                if time.monotonic() > deadline:
-                    break
-                time.sleep(0.01)
+            time.sleep(0.03)
             return item
         with self.assertRaisesRegex(RuntimeError, "scene item 3 failed"):
             render_parallel.run_parallel([0, 1, 2, 3], worker,
@@ -65,7 +62,7 @@ class ParallelRenderTests(unittest.TestCase):
     def test_deadline_cancels_cooperative_workers(self):
         stopped = threading.Event()
         def worker(i, item, cancel, deadline):
-            while time.monotonic() < deadline and not cancel.is_set():
+            while not cancel.is_set():
                 time.sleep(0.01)
             stopped.set()
             return item
