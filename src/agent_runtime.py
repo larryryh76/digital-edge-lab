@@ -119,7 +119,8 @@ class GeminiToolAgent:
             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1600}
         }
         try:
-            response = self.session.post(url, params={"key": self.api_key}, json=payload, timeout=(8, 45))
+            response = self.session.post(url, headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json"},
+                                         json=payload, timeout=(8, 45))
         except requests.RequestException as exc:
             raise AgentError("Gemini request failed before a model response: " + str(exc)[:240]) from exc
         if response.status_code >= 400:
