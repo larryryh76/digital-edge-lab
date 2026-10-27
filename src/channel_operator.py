@@ -228,6 +228,69 @@ def _latest_verified_video():
     raise RuntimeError("Run-report says delivery passed, but its referenced MP4 is missing or empty.")
 
 
+def _research_topic(topic):
+    """Run a bounded Gemini Google Search-grounded research request and persist source notes."""
+    topic = str(topic).strip()
+    if not topic or len(topic) > 240:
+        raise ValueError("topic must contain 1-240 characters")
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("Grounded research requires GEMINI_API_KEY; no research request was made.")
+    import requests
+    model = os.getenv("DEL_RESEARCH_MODEL", os.getenv("DEL_AGENT_MODEL", "gemini-2.5-flash"))
+    prompt = (
+        "Research this topic for a short educational video: " + topic + "\\n"
+        "Use Google Search grounding. Return concise findings, dates/context, uncertainties, "
+        "and avoid unsupported statistics. Distinguish established facts from interpretation. "
+        "Do not invent citations; source URLs will be taken from grounding metadata."
+    )
+    try:
+        response = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            params={"key": api_key},
+            json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                  "tools": [{"google_search": {}}],
+                  "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1400}},
+            timeout=(8, 50))
+    except requests.RequestException as exc:
+        raise RuntimeError("Grounded research request failed: " + str(exc)[:250]) from exc
+    if response.status_code >= 400:
+        raise RuntimeError(f"Grounded research API returned HTTP {response.status_code}: {response.text[:350]}")
+    try:
+        payload = response.json()
+        candidate = payload["candidates"][0]
+        findings = "\\n".join(p.get("text", "") for p in candidate["content"]["parts"] if p.get("text")).strip()
+        metadata = candidate.get("groundingMetadata", {})
+        chunks = metadata.get("groundingChunks", [])
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError("Grounded research returned a malformed response.") from exc
+    sources, seen = [], set()
+    for chunk in chunks:
+        web = chunk.get("web", {}) if isinstance(chunk, dict) else {}
+        url = str(web.get("uri", "")).strip()
+        if url.startswith("https://") and url not in seen:
+            seen.add(url)
+            sources.append({"title": str(web.get("title", ""))[:250], "url": url})
+    if not findings or not sources:
+        raise RuntimeError("Research did not return findings plus Google grounding source URLs; refusing to save ungrounded notes.")
+    record = {"research_id": str(uuid.uuid4()), "topic": topic, "created_at": now(),
+              "provider": "Google Gemini Google Search grounding", "model": model,
+              "findings": findings[:9000], "sources": sources[:12],
+              "verification_status": "grounded_sources_returned_claim_review_still_required"}
+    from channel_memory import ChannelMemory
+    store = ChannelMemory(MEMORY_PATH)
+    data = store.load()
+    same = next((item for item in reversed(data.get("research", []))
+                 if item.get("topic", "").strip().casefold() == topic.casefold()
+                 and {s.get("url") for s in item.get("sources", [])} == {s.get("url") for s in record["sources"]}), None)
+    if same:
+        return {"research": same, "duplicate_prevented": True}
+    data.setdefault("research", []).append(record)
+    data["research"] = data["research"][-100:]
+    store.save(data)
+    return {"research": record, "duplicate_prevented": False}
+
+
 def _agent_tool(name, args):
     from channel_memory import ChannelMemory
     memory = ChannelMemory(MEMORY_PATH)
@@ -246,6 +309,8 @@ def _agent_tool(name, args):
             context["research"] = context.get("research", [])[-20:]
             context["production_history"] = context.get("production_history", [])[-20:]
         return {"found": True, "memory": context}
+    if name == "research_topic":
+        return _research_topic(args["topic"])
     if name == "start_episode":
         topic = str(args["topic"]).strip()
         if not topic or len(topic) > 240:
