@@ -215,7 +215,7 @@ def _latest_verified_video():
         report = json.loads(report_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise RuntimeError("Latest run-report is unreadable: " + str(exc)[:200]) from exc
-    if report.get("status") not in ("verified_delivery", "verified_degraded_delivery"):
+    if report.get("status") != "verified_delivery":
         raise RuntimeError("Latest pipeline report is not QA-passed; publishing is blocked.")
     candidates = []
     raw = report.get("video_file") or report.get("video_path")
