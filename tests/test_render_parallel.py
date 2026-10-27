@@ -4,6 +4,8 @@ import tempfile
 import threading
 import time
 import unittest
+import os
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -84,6 +86,35 @@ class ParallelRenderTests(unittest.TestCase):
             data = json.loads((Path(d) / "diagnostics.json").read_text())
             self.assertEqual(len(data["events"]), 40)
             self.assertEqual(len(data["events"]), len(diag.data["events"]))
+
+    def test_failed_blender_preserves_scene_log_and_removes_stale_outputs(self):
+        with tempfile.TemporaryDirectory() as d:
+            work = Path(d)
+            fake = work / "fake-blender"
+            fake.write_text("#!/usr/bin/env python3\\nimport sys\\nprint('synthetic Blender crash marker', flush=True)\\nsys.exit(7)\\n")
+            fake.chmod(0o755)
+            stale = work / "segment_00.mp4"
+            stale.write_bytes(b"stale")
+            stale_trace = work / "segment_00.visual.json"
+            stale_trace.write_text('{"old": true}')
+            scene = {"index": 0, "id": "test-scene"}
+            episode = {"scenes": [scene]}
+            window = {"frames": 12, "duration": 0.5}
+            diag = pipeline.Diagnostics(work / "diagnostics.json")
+            with mock.patch.object(pipeline.shutil, "which", return_value=str(fake)), \\
+                 mock.patch.object(pipeline.scene_spec, "template_id", return_value="test-treatment"):
+                with self.assertRaisesRegex(RuntimeError, "synthetic Blender crash marker"):
+                    pipeline.render_scene(episode, scene, window, work, diag)
+            self.assertFalse(stale.exists())
+            self.assertFalse(stale_trace.exists())
+            log = work / "scene_00_blender.log"
+            self.assertIn("synthetic Blender crash marker", log.read_text())
+            import json
+            record = json.loads((work / "diagnostics.json").read_text())
+            failure = record["scene_render_failure"][-1]
+            self.assertEqual(failure["frames"], 12)
+            self.assertIn("synthetic Blender crash marker", failure["log_tail"])
+            self.assertEqual(failure["subprocess_outcome"], "exit_7")
 
     def test_actual_encoded_delivery_qa_remains_in_pipeline(self):
         source = (ROOT / "src" / "pipeline.py").read_text()
