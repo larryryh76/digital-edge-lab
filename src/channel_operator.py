@@ -394,6 +394,19 @@ def _agent_tool(name, args):
         from tiktok_publisher import prepare_for_manual_upload
         result = prepare_for_manual_upload(video, args["title"])
         return {"package": result, "report_status": report.get("status"), "published": False}
+    if name == "get_youtube_analytics":
+        from youtube_publisher import build_youtube_analytics_service, fetch_video_analytics
+        service = build_youtube_analytics_service()
+        result = fetch_video_analytics(args["video_id"], args["start_date"], args["end_date"],
+                                       analytics_service=service)
+        data = memory.load()
+        data.setdefault("analytics", []).append({"platform": "youtube", "video_id": args["video_id"],
+            "start_date": args["start_date"], "end_date": args["end_date"], "fetched_at": now(),
+            "result": result})
+        data["analytics"] = data["analytics"][-100:]
+        memory.save(data)
+        return {"analytics": result, "stored": True, "video_id": args["video_id"],
+                "date_range": [args["start_date"], args["end_date"]]}
     if name == "upload_youtube_private":
         video, report = _latest_verified_video()
         from youtube_publisher import upload_video
