@@ -30,6 +30,8 @@ class YouTubePublisherTests(unittest.TestCase):
             path = Path(temp) / "video.mp4"
             path.write_bytes(b"fake-not-a-real-video")
             state = Path(temp) / "state.json"
+            parent_module = types.ModuleType("googleapiclient")
+            parent_module.__path__ = []
             media_module = types.ModuleType("googleapiclient.http")
             media_module.MediaFileUpload = lambda *args, **kwargs: object()
             class Request:
@@ -41,7 +43,7 @@ class YouTubePublisherTests(unittest.TestCase):
             class Service:
                 def videos(self):
                     return Videos()
-            with patch.dict("sys.modules", {"googleapiclient": types.ModuleType("googleapiclient"),
+            with patch.dict("sys.modules", {"googleapiclient": parent_module,
                                             "googleapiclient.http": media_module}):
                 with self.assertRaisesRegex(PublishingError, "outcome is uncertain"):
                     upload_video(path, {"title": "Episode"}, service=Service(), state_file=state)
