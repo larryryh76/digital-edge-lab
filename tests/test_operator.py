@@ -141,6 +141,12 @@ class OperatorTests(unittest.TestCase):
                 path, loaded = operator._latest_verified_video()
                 self.assertEqual(path, video.resolve())
                 self.assertEqual(loaded["status"], "verified_delivery")
+                report.write_text(json.dumps({"status": "verified_degraded_delivery",
+                    "video_file": "output/delivery/pilot.mp4"}), encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "not QA-passed"):
+                    operator._latest_verified_video()
+                report.write_text(json.dumps({"status": "verified_delivery",
+                    "video_file": "output/delivery/pilot.mp4"}), encoding="utf-8")
                 video.unlink()
                 with self.assertRaisesRegex(RuntimeError, "missing or empty"):
                     operator._latest_verified_video()
