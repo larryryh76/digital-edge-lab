@@ -208,6 +208,30 @@ def interpret(message):
     return result
 
 
+INDEX_HTML = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Digital Edge Lab Operator</title><style>
+:root{color-scheme:dark;font:16px system-ui;background:#080b13;color:#e8edf7}body{margin:0 auto;max-width:900px;padding:20px}
+h1{font-size:1.35rem}p{color:#9aa8bf}.panel{border:1px solid #26324a;background:#0e1422;border-radius:14px;padding:14px;margin:14px 0}
+#messages{height:48vh;min-height:260px;overflow:auto;white-space:pre-wrap;display:flex;flex-direction:column;gap:10px}
+.msg{padding:10px 12px;border-radius:10px;background:#172136;overflow-wrap:anywhere}.user{border-left:3px solid #6c8cff}.assistant{border-left:3px solid #29c5d7}
+form{display:flex;gap:8px}input{flex:1;min-width:0;background:#080b13;border:1px solid #35415b;color:inherit;border-radius:8px;padding:12px}
+button{background:#4f6fe8;color:white;border:0;border-radius:8px;padding:10px 14px;font-weight:650}pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#b9c9e5}
+</style></head><body><h1>Digital Edge Lab · Channel Operator</h1>
+<p>Connected to the local backend. Commands are executed only where a real handler exists; unsupported work is reported honestly.</p>
+<div class="panel"><div id="messages" aria-live="polite"></div><form id="chat"><input id="prompt" autocomplete="off" placeholder="Run pilot, check status, create a series..." required><button>Send</button></form></div>
+<div class="panel"><strong>Persistent jobs</strong><button id="refresh" style="float:right">Refresh</button><pre id="jobs">Loading…</pre></div>
+<p>Local-only service · Do not expose this page/API publicly without authentication.</p>
+<script>
+const messages=document.querySelector('#messages'), jobs=document.querySelector('#jobs');
+function line(role,text){const d=document.createElement('div');d.className='msg '+role;d.textContent=role+': '+text;messages.appendChild(d);messages.scrollTop=messages.scrollHeight}
+async function refresh(){try{const r=await fetch('/api/jobs');const d=await r.json();jobs.textContent=JSON.stringify(d.jobs.map(j=>({id:j.id,kind:j.kind,status:j.status,stage:j.stage,error:j.error})),null,2)}catch(e){jobs.textContent='Backend unavailable: '+e}}
+document.querySelector('#refresh').onclick=refresh;
+document.querySelector('#chat').onsubmit=async e=>{e.preventDefault();const input=document.querySelector('#prompt'),message=input.value.trim();if(!message)return;line('user',message);input.value='';try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});const d=await r.json();line('assistant',d.message+'\n'+(d.job?'Job '+d.job.id+' · '+d.job.status:'')+(d.jobs?'\n'+d.jobs.map(j=>j.id+' · '+j.status+' · '+j.stage).join('\n'):''));await refresh()}catch(err){line('assistant','Request failed: '+err)}};
+refresh();fetch('/api/conversation').then(r=>r.json()).then(d=>d.messages.forEach(m=>line(m.role,m.message))).catch(()=>{});
+</script></body></html>"""
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "DigitalEdgeOperator/0.1"
     def _send(self, code, obj):
@@ -221,6 +245,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = urlparse(self.path).path
+        if path == "/":
+            payload = INDEX_HTML.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if path == "/health":
             return self._send(200, {"ok": True, "service": "digital-edge-operator", "database": str(DB_PATH)})
         if path == "/api/jobs":
