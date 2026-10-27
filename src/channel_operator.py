@@ -196,148 +196,181 @@ def execute_generated_episode(job_id, topic, series_id, episode_id):
         PROCESSES.pop(job_id, None)
 
 
+def _latest_verified_video():
+    report_path = ROOT / "output" / "run-report.json"
+    if not report_path.is_file():
+        raise RuntimeError("No pipeline run-report exists. Generate and QA an episode first.")
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Latest run-report is unreadable: " + str(exc)[:200]) from exc
+    if report.get("status") not in ("verified_delivery", "verified_degraded_delivery"):
+        raise RuntimeError("Latest pipeline report is not QA-passed; publishing is blocked.")
+    candidates = []
+    raw = report.get("video_file") or report.get("video_path")
+    if raw:
+        p = Path(raw)
+        candidates.extend([p if p.is_absolute() else ROOT / p, ROOT / "output" / "delivery" / p.name, ROOT / "output" / p.name])
+    candidates.extend([ROOT / "output" / "delivery" / "digital-edge-lab-pilot.mp4",
+                       ROOT / "output" / "delivery" / "pilot.mp4"])
+    for path in candidates:
+        if path.is_file() and path.stat().st_size > 0 and path.suffix.lower() == ".mp4":
+            return path.resolve(), report
+    raise RuntimeError("Run-report says delivery passed, but its referenced MP4 is missing or empty.")
+
+
+def _agent_tool(name, args):
+    from channel_memory import ChannelMemory
+    memory = ChannelMemory(MEMORY_PATH)
+    if name == "list_jobs":
+        return {"jobs": jobs_list(args.get("limit", 20))}
+    if name == "get_channel_memory":
+        data = memory.load()
+        series_id = args.get("series_id")
+        if series_id and series_id not in data.get("series", {}):
+            return {"found": False, "series_id": series_id, "available_series": list(data.get("series", {}))[:30]}
+        context = memory.context_for(series_id=series_id) if series_id else data
+        # Keep tool context bounded so large archives do not overwhelm the model.
+        if not series_id:
+            context = {k: context.get(k) for k in ("schema_version", "channel", "series", "episodes", "characters", "timelines", "research", "production_history", "publishing", "analytics", "recent_topics")}
+            context["episodes"] = dict(list(context.get("episodes", {}).items())[-12:])
+            context["research"] = context.get("research", [])[-20:]
+            context["production_history"] = context.get("production_history", [])[-20:]
+        return {"found": True, "memory": context}
+    if name == "start_episode":
+        topic = str(args["topic"]).strip()
+        if not topic or len(topic) > 240:
+            raise ValueError("topic must contain 1-240 characters")
+        continue_existing = args["continue_existing"]
+        data = memory.load()
+        series_id = str(args.get("series_id", "")).strip() or None
+        if continue_existing:
+            if series_id:
+                series = data.get("series", {}).get(series_id)
+            else:
+                active = [s for s in data.get("series", {}).values() if s.get("status") == "active"]
+                series = sorted(active, key=lambda s: s.get("created_at", ""))[-1] if active else None
+                series_id = series.get("series_id") if series else None
+            if not series:
+                raise RuntimeError("No active series was found. Start a new series first or supply a valid series_id.")
+            episode_topic = topic if topic.lower() not in ("next episode", "continue", "continue the story", "next") else series.get("title", series_id)
+            existing = [e for e in data.get("episodes", {}).values()
+                        if e.get("series_id") == series_id and e.get("status") in ("queued", "failed", "interrupted")]
+            if existing:
+                episode = sorted(existing, key=lambda e: e.get("episode_number") or 0)[-1]
+                episode_id = episode["episode_id"]
+            else:
+                number = max([int(e.get("episode_number") or 0) for e in data.get("episodes", {}).values()
+                              if e.get("series_id") == series_id] + [0]) + 1
+                episode_id = f"{series_id}-e{number:02d}"
+                episode = memory.create_episode(episode_id, title=f"{series.get('title', series_id)} — Episode {number}",
+                    topic=episode_topic, series_id=series_id, episode_number=number)
+        else:
+            series_id = re.sub(r"[^a-z0-9]+", "-", topic.lower()).strip("-")[:64] or "new-series"
+            if series_id not in data.get("series", {}):
+                data.setdefault("series", {})[series_id] = {"series_id": series_id, "title": topic,
+                    "status": "active", "episode_ids": [], "created_at": now(),
+                    "editorial_note": "Canonical episode memory is committed only after delivery QA passes."}
+                memory.save(data)
+            series = memory.load()["series"][series_id]
+            number = max([int(e.get("episode_number") or 0) for e in memory.load().get("episodes", {}).values()
+                          if e.get("series_id") == series_id] + [0]) + 1
+            episode_id = f"{series_id}-e{number:02d}"
+            episode = memory.create_episode(episode_id, title=f"{topic} — Episode {number}",
+                topic=topic, series_id=series_id, episode_number=number)
+        if not os.getenv("GEMINI_API_KEY"):
+            blocked = job_create("generated_episode", topic, status="blocked", stage="missing GEMINI_API_KEY")
+            update_job(blocked["id"], error="Set GEMINI_API_KEY in the local environment before AI generation.",
+                       result_json=json.dumps({"series_id": series_id, "episode_id": episode_id}))
+            return {"started": False, "blocked": True, "reason": "GEMINI_API_KEY is missing; the episode was not generated.",
+                    "series_id": series_id, "episode_id": episode_id, "job": job_get(blocked["id"])}
+        job = job_create("generated_episode", topic)
+        thread = threading.Thread(target=execute_generated_episode,
+            args=(job["id"], episode_topic if continue_existing else topic, series_id, episode_id), daemon=True)
+        thread.start()
+        return {"started": True, "series_id": series_id, "episode_id": episode_id, "job": job_get(job["id"]),
+                "note": "Background job started; this is not a completion claim."}
+    if name == "run_offline_pilot":
+        job = job_create("offline_pilot", "Run deterministic offline production pilot")
+        threading.Thread(target=execute_pilot, args=(job["id"], job["instruction"]), daemon=True).start()
+        return {"started": True, "job": job_get(job["id"]), "note": "Background job started; poll status before claiming success."}
+    if name == "diagnose_recent_failures":
+        limit = args.get("limit", 10)
+        failures = [j for j in jobs_list(100) if j.get("status") in ("failed", "blocked", "cancelled", "interrupted")]
+        return {"failures": failures[:limit], "count": len(failures),
+                "note": "These are persisted operator job records; they do not prove the root cause beyond their stored error evidence."}
+    if name == "inspect_latest_artifact":
+        video, report = _latest_verified_video()
+        result = {"report_status": report.get("status"), "report": report,
+                  "video_path": str(video), "bytes": video.stat().st_size}
+        try:
+            probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries",
+                "format=duration:stream=codec_type,codec_name,width,height,r_frame_rate,sample_rate,channels",
+                "-of", "json", str(video)], capture_output=True, text=True, timeout=15, check=False)
+            result["ffprobe_exit_code"] = probe.returncode
+            if probe.returncode == 0:
+                result["media_streams"] = json.loads(probe.stdout)
+            else:
+                result["ffprobe_error"] = probe.stderr[-500:]
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            result["ffprobe_error"] = str(exc)[:300]
+        return result
+    if name == "prepare_tiktok_manual_upload":
+        video, report = _latest_verified_video()
+        from tiktok_publisher import prepare_for_manual_upload
+        result = prepare_for_manual_upload(video, args["title"])
+        return {"package": result, "report_status": report.get("status"), "published": False}
+    if name == "upload_youtube_private":
+        video, report = _latest_verified_video()
+        from youtube_publisher import upload_video
+        metadata = {"title": args["title"], "description": args.get("description", ""),
+                    "privacy_status": "private", "tags": ["Digital Edge Lab", "education"]}
+        result = upload_video(video, metadata, approval=False)
+        # The publisher returns a platform ID/URL only after the API actually confirms an upload.
+        data = memory.load()
+        data.setdefault("publishing", {}).setdefault("youtube", []).append({
+            "video_id": result.get("video_id"), "url": result.get("url"), "status": result.get("status"),
+            "fingerprint": result.get("fingerprint"), "at": now(), "source_video": str(video)})
+        memory.save(data)
+        return {"upload": result, "report_status": report.get("status"), "video_path": str(video)}
+    raise ValueError("No registered tool executor for " + name)
+
+
+def _agent_chat(message):
+    from agent_runtime import AgentError, GeminiToolAgent
+    # Persist the user turn first; the model receives previous turns, not a duplicate current turn.
+    conversation("user", message)
+    history = recent_conversation(20)
+    if history and history[-1].get("role") == "user" and history[-1].get("message") == message:
+        history = history[:-1]
+    try:
+        response = GeminiToolAgent().run(message, history, _agent_tool)
+        assistant_text = response.get("message", "")
+        conversation("assistant", assistant_text)
+        return {**response, "message": assistant_text}
+    except AgentError as exc:
+        response = {"ok": False, "message": str(exc), "provider": "Google Gemini",
+                    "model": os.getenv("DEL_AGENT_MODEL", "gemini-2.5-flash"), "tool_calls": []}
+        conversation("assistant", response["message"])
+        return response
+    except Exception as exc:
+        response = {"ok": False, "message": "Agent request failed safely: " + str(exc)[:700],
+                    "provider": "Google Gemini", "tool_calls": []}
+        conversation("assistant", response["message"])
+        return response
+
+
 def interpret(message):
-    """Small deterministic command router; unknown commands are never claimed as done."""
+    """Use the model as the intelligence layer; never silently fall back to keyword routing."""
     text = str(message).strip()
     if not text:
-        return {"ok": False, "message": "Enter a command."}
-    conversation("user", text)
-    low = text.lower()
-    if any(k in low for k in ("what are you working on", "status", "show jobs", "production status")):
-        result = {"ok": True, "message": "Current persisted production jobs.", "jobs": jobs_list()}
-    elif "why did" in low and ("fail" in low or "error" in low or "render" in low):
-        failed = [j for j in jobs_list(100) if j["status"] == "failed"]
-        result = {"ok": True, "message": "Stored failure evidence from actual job logs.", "jobs": failed[:10]}
-    elif any(k in low for k in ("run pilot", "generate pilot", "render pilot", "test production pipeline")):
-        job = job_create("offline_pilot", text)
-        thread = threading.Thread(target=execute_pilot, args=(job["id"], text), daemon=True)
-        thread.start()
-        result = {"ok": True, "message": "Started the repository's real offline pilot. Progress will reflect subprocess output.", "job": job_get(job["id"])}
-    elif low.startswith("continue"):
-        from channel_memory import ChannelMemory
-        memory = ChannelMemory(MEMORY_PATH)
-        data = memory.load()
-        match = re.search(r"continue\s+series\s+([a-z0-9-]+)", low)
-        series_id = match.group(1) if match else None
-        if series_id:
-            series = data.get("series", {}).get(series_id)
-        else:
-            active = [s for s in data.get("series", {}).values() if s.get("status") == "active"]
-            series = sorted(active, key=lambda s: s.get("created_at", ""))[-1] if active else None
-            series_id = series.get("series_id") if series else None
-        if not series:
-            result = {"ok": False, "message": "No active series found. Use 'create a new series about TOPIC' first, or specify 'continue series SERIES_ID'."}
-        elif not os.getenv("GEMINI_API_KEY"):
-            job = job_create("generated_episode", text, status="blocked", stage="missing GEMINI_API_KEY")
-            update_job(job["id"], result_json=json.dumps({"series_id": series_id, "blocked_reason": "Set GEMINI_API_KEY locally to enable topic-directed generation."}))
-            result = {"ok": False, "message": "Series found, but episode generation is blocked until GEMINI_API_KEY is configured.", "series": series, "job": job_get(job["id"])}
-        else:
-            episode_number = len(series.get("episode_ids", [])) + 1
-            episode_id = f"{series_id}-e{episode_number:02d}"
-            memory.create_episode(episode_id, title=f"{series.get('title', series_id)} — Episode {episode_number}",
-                                  topic=series.get("title", series_id), series_id=series_id,
-                                  episode_number=episode_number)
-            job = job_create("generated_episode", text)
-            threading.Thread(target=execute_generated_episode,
-                args=(job["id"], series.get("title", series_id), series_id, episode_id),
-                daemon=True).start()
-            result = {"ok": True, "message": "Continuation queued with this series' completed-episode memory. The real production subprocess will report progress and QA.", "series": memory.load()["series"][series_id], "job": job_get(job["id"])}
-    elif "create a new series about " in low or "create new series about " in low:
-        from channel_memory import ChannelMemory
-        match = re.search(r"series about\s+(.+)$", text, re.I)
-        topic = match.group(1).strip(" .!?") if match else "Untitled series"
-        memory = ChannelMemory(MEMORY_PATH)
-        data = memory.load()
-        slug = re.sub(r"[^a-z0-9]+", "-", topic.lower()).strip("-")[:64] or "new-series"
-        if slug in data["series"]:
-            series = data["series"][slug]
-            result = {"ok": True, "message": "That series already exists; no duplicate was created.", "series": series}
-        else:
-            series = {"series_id": slug, "title": topic, "status": "active", "episode_ids": [],
-                      "created_at": now(), "editorial_note": "Episode memory is committed only after delivery QA passes."}
-            data["series"][slug] = series
-            memory.save(data)
-            if not os.getenv("GEMINI_API_KEY"):
-                job = job_create("generated_episode", text, status="blocked", stage="missing GEMINI_API_KEY")
-                update_job(job["id"], result_json=json.dumps({"series_id": slug, "blocked_reason": "Set GEMINI_API_KEY locally to enable topic-directed generation."}))
-                result = {"ok": True, "message": "Series saved. Episode generation is blocked until GEMINI_API_KEY is configured; no video was claimed.", "series": series, "job": job_get(job["id"])}
-            else:
-                episode_number = len(series.get("episode_ids", [])) + 1
-                episode_id = f"{slug}-e{episode_number:02d}"
-                memory.create_episode(episode_id, title=f"{topic} — Episode {episode_number}",
-                                      topic=topic, series_id=slug, episode_number=episode_number)
-                job = job_create("generated_episode", text)
-                thread = threading.Thread(target=execute_generated_episode,
-                    args=(job["id"], topic, slug, episode_id), daemon=True)
-                thread.start()
-                result = {"ok": True, "message": "Series and episode request saved. The real Gemini-to-Blender pipeline has started; progress and final QA are read from the subprocess.", "series": memory.load()["series"][slug], "job": job_get(job["id"])}
-    elif low.startswith(("pause ", "resume ", "cancel ", "retry ")):
-        action, _, target = low.partition(" ")
-        job = job_get(target.strip())
-        if not job:
-            result = {"ok": False, "message": "Supply an exact job ID. No job was changed."}
-        elif action == "cancel":
-            process = PROCESSES.get(job["id"])
-            if process and process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                result = {"ok": True, "message": "Cancellation signal sent to the actual subprocess.", "job": update_job(job["id"], status="cancelled", stage="cancelled")}
-            elif job["status"] == "queued":
-                result = {"ok": True, "message": "Queued job cancelled.", "job": update_job(job["id"], status="cancelled", stage="cancelled")}
-            else:
-                result = {"ok": False, "message": "This job is not cancellable in its current state.", "job": job}
-        elif action == "pause" and job["status"] == "queued":
-            result = {"ok": True, "message": "Queued job paused before execution.", "job": update_job(job["id"], status="paused", stage="paused before execution")}
-        elif action == "resume" and job["status"] == "paused":
-            resumed = update_job(job["id"], status="queued", stage="resuming queued job")
-            if job["kind"] == "offline_pilot":
-                threading.Thread(target=execute_pilot, args=(job["id"], job["instruction"]), daemon=True).start()
-            else:
-                result = {"ok": False, "message": "This paused job type has no resume executor.", "job": resumed}
-                conversation("assistant", result["message"], job["id"])
-                return result
-            result = {"ok": True, "message": "Queued job resumed.", "job": resumed}
-        elif action == "retry" and job["status"] in ("failed", "cancelled", "blocked"):
-            new = job_create(job["kind"], job["instruction"], status="retrying", stage="retry queued")
-            if new["kind"] == "offline_pilot":
-                threading.Thread(target=execute_pilot, args=(new["id"], new["instruction"]), daemon=True).start()
-            elif new["kind"] == "generated_episode":
-                from channel_memory import ChannelMemory
-                memory = ChannelMemory(MEMORY_PATH)
-                data = memory.load()
-                requested = re.search(r"series about\s+(.+)$", new["instruction"], re.I)
-                if requested:
-                    series_id = re.sub(r"[^a-z0-9]+", "-", requested.group(1).strip(" .!?").lower()).strip("-")[:64]
-                else:
-                    match = re.search(r"continue\s+series\s+([a-z0-9-]+)", new["instruction"], re.I)
-                    series_id = match.group(1) if match else None
-                series = data.get("series", {}).get(series_id) if series_id else None
-                if series:
-                    pending = [ep for ep in data.get("episodes", {}).values()
-                               if ep.get("series_id") == series_id and ep.get("status") == "queued"]
-                    if pending:
-                        episode = sorted(pending, key=lambda ep: ep.get("episode_number") or 0)[-1]
-                    else:
-                        number = len(series.get("episode_ids", [])) + 1
-                        episode_id = f"{series_id}-e{number:02d}"
-                        episode = memory.create_episode(episode_id, title=f"{series['title']} — Episode {number}",
-                            topic=series["title"], series_id=series_id, episode_number=number)
-                    threading.Thread(target=execute_generated_episode,
-                        args=(new["id"], episode.get("topic", series["title"]), series_id, episode["episode_id"]),
-                        daemon=True).start()
-                else:
-                    update_job(new["id"], status="blocked", stage="series context unavailable",
-                               error="Could not identify the series from the original instruction.")
-            result = {"ok": True, "message": "Created a separate retry job; previous logs remain intact. Retry only starts if its required configuration and series context exist.", "job": job_get(new["id"])}
-        else:
-            result = {"ok": False, "message": f"{action.title()} is not supported for this job type yet; no state was changed.", "job": job}
-    else:
-        result = {"ok": False, "message": "Command understood as a request, but no safe executor is registered. Supported now: status, why did render fail, run pilot, create a new series about TOPIC (requires GEMINI_API_KEY for generation), cancel JOB_ID, retry JOB_ID."}
-    conversation("assistant", result["message"], (result.get("job") or {}).get("id"))
-    return result
+        return {"ok": False, "message": "Enter an instruction."}
+    if not os.getenv("GEMINI_API_KEY"):
+        conversation("user", text)
+        answer = "AI operator unavailable: GEMINI_API_KEY is missing. No model reasoning or tool execution occurred. Set the key in your local environment and restart the operator."
+        conversation("assistant", answer)
+        return {"ok": False, "message": answer, "provider": "Google Gemini", "tool_calls": []}
+    return _agent_chat(text)
 
 
 INDEX_HTML = """<!doctype html>
