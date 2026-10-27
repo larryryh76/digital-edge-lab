@@ -13,7 +13,7 @@ from typing import Callable, Any
 import requests
 
 API_ROOT = "https://generativelanguage.googleapis.com/v1beta/models"
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.8-flash"
 MAX_TOOL_ROUNDS = 5
 MAX_HISTORY = 16
 
