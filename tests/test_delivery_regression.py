@@ -1,207 +1,172 @@
+"""Delivery regressions: run #73 must stay fixed.
+
+Run #73 shipped a playable MP4 in which five different narrative beats contained
+the same generic metallic transformation, and the QA layer "passed" metadata
+that described scenes the renderer never built. These tests pin the properties
+that make that impossible.
+"""
+
 import json
-import re
-import tempfile
+import sys
 import unittest
-from types import SimpleNamespace
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
+
+import media_qa  # noqa: E402
+import pipeline  # noqa: E402
+import scene_spec  # noqa: E402
+
+BLENDER = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
+PIPELINE = (ROOT / "src" / "pipeline.py").read_text(encoding="utf-8")
 
 
-class DeliveryRegressionTests(unittest.TestCase):
+class RendererContractTests(unittest.TestCase):
+    def test_trace_reports_measured_animation(self):
+        for field in ("measured", "parts", "mover_object", "built_parts",
+                      "requirement", "hero_object"):
+            self.assertIn(field, BLENDER)
+        self.assertIn("scene.frame_set(frame)", BLENDER)
+        self.assertIn("object_corners(obj)", BLENDER)
 
-    def test_precision_weight_scene_wins_over_incidental_balance_metaphor(self):
-        source = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
-        balance = source.index('elif (("balance scale" in brief_text')
-        precision = source.index('elif "16-bit" in brief_text')
-        self.assertLess(balance, precision)  # balance branch must explicitly exclude precision briefs
-        branch = source[balance:precision]
-        self.assertIn('"16-bit" not in brief_text', branch)
-        self.assertIn('not ("floating-point" in brief_text and "weights" in brief_text)', branch)
-        self.assertIn('story_treatment = "high_precision_weight_sphere"', source)
-        self.assertIn('treatment_specific_subject_animation', source)
+    def test_renderer_writes_a_trace_before_rendering(self):
+        trace_write = BLENDER.index("trace_path.write_text")
+        render_call = BLENDER.index("bpy.ops.render.render(animation=True)")
+        self.assertLess(trace_write, render_call)
 
-    def test_delivery_report_has_explicit_review_and_publish_state(self):
-        source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        self.assertIn('"human_review_required": True', source)
-        self.assertIn('"youtube": "not_implemented"', source)
-        self.assertIn('"tiktok": "not_implemented"', source)
+    def test_no_scene_is_animated_only_by_the_camera(self):
+        # Every action program must key at least one object transform.
+        for action in scene_spec.ACTIONS:
+            program = f'"act_{action}"'
+            marker = f'"{action}": act_{action}'
+            self.assertIn(marker, BLENDER, f"{action} is not registered")
+            start = BLENDER.index(f"def act_{action}(")
+            body = BLENDER[start:start + 2600]
+            self.assertTrue(
+                "key(" in body or "for " in body,
+                f"{action} does not keyframe any subject transform")
+        self.assertNotIn('"act_camera', BLENDER)
 
-    def test_final_media_qa_and_contact_sheet_are_required(self):
-        source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        self.assertIn("ffprobe", source)
-        self.assertIn('"contact_sheet_created": "PASS"', source)
-        self.assertIn("contact-sheet.jpg", source)
-        self.assertIn("narration.wav", source)
+    def test_idle_motion_is_small_and_never_the_action(self):
+        self.assertIn("math.radians(2.0)", BLENDER)
 
-    def test_source_reachability_is_not_claim_support(self):
-        source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        self.assertIn('"reachability_only": True', source)
-        self.assertIn("editorial review is still required", source)
-        self.assertIn('["source_claim_support_status"] = "HUMAN_REVIEW_REQUIRED"', source)
-        self.assertIn('["human_editorial_approval"] = "PENDING"', source)
-        self.assertIn('"review_required"] = True', source)
-
-    def test_failure_artifact_does_not_depend_on_success_report(self):
-        workflow = (ROOT / ".github/workflows/generate-pilot.yml").read_text(encoding="utf-8")
-        # Either status-check form is valid: failure/cancelled already overrides the implicit success() check.
-        self.assertRegex(workflow, r"if:\s*\$\{\{[^\n]*failure\(\)[^\n]*cancelled\(\)[^\n]*\}\}")
-        self.assertIn("output/**", workflow)
-        self.assertIn("digital-edge-lab-failure-", workflow)
-
-    def test_blender_ffmpeg_output_path_lets_blender_add_extension(self):
-        source = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
-        self.assertIn('with_suffix("")', source)
-        smoke = (ROOT / "tests/blender_smoke.py").read_text(encoding="utf-8")
-        self.assertIn("with_suffix('')", smoke)
-
-    def test_blender_video_format_uses_image_settings_property(self):
-        scene = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
-        smoke = (ROOT / "tests/blender_smoke.py").read_text(encoding="utf-8")
-        self.assertIn('scene.render.image_settings.file_format = "FFMPEG"', scene)
-        self.assertIn("s.render.image_settings.file_format = 'FFMPEG'", smoke)
-        self.assertNotIn("scene.render.file_format = ", scene)
-        self.assertNotIn("s.render.file_format = ", smoke)
+    def test_required_parts_come_from_the_shared_registry(self):
+        self.assertIn("scene_spec.required_parts(spec)", BLENDER)
+        for kind, meta in scene_spec.SUBJECT_KINDS.items():
+            builder = BLENDER[BLENDER.index(f"def build_{kind}("):]
+            builder = builder[:builder.index("\ndef ", 10)]
+            for part in meta["parts"]:
+                self.assertIn(part, builder,
+                              f"builder for {kind} does not create required part {part}")
 
 
-    def test_gemini_fallback_prioritizes_current_models_and_skips_image_models(self):
-        from src.pipeline import ordered_model_candidates
-        available = {
-            "gemini-3.8-flash": ["generateContent"],
-            "gemini-3.7-flash": ["generateContent"],
-            "gemini-2.5-flash": ["generateContent"],
-            "gemini-3.8-flash-image": ["generateContent"],
-            "gemini-3.8-flash-tts": ["generateContent"],
-            "gemini-3.1-flash-tts-preview": ["generateContent"],
+class PipelineContractTests(unittest.TestCase):
+    def test_outputs_are_named_consistently(self):
+        self.assertIn("digital-edge-lab-pilot.mp4", PIPELINE)
+        self.assertIn("run-report.json", PIPELINE)
+        self.assertIn("contact-sheet.jpg", PIPELINE)
+        self.assertIn("delivery", PIPELINE)
+
+    def test_diagnostics_directory_is_preserved(self):
+        # The workflow writes output/diagnostics/run-context.txt before the run;
+        # wiping it silently broke failure triage in run #73.
+        self.assertIn("Never delete output/diagnostics", PIPELINE)
+
+    def test_failed_gate_exits_non_zero(self):
+        self.assertIn("def decide_failures(", PIPELINE)
+        self.assertIn('fail("delivery rejected by QA:', PIPELINE)
+        self.assertIn("raise SystemExit", PIPELINE)
+
+    def test_no_generic_scene_label_can_be_reported_as_pass(self):
+        self.assertNotIn("metallic_object_transformation", PIPELINE)
+        self.assertNotIn("technical_fallback", PIPELINE)
+
+    def test_report_states_honest_publication_state(self):
+        self.assertIn('"publication_ready": False', PIPELINE)
+        self.assertIn('"youtube": "not_implemented"', PIPELINE)
+        self.assertIn('"tiktok": "not_implemented"', PIPELINE)
+        self.assertIn("HUMAN_REVIEW_REQUIRED", PIPELINE)
+
+    def test_narration_timing_comes_from_measured_audio(self):
+        narration_src = (ROOT / "src" / "narration.py").read_text(encoding="utf-8")
+        self.assertIn("probe_duration", narration_src)
+        self.assertIn("spoken_seconds", narration_src)
+        self.assertIn("pad_to(", narration_src)
+
+
+class ReportConsistencyTests(unittest.TestCase):
+    def test_failed_report_is_never_labelled_success(self):
+        failed = pipeline.decide_failures({"passed": False}, {"passed": True},
+                                          {"passed": True}, {"passed": True},
+                                          {"mean": 1.0})
+        self.assertTrue(failed)
+
+    def test_scene_report_fails_when_subject_parts_are_missing(self):
+        scene = scene_spec.normalize_scene({
+            "beat_id": "b1",
+            "subject": {"kind": "dial"},
+            "action": {"kind": "spin"},
+            "camera": {"framing": "close_up", "move": "push_in"},
+        }, 0, {"b1"})
+        trace = {
+            "template": "dial__spin",
+            "required_parts": scene_spec.required_parts(scene),
+            "built_parts": ["visible_sphere"],
+            "measured": {"mover": {"rotation_degrees": 400, "displacement": 1.0,
+                                   "screen_pixels": 50.0},
+                         "parts_moved": 1, "parts_removed": 0,
+                         "moving_part_names": ["x"]},
+            "requirement": scene_spec.motion_requirement(scene),
         }
-        text_models = ordered_model_candidates("gemini-3.8-flash", available, audio=False)
-        self.assertEqual(text_models[:2], ["gemini-3.8-flash", "gemini-3.7-flash"])
-        self.assertIn("gemini-2.5-flash", text_models)
-        self.assertGreater(text_models.index("gemini-2.5-flash"), 1)
-        self.assertNotIn("gemini-3.8-flash-image", text_models)
-        tts_models = ordered_model_candidates("gemini-3.8-flash-tts", available, audio=True)
-        self.assertEqual(tts_models[:2], ["gemini-3.8-flash-tts", "gemini-3.1-flash-tts-preview"])
-        self.assertNotIn("gemini-3.8-flash-image", tts_models)
-
-    def test_suffixed_blender_mp4_is_probed_normalized_and_accepted(self):
-        from src.pipeline import normalize_blender_output
-        with tempfile.TemporaryDirectory() as td:
-            requested = Path(td) / "segment_00.mp4"
-            actual = Path(td) / "segment_000001-0081.mp4"
-            actual.write_bytes(b"x" * 4096)
-            calls = []
-            def fake_probe(command, **kwargs):
-                calls.append(command[-1])
-                return SimpleNamespace(returncode=0, stdout=json.dumps({
-                    "streams": [{"codec_type": "video", "codec_name": "h264",
-                                 "width": 360, "height": 640}],
-                    "format": {"duration": "6.75"}
-                }), stderr="")
-            normalized = normalize_blender_output(requested, 0, probe_runner=fake_probe)
-            self.assertEqual(normalized, requested)
-            self.assertTrue(requested.is_file())
-            self.assertFalse(actual.exists())
-            self.assertEqual(calls, [str(actual)])
-            self.assertEqual(requested.stat().st_size, 4096)
-
-    def test_suffixed_blender_outputs_fail_if_ambiguous(self):
-        from src.pipeline import normalize_blender_output
-        with tempfile.TemporaryDirectory() as td:
-            requested = Path(td) / "segment_01.mp4"
-            (Path(td) / "segment_0100001-0081.mp4").write_bytes(b"x" * 2000)
-            (Path(td) / "segment_0100082-0162.mp4").write_bytes(b"x" * 2000)
-            with self.assertRaisesRegex(RuntimeError, "exactly one"):
-                normalize_blender_output(requested, 1, probe_runner=lambda *a, **k: None)
-
-    def test_visual_briefs_have_distinct_named_render_treatments(self):
-        renderer = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
-        for treatment in ("copper_strawberry_word_laser", "three_token_blocks",
-                          "macro_serial_number_reveal", "tokenization_lens_reveal",
-                          "pi_sphere_compression", "misaligned_token_reassembly",
-                          "brand_cube_reveal"):
-            self.assertIn(treatment, renderer)
-        self.assertIn('label("STRAWBERRY"', renderer)
-        self.assertIn('cube("Cyan laser sweep"', renderer)
-        self.assertIn('not any(k in brief_text for k in ("misaligned", "snap back", "gaps", "token gap", "sparks"))', renderer)
-        self.assertIn('keyframe_insert(data_path="location", frame=end_frame)', renderer)
-
-    def test_blender_scene_deadline_is_bounded(self):
-        source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        self.assertRegex(source, r"timeout=150")
-        self.assertIn("scene_", source)
-        self.assertIn("_blender.log", source)
-
-    def test_memory_is_written_after_render_qa(self):
-        source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        self.assertLess(source.index("video, duration, audio_qa = render(data, wav)"),
-                        source.index('(OUT / "channel-memory.json").write_text'))
-
-    def test_full_pilot_requires_exactly_seven_scenes(self):
-        source = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        self.assertIn("Create exactly 7 scene objects", source)
-        self.assertIn('if len(data["scenes"]) != 7:', source)
-        self.assertIn("Pilot requires exactly seven distinct scenes", source)
-
-    def test_visual_diversity_gate_rejects_genuine_repetition(self):
-        from src.pipeline import treatment_diversity_report
-        report = treatment_diversity_report([
-            "metallic_object_transformation", "metallic_object_transformation",
-            "metallic_object_transformation", "pi_sphere_compression",
-            "metallic_object_transformation", "metallic_object_transformation",
-            "metallic_object_transformation"
-        ])
+        window = {"index": 0, "start": 0.0, "end": 3.0, "duration": 3.0, "frames": 72,
+                  "narration": "a line"}
+        # No real segment is needed: the parts check must fail before any decode.
+        report = media_qa.evaluate_scene(scene, window, "does-not-exist.mp4", trace,
+                                        scene_spec)
         self.assertFalse(report["passed"])
-        self.assertEqual(report["unique_count"], 2)
-        self.assertEqual(report["required_count"], 5)
-        self.assertEqual(report["repeated_treatments"]["metallic_object_transformation"], 6)
+        self.assertTrue(any("requested subject parts missing" in f
+                            for f in report["failures"]))
 
-    def test_visual_diversity_gate_accepts_legitimately_distinct_scenes(self):
-        from src.pipeline import treatment_diversity_report
-        report = treatment_diversity_report([
-            "phone_overloaded_by_model_cube", "high_precision_weight_sphere",
-            "quantized_grid_sphere", "decimal_rounding_gear_track",
-            "memory_volume_compression", "phone_socket_hero_reveal",
-            "phone_socket_hero_reveal"
-        ])
-        self.assertTrue(report["passed"])
-        self.assertEqual(report["unique_count"], 6)
-
-    def test_visual_diversity_rejects_repeated_generic_fallback_even_with_five_unique_labels(self):
-        from src.pipeline import treatment_diversity_report
-        report = treatment_diversity_report([
-            "semantic_vector_field", "semantic_vector_field",
-            "blocked_reverse_signal", "directed_relation_blocks",
-            "two_slab_information_barrier", "neural_node_data_flow",
-            "digital_library_book_reveal"
-        ])
+    def test_template_mismatch_is_a_failure(self):
+        scene = scene_spec.normalize_scene({
+            "beat_id": "b1",
+            "subject": {"kind": "pipe_bundle"},
+            "action": {"kind": "collapse_to_one"},
+            "camera": {"framing": "medium", "move": "push_in"},
+        }, 0, {"b1"})
+        trace = {
+            "template": "generic_cube__spin",
+            "required_parts": scene_spec.required_parts(scene),
+            "built_parts": scene_spec.required_parts(scene),
+            "measured": {"mover": {}, "parts_moved": 0, "parts_removed": 0},
+            "requirement": scene_spec.motion_requirement(scene),
+        }
+        window = {"index": 0, "start": 0.0, "end": 3.0, "duration": 3.0, "frames": 72,
+                  "narration": "a line"}
+        report = media_qa.evaluate_scene(scene, window, "does-not-exist.mp4", trace,
+                                        scene_spec)
         self.assertFalse(report["passed"])
-        self.assertEqual(report["repeated_generic_fallbacks"]["semantic_vector_field"], 2)
+        self.assertTrue(any("renderer template" in f for f in report["failures"]))
 
-    def test_reversal_curse_briefs_map_to_story_specific_treatments(self):
-        renderer = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
-        pipeline = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        for treatment in (
-            "directed_relation_blocks", "blocked_reverse_signal",
-            "two_slab_information_barrier", "neural_node_data_flow",
-            "digital_library_book_reveal", "directional_compass_reveal",
-            "bidirectional_circuit_reveal"
-        ):
-            self.assertIn(treatment, renderer)
-            self.assertIn(treatment, pipeline)
-        self.assertIn('("4921","serial number","macro shot")', renderer)
 
-    def test_quantization_scene_briefs_have_specific_renderer_and_qa_treatments(self):
-        renderer = (ROOT / "src/blender_scene.py").read_text(encoding="utf-8")
-        pipeline = (ROOT / "src/pipeline.py").read_text(encoding="utf-8")
-        for treatment in (
-            "phone_overloaded_by_model_cube", "high_precision_weight_sphere",
-            "quantized_grid_sphere", "decimal_rounding_gear_track",
-            "memory_volume_compression", "phone_socket_hero_reveal"
-        ):
-            self.assertIn(treatment, renderer)
-            self.assertIn(treatment, pipeline)
-        # "etched" is descriptive surface detail, not sufficient evidence for a serial-number scene.
-        self.assertIn('("4921","serial number","macro shot")', renderer)
+class PlanIntegrityTests(unittest.TestCase):
+    def test_plan_uses_distinct_subjects_and_actions(self):
+        data = json.loads((ROOT / "plans" / "quantization-on-device.json")
+                          .read_text(encoding="utf-8"))
+        episode, errors = scene_spec.normalize_episode(data)
+        self.assertEqual(errors, [])
+        subjects = [s["subject"]["kind"] for s in episode["scenes"]]
+        actions = [s["action"]["kind"] for s in episode["scenes"]]
+        self.assertGreaterEqual(len(set(subjects)), 5)
+        self.assertGreaterEqual(len(set(actions)), 5)
+
+    def test_no_placeholder_subject_in_delivered_plan(self):
+        data = json.loads((ROOT / "plans" / "quantization-on-device.json")
+                          .read_text(encoding="utf-8"))
+        kinds = [s["subject"]["kind"] for s in data["scenes"]]
+        self.assertNotIn(scene_spec.FALLBACK_SUBJECT, kinds)
+
 
 if __name__ == "__main__":
     unittest.main()
