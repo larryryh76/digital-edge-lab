@@ -37,7 +37,7 @@ python -m pip install -r requirements-publishing.txt
 4. Run the publisher from a local terminal once to complete OAuth. The token is stored as `secrets/youtube-token.json` (or `YOUTUBE_TOKEN_FILE`) and is chmod 600 where supported.
 5. Validate the MP4 with the existing pipeline before calling `upload_video`. It defaults to private. Non-private publication requires explicit `approval=True`.
 
-YouTube API quota applies; uploads commonly consume substantial quota. No API keys, OAuth client files, account permissions, or successful real uploads are bundled with this repository. Interrupted uploads must be reconciled against the channel before retrying. The system does not yet automatically schedule a future publication time or upload thumbnails/playlists.
+YouTube API quota applies; uploads commonly consume substantial quota. No API keys, OAuth client files, account permissions, or successful real uploads are bundled with this repository. Interrupted uploads must be reconciled against the channel before retrying. Approved scheduling is supported through the YouTube `publishAt` field (scheduled videos must remain private until publication). Optional playlist insertion and JPEG thumbnail upload are supported when `playlist_id` and `thumbnail_path` are provided in the metadata. The uploaded platform video ID is persisted before optional post-upload operations so a playlist/thumbnail error does not cause a duplicate video upload.
 
 Analytics requires a separate OAuth scope and a correctly authorized YouTube Analytics API service; the included analytics boundary will not pretend this access exists.
 
