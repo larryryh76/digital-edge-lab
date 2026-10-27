@@ -1,5 +1,10 @@
 name: Digital Edge Lab — AI story and video
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/quick-story.yml'
+      - 'src/quick_story.py'
+      - 'scripts/generate_video.py'
   workflow_dispatch:
     inputs:
       topic:
@@ -15,7 +20,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-code:
+    name: Validate Python syntax without spending API credits
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Compile Python scripts
+        run: python -m py_compile src/quick_story.py scripts/generate_video.py
+
   generate-video:
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate-code
     name: Choose topic, write story, generate and validate MP4
     runs-on: ubuntu-latest
     timeout-minutes: 15
