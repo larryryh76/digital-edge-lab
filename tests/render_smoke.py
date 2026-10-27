@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +58,7 @@ def main():
         out = work / f"segment_{i:02d}.mp4"
         log = work / f"scene_{i:02d}.log"
         print(f"[smoke] rendering {subject}/{action} -> {out.name}", flush=True)
+        started = time.monotonic()
         with log.open("w", encoding="utf-8") as handle:
             result = subprocess.run(
                 [blender, "-b", "-t", "2", "--python-exit-code", "1",
@@ -65,6 +67,9 @@ def main():
                  f"{SECONDS:.3f}"],
                 stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=600)
         log_tail = log.read_text(encoding="utf-8", errors="replace")
+        elapsed = time.monotonic() - started
+        print(f"[smoke] rendered {frames} frames in {elapsed:.1f}s "
+              f"({elapsed / max(frames, 1):.2f}s/frame)", flush=True)
         if result.returncode:
             failures.append(f"{subject}/{action}: blender exit {result.returncode}\n"
                             + log_tail[-2500:])

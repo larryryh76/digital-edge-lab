@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -323,6 +324,7 @@ def render_scene(episode, scene, window, work, diagnostics):
     env = dict(os.environ, OMP_NUM_THREADS="1", OPENBLAS_NUM_THREADS="1",
                MKL_NUM_THREADS="1", OPENCV_OPENCL_RUNTIME="disabled")
     seconds = window["frames"] / FPS
+    started = time.monotonic()
     with log_path.open("w", encoding="utf-8") as log:
         result = subprocess.run(
             [blender, "-b", "-t", "2", "--python-exit-code", "1",
@@ -335,6 +337,10 @@ def render_scene(episode, scene, window, work, diagnostics):
         tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
         raise RuntimeError(f"Blender failed for scene {index + 1} "
                            f"(exit {result.returncode}):\n{tail}")
+    elapsed = time.monotonic() - started
+    print(f"[render] scene {index + 1} rendered {window['frames']} frames "
+          f"in {elapsed:.1f}s ({elapsed / max(window['frames'], 1):.2f}s/frame)",
+          flush=True)
     try:
         clip = normalize_blender_output(raw, index)
     except RuntimeError as exc:
