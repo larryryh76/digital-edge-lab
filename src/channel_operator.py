@@ -473,8 +473,8 @@ h1{font-size:1.35rem}p{color:#9aa8bf}.panel{border:1px solid #26324a;background:
 form{display:flex;gap:8px}input{flex:1;min-width:0;background:#080b13;border:1px solid #35415b;color:inherit;border-radius:8px;padding:12px}
 button{background:#4f6fe8;color:white;border:0;border-radius:8px;padding:10px 14px;font-weight:650}pre{white-space:pre-wrap;overflow-wrap:anywhere;color:#b9c9e5}
 </style></head><body><h1>Digital Edge Lab · Channel Operator</h1>
-<p>Connected to the local backend. Commands are executed only where a real handler exists; unsupported work is reported honestly.</p>
-<div class="panel"><div id="messages" aria-live="polite"></div><form id="chat"><input id="prompt" autocomplete="off" placeholder="Run pilot, check status, create a series..." required><button>Send</button></form></div>
+<p>Gemini model-backed agent · Research, production, memory and publishing tools report their actual results. Missing API access is shown as a blocker.</p>
+<div class="panel"><div id="messages" aria-live="polite"></div><form id="chat"><input id="prompt" autocomplete="off" placeholder="Ask naturally: research ancient Rome and produce a Short..." required><button>Send</button></form></div>
 <div class="panel"><strong>Persistent jobs</strong><button id="refresh" style="float:right">Refresh</button><pre id="jobs">Loading…</pre></div>
 <p>Local-only service · Do not expose this page/API publicly without authentication.</p>
 <script>
@@ -482,7 +482,7 @@ const messages=document.querySelector('#messages'), jobs=document.querySelector(
 function line(role,text){const d=document.createElement('div');d.className='msg '+role;d.textContent=role+': '+text;messages.appendChild(d);messages.scrollTop=messages.scrollHeight}
 async function refresh(){try{const r=await fetch('/api/jobs');const d=await r.json();jobs.textContent=JSON.stringify(d.jobs.map(j=>({id:j.id,kind:j.kind,status:j.status,stage:j.stage,error:j.error})),null,2)}catch(e){jobs.textContent='Backend unavailable: '+e}}
 document.querySelector('#refresh').onclick=refresh;
-document.querySelector('#chat').onsubmit=async e=>{e.preventDefault();const input=document.querySelector('#prompt'),message=input.value.trim();if(!message)return;line('user',message);input.value='';try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});const d=await r.json();line('assistant',d.message+'\\n'+(d.job?'Job '+d.job.id+' · '+d.job.status:'')+(d.jobs?'\\n'+d.jobs.map(j=>j.id+' · '+j.status+' · '+j.stage).join('\\n'):''));await refresh()}catch(err){line('assistant','Request failed: '+err)}};
+document.querySelector('#chat').onsubmit=async e=>{e.preventDefault();const input=document.querySelector('#prompt'),message=input.value.trim();if(!message)return;line('user',message);input.value='';try{const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});const d=await r.json();line('assistant',d.message+(d.provider?'\\nModel: '+d.provider+' / '+(d.model||'configured'):'')+(d.tool_calls&&d.tool_calls.length?'\\nTools: '+d.tool_calls.map(t=>t.name+' ['+(t.ok?'ok':t.error||'failed')+']').join(', '):'')+(d.job?'\\nJob '+d.job.id+' · '+d.job.status:'')+(d.jobs?'\\n'+d.jobs.map(j=>j.id+' · '+j.status+' · '+j.stage).join('\\n'):''));await refresh()}catch(err){line('assistant','Request failed: '+err)}};
 refresh();fetch('/api/conversation').then(r=>r.json()).then(d=>d.messages.forEach(m=>line(m.role,m.message))).catch(()=>{});
 </script></body></html>"""
 
