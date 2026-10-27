@@ -40,6 +40,8 @@ class GroundedResearchTests(unittest.TestCase):
                     {"title": "Museum research", "url": "https://example.org/roman-roads"}])
                 self.assertEqual(len(json.loads(channel_operator.MEMORY_PATH.read_text())["research"]), 1)
                 self.assertEqual(post.call_count, 2)
+                self.assertNotIn("test-key", post.call_args.kwargs["url"] if "url" in post.call_args.kwargs else post.call_args.args[0])
+                self.assertEqual(post.call_args.kwargs["headers"]["x-goog-api-key"], "test-key")
             finally:
                 channel_operator.MEMORY_PATH = old_memory
 
