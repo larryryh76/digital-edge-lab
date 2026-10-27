@@ -188,6 +188,9 @@ jobs:
 
   pilot:
     name: Render and verify one complete pilot
+    # Pull requests run unit tests and the real-renderer smoke test first.
+    # The expensive full episode runs after merge, on manual dispatch, or nightly.
+    if: github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 90
