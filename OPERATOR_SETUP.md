@@ -5,7 +5,7 @@
 Install the normal project requirements, then run:
 
 ```bash
-python src/operator.py serve
+python src/channel_operator.py serve
 ```
 
 The service binds to `127.0.0.1:8765` by default. It is intended for local use only; do not expose it to the public internet without authentication and TLS.
