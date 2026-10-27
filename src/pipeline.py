@@ -169,6 +169,29 @@ def enum_documentation():
 
 def script_prompt(memory):
     recent = [t.get("topic") for t in memory.get("recent_topics", [])[-12:]]
+    # Bound continuity context to keep prompts useful without exploding token cost.
+    legacy_context = [str(item)[:500] for item in memory.get("running_context", [])[-8:]]
+    episode_store = memory.get("episodes", {})
+    if isinstance(episode_store, dict):
+        episode_records = list(episode_store.values())
+    elif isinstance(episode_store, list):
+        episode_records = episode_store
+    else:
+        episode_records = []
+    completed = [ep for ep in episode_records
+                 if ep.get("status") in ("completed", "completed_degraded", "legacy_completed")]
+    completed = completed[-8:]
+    continuity_records = [{
+        "episode_id": ep.get("episode_id"), "series_id": ep.get("series_id"),
+        "episode_number": ep.get("episode_number"), "title": ep.get("title"),
+        "summary": str(ep.get("summary", ""))[:350], "characters": ep.get("characters", [])[:8],
+        "ending": str(ep.get("ending", ""))[:250], "unresolved": ep.get("unresolved", [])[:8],
+        "sources": ep.get("sources", [])[:4]
+    } for ep in completed]
+    continuity = json.dumps({"channel": memory.get("channel", {}),
+                             "recent_completed_episodes": continuity_records,
+                             "running_context": legacy_context},
+                            ensure_ascii=False)[:6500]
     return f"""You are the story editor and visual director for Digital Edge Lab, an original
 faceless short-form channel about technology. Produce ONE 35-55 second vertical mini-documentary
 with the pacing of a premium science short: an immediate visual hook, a genuine question, an
@@ -211,6 +234,11 @@ Hard rules:
   statistics or URLs.
 - Sources: 2-3 real, reputable URLs as {{"name","url","supports"}}; prefer primary docs or papers.
 - Avoid recent topics: {recent}
+- CONTINUITY MEMORY (authoritative where it contains established facts): {continuity}
+- Do not contradict completed-episode facts, character identities, established timelines, or unresolved
+  plot points. If continuing a series, advance its unresolved thread rather than repeating its recap.
+  If the new topic is unrelated, do not force old characters or plot details into it.
+- Treat source URLs in memory as leads, not proof: retain only sources you can substantiate.
 
 Return raw JSON only, no Markdown fences, no commentary."""
 
