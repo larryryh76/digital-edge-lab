@@ -325,7 +325,8 @@ def render_scene(episode, scene, window, work, diagnostics):
     seconds = window["frames"] / FPS
     with log_path.open("w", encoding="utf-8") as log:
         result = subprocess.run(
-            [blender, "-b", "-t", "2", "--python", str(ROOT / "src" / "blender_scene.py"),
+            [blender, "-b", "-t", "2", "--python-exit-code", "1",
+             "--python", str(ROOT / "src" / "blender_scene.py"),
              "--", str(spec_path), str(raw), str(index), str(len(episode["scenes"])),
              f"{seconds:.4f}"],
             stdout=log, stderr=subprocess.STDOUT, text=True, env=env, timeout=600,

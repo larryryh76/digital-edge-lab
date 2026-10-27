@@ -59,18 +59,20 @@ def main():
         print(f"[smoke] rendering {subject}/{action} -> {out.name}", flush=True)
         with log.open("w", encoding="utf-8") as handle:
             result = subprocess.run(
-                [blender, "-b", "-t", "2", "--python", str(ROOT / "src" / "blender_scene.py"),
+                [blender, "-b", "-t", "2", "--python-exit-code", "1",
+                 "--python", str(ROOT / "src" / "blender_scene.py"),
                  "--", str(spec_path), str(out), str(i), str(len(SCENES)),
                  f"{SECONDS:.3f}"],
                 stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=600)
+        log_tail = log.read_text(encoding="utf-8", errors="replace")
         if result.returncode:
             failures.append(f"{subject}/{action}: blender exit {result.returncode}\n"
-                            + log.read_text(encoding="utf-8", errors="replace")[-2500:])
+                            + log_tail[-2500:])
             continue
         produced = sorted(out.parent.glob(out.stem + "*.mp4"))
         if len(produced) != 1:
             failures.append(f"{subject}/{action}: expected one mp4, got "
-                            f"{[p.name for p in produced]}")
+                            f"{[p.name for p in produced]}\n" + log_tail[-2500:])
             continue
         clip = produced[0]
         if clip != out:
