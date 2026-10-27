@@ -318,7 +318,7 @@ def normalize_blender_output(requested, index):
 
 # The full-pilot render phase has its own hard deadline. A scene timeout is
 # bounded by remaining budget; it is not used as a substitute for an episode deadline.
-SECONDS_PER_FRAME_BUDGET = float(os.getenv("DEL_RENDER_SECONDS_PER_FRAME", "4.0"))
+SECONDS_PER_FRAME_BUDGET = float(os.getenv("DEL_RENDER_SECONDS_PER_FRAME", "5.0"))
 RENDER_STARTUP_SECONDS = int(os.getenv("DEL_RENDER_STARTUP_SECONDS", "120"))
 RENDER_PHASE_BUDGET_SECONDS = int(os.getenv("DEL_RENDER_PHASE_BUDGET_SECONDS", "2700"))
 RENDER_MAX_WORKERS = min(2, max(1, int(os.getenv("DEL_RENDER_WORKERS", "2"))))
@@ -353,7 +353,7 @@ def render_scene(episode, scene, window, work, diagnostics, cancel_event=None, d
     timeout_s = render_timeout(window["frames"])
     if deadline is not None:
         timeout_s = min(timeout_s, max(1, int(deadline - time.monotonic())))
-    argv = [blender, "-b", "-t", "1", "--python-exit-code", "1",
+    argv = [blender, "-b", "-t", "2", "--python-exit-code", "1",
             "--python", str(ROOT / "src" / "blender_scene.py"),
             "--", str(spec_path), str(raw), str(index), str(len(episode["scenes"])),
             f"{seconds:.4f}"]
