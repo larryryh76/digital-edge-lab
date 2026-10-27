@@ -91,7 +91,7 @@ class ParallelRenderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             work = Path(d)
             fake = work / "fake-blender"
-            fake.write_text("#!/usr/bin/env python3\\nimport sys\\nprint('synthetic Blender crash marker', flush=True)\\nsys.exit(7)\\n")
+            fake.write_text("#!/usr/bin/env python3\nimport sys\nprint('synthetic Blender crash marker', flush=True)\nsys.exit(7)\n")
             fake.chmod(0o755)
             stale = work / "segment_00.mp4"
             stale.write_bytes(b"stale")
