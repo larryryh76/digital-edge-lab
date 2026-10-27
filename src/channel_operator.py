@@ -190,17 +190,27 @@ def execute_generated_episode(job_id, topic, series_id, episode_id):
                 report = json.loads(report_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 report = None
+        delivery = None
+        delivery_error = None
         if code == 0 and report and report.get("status") == "verified_delivery":
-            update_job(job_id, status="completed", stage="QA-passed episode delivered", pid=None,
-                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail,
-                                                "series_id": series_id, "episode_id": episode_id}))
-            conversation("assistant", "Episode passed the pipeline's delivery QA gates. Review the generated MP4 and report before publishing.", job_id)
+            try:
+                video_path, verified_report = _latest_verified_video()
+                delivery = {"video_path": str(video_path), "bytes": video_path.stat().st_size,
+                            "report": verified_report}
+            except Exception as exc:
+                delivery_error = str(exc)
+        if code == 0 and report and report.get("status") == "verified_delivery" and delivery:
+            update_job(job_id, status="completed", stage="QA-passed episode and MP4 verified", pid=None,
+                       result_json=json.dumps({"exit_code": code, "report": report, "delivery": delivery,
+                                                "log_tail": tail, "series_id": series_id, "episode_id": episode_id}))
+            conversation("assistant", "Episode passed delivery QA and its nonempty MP4 was verified. Review the video before publishing.", job_id)
         else:
-            update_job(job_id, status="failed", stage="failed or QA rejected", pid=None,
-                       error=tail[-6000:] or "Pipeline exited without a QA-passed run-report.",
-                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail,
-                                                "series_id": series_id, "episode_id": episode_id}))
-            conversation("assistant", "Episode generation failed or did not pass delivery QA. No completed episode was claimed.", job_id)
+            failure = delivery_error or tail[-6000:] or "Pipeline exited without a QA-passed report and existing MP4."
+            update_job(job_id, status="failed", stage="failed or delivery QA rejected", pid=None,
+                       error=failure[-6000:],
+                       result_json=json.dumps({"exit_code": code, "report": report, "delivery_error": delivery_error,
+                                                "log_tail": tail, "series_id": series_id, "episode_id": episode_id}))
+            conversation("assistant", "Episode generation failed or did not pass report-plus-video QA. No completed episode was claimed.", job_id)
     except Exception as exc:
         update_job(job_id, status="failed", stage="failed to launch", pid=None, error=str(exc)[:6000])
     finally:
