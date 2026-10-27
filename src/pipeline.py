@@ -786,7 +786,7 @@ def main(argv=None):
         "gates": gates,
         "failed_gates": failed_gates,
         "video_file": final.name,
-        "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented"},
+        "publishing": {"youtube": "private_upload_tool_available_requires_oauth", "tiktok": "manual_upload_package_available_direct_post_requires_authorization"},
         "editorial_review": {
             "source_claim_support": "HUMAN_REVIEW_REQUIRED",
             "publication_ready": False,
