@@ -73,12 +73,22 @@ def configure_scene():
         scene.render.engine = "BLENDER_EEVEE_NEXT"
     except (TypeError, AttributeError):
         scene.render.engine = "BLENDER_EEVEE"
-    for attr, value in (("taa_render_samples", SAMPLES), ("use_gtao", True),
-                        ("use_ssr", True), ("use_bloom", True)):
+    # CI has no GPU: keep the per-frame cost bounded but still cinematic.
+    for attr, value in (
+        ("taa_render_samples", SAMPLES),
+        ("use_gtao", True),
+        ("use_ssr", False),          # screen-space reflections are very costly on llvmpipe
+        ("use_raytracing", False),   # EEVEE Next equivalent
+        ("use_bloom", True),
+    ):
         try:
             setattr(scene.eevee, attr, value)
         except (AttributeError, TypeError):
             pass
+    try:
+        scene.render.use_persistent_data = True
+    except (AttributeError, TypeError):
+        pass
     for transform in ("AgX", "Filmic", "Standard"):
         try:
             scene.view_settings.view_transform = transform

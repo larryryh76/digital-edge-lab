@@ -60,9 +60,14 @@ jobs:
         timeout-minutes: 25
         run: |
           set -euo pipefail
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 update
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 install -y \
-            --no-install-recommends ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+          export DEBIAN_FRONTEND=noninteractive
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::LowSpeedLimit=2000 -o Acquire::LowSpeedTime=25"
+          timeout 600 sudo apt-get $APT update
+          timeout 900 sudo apt-get $APT install -y --no-install-recommends \
+            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+            ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+          command -v ffmpeg
+          command -v blender
           ffmpeg -version | head -1
           blender --version | head -1
 
@@ -99,9 +104,14 @@ jobs:
         timeout-minutes: 25
         run: |
           set -euo pipefail
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 update
-          sudo apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=45 install -y \
-            --no-install-recommends ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+          export DEBIAN_FRONTEND=noninteractive
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::LowSpeedLimit=2000 -o Acquire::LowSpeedTime=25"
+          timeout 600 sudo apt-get $APT update
+          timeout 900 sudo apt-get $APT install -y --no-install-recommends \
+            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+            ffmpeg blender libegl1 libgl1 espeak-ng fonts-dejavu-core
+          command -v ffmpeg
+          command -v blender
           ffmpeg -version | head -1
           blender --version | head -1
 
