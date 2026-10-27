@@ -8,7 +8,7 @@ Requires Python 3.10+ and the repository's normal dependencies. From the reposit
 python -m pip install -r requirements.txt
 export GEMINI_API_KEY="YOUR_KEY_FROM_GOOGLE_AI_STUDIO"
 # Optional: choose another Gemini model available to this key.
-export DEL_AGENT_MODEL="gemini-2.5-flash"
+export DEL_AGENT_MODEL="gemini-3.8-flash"
 python src/channel_operator.py serve
 ```
 
