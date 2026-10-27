@@ -190,7 +190,7 @@ def execute_generated_episode(job_id, topic, series_id, episode_id):
                 report = json.loads(report_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 report = None
-        if code == 0 and report and report.get("status") in ("verified_delivery", "verified_degraded_delivery"):
+        if code == 0 and report and report.get("status") == "verified_delivery":
             update_job(job_id, status="completed", stage="QA-passed episode delivered", pid=None,
                        result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail,
                                                 "series_id": series_id, "episode_id": episode_id}))
