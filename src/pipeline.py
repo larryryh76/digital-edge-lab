@@ -115,7 +115,7 @@ def build_caption_pngs(cards, index, out_dir):
     return paths
 
 
-def encode_segment(raw_clip, cards, duration, out_path, work):
+def encode_segment(raw_clip, cards, duration, out_path, work, timeout_seconds=240):
     overlays = build_caption_pngs(cards, int(out_path.stem.split("_")[-1]), work) \
         if cards else []
     argv = ["ffmpeg", "-y", "-v", "error", "-i", str(raw_clip)]
@@ -131,7 +131,7 @@ def encode_segment(raw_clip, cards, duration, out_path, work):
     argv += ["-filter_complex", ";".join(chain), "-map", "[vout]", "-an",
              "-t", f"{duration:.4f}", "-c:v", "libx264", "-preset", "veryfast",
              "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS), str(out_path)]
-    result = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=240)
+    result = subprocess.run(argv, check=False, capture_output=True, text=True, timeout=max(1, int(timeout_seconds)))
     if result.returncode:
         raise RuntimeError(f"segment encode failed: {result.stderr[-500:]}")
     return out_path
@@ -432,7 +432,11 @@ def render_episode(episode, windows, work, diagnostics):
         final = work / f"final_segment_{scene['index']:02d}.mp4"
         if final.exists():
             final.unlink()
-        encode_segment(clip, cards, window["duration"], final, work)
+        if cancel_event.is_set() or time.monotonic() >= deadline:
+            raise render_parallel.RenderDeadlineExceeded(
+                f"scene {scene['index'] + 1}: cancelled before segment encoding")
+        encode_segment(clip, cards, window["duration"], final, work,
+                       timeout_seconds=min(240, max(1, int(deadline-time.monotonic()))))
         diagnostics.append("scene_rendered", {
             "scene_index": scene["index"], "template": trace.get("template"),
             "duration": window["duration"], "frames": window["frames"],
@@ -613,7 +617,7 @@ def main(argv=None):
 
     try:
         segments, traces = render_episode(episode, windows, work, diagnostics)
-    except RuntimeError as exc:
+    except Exception as exc:
         fail(str(exc), diagnostics)
 
     # --- per-scene QA -----------------------------------------------------
