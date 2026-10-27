@@ -3,11 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       topic:
-        description: "Optional topic; leave blank and AI will choose one"
+        description: "Manual run only; video generation uses paid API quota. Optional topic."
         required: false
         type: string
-  schedule:
-    - cron: "0 10 * * *"
 
 permissions:
   contents: read
