@@ -144,18 +144,12 @@ def make_frame(t, topic, captions):
     d.text((W-130,69),f"0{scene+1} / 06",font=font(16,True),fill=(*accent,255))
     centered(d,label,165,font(17,True),(*accent,255))
     if scene == 0:
-        headline="AI DOESN'T
-HAVE TO FORGET"
-    elif scene == 1: headline="NOT EVERY DETAIL
-DESERVES TO STAY"
-    elif scene == 2: headline="KEEP WHAT
-CHANGES THE ANSWER"
-    elif scene == 3: headline="LINK FACTS TO
-THE RIGHT CONTEXT"
-    elif scene == 4: headline="MEMORY IS A
-FEEDBACK LOOP"
-    else: headline="RECALL THE RIGHT
-THING. AT THE RIGHT TIME."
+        headline="AI DOESN'T\\nHAVE TO FORGET"
+    elif scene == 1: headline="NOT EVERY DETAIL\\nDESERVES TO STAY"
+    elif scene == 2: headline="KEEP WHAT\\nCHANGES THE ANSWER"
+    elif scene == 3: headline="LINK FACTS TO\\nTHE RIGHT CONTEXT"
+    elif scene == 4: headline="MEMORY IS A\\nFEEDBACK LOOP"
+    else: headline="RECALL THE RIGHT\\nTHING. AT THE RIGHT TIME."
     centered(d,headline,670,font(28,True),(245,248,255,255),W-62,7)
     # Kinetic underline and active progress indicator.
     prog = (scene+p)/6
