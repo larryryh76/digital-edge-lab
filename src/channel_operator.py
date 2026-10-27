@@ -192,7 +192,8 @@ def execute_generated_episode(job_id, topic, series_id, episode_id):
                 report = None
         if code == 0 and report and report.get("status") in ("verified_delivery", "verified_degraded_delivery"):
             update_job(job_id, status="completed", stage="QA-passed episode delivered", pid=None,
-                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail}))
+                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail,
+                                                "series_id": series_id, "episode_id": episode_id}))
             conversation("assistant", "Episode passed the pipeline's delivery QA gates. Review the generated MP4 and report before publishing.", job_id)
         else:
             update_job(job_id, status="failed", stage="failed or QA rejected", pid=None,
