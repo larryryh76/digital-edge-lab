@@ -1,6 +1,6 @@
 """Bounded, ordered scene scheduling with a hard wall-clock deadline."""
 from __future__ import annotations
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError as FuturesTimeoutError
 import threading
 import time
 
@@ -23,16 +23,23 @@ def run_parallel(items, worker, *, max_workers=2, deadline_seconds=2700):
     futures = {pool.submit(worker, i, item, cancel, deadline): i
                for i, item in enumerate(items)}
     try:
-        for future in as_completed(futures, timeout=max(0.01, deadline-time.monotonic())):
-            index = futures[future]
-            try:
-                results[index] = future.result()
-            except BaseException as exc:
-                errors.append((index, exc))
-                cancel.set()
-                for pending in futures:
-                    pending.cancel()
-                break
+        try:
+            completed = as_completed(futures, timeout=max(0.01, deadline-time.monotonic()))
+            for future in completed:
+                index = futures[future]
+                try:
+                    results[index] = future.result()
+                except BaseException as exc:
+                    errors.append((index, exc))
+                    cancel.set()
+                    for pending in futures:
+                        pending.cancel()
+                    break
+        except FuturesTimeoutError as exc:
+            cancel.set()
+            raise RenderDeadlineExceeded(
+                f"render-phase deadline expired after {deadline_seconds:.1f}s; "
+                f"completed {len(results)}/{len(items)} scenes") from exc
         if time.monotonic() >= deadline and len(results) != len(items):
             cancel.set()
             raise RenderDeadlineExceeded(
