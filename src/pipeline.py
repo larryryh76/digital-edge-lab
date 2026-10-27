@@ -167,7 +167,7 @@ def enum_documentation():
     return ENUM_DOC
 
 
-def script_prompt(memory, requested_topic=None):
+def script_prompt(memory, requested_topic=None, series_id=None):
     recent = [t.get("topic") for t in memory.get("recent_topics", [])[-12:]]
     topic_instruction = ("Requested episode topic: " + str(requested_topic) +
                          ". Stay focused on this topic; do not substitute a generic topic."
@@ -183,6 +183,8 @@ def script_prompt(memory, requested_topic=None):
         episode_records = []
     completed = [ep for ep in episode_records
                  if ep.get("status") in ("completed", "completed_degraded", "legacy_completed")]
+    if series_id:
+        completed = [ep for ep in completed if ep.get("series_id") == series_id]
     completed = completed[-8:]
     continuity_records = [{
         "episode_id": ep.get("episode_id"), "series_id": ep.get("series_id"),
@@ -191,12 +193,18 @@ def script_prompt(memory, requested_topic=None):
         "ending": str(ep.get("ending", ""))[:250], "unresolved": ep.get("unresolved", [])[:8],
         "sources": ep.get("sources", [])[:4]
     } for ep in completed]
+    series_record = memory.get("series", {}).get(series_id) if series_id else None
     continuity = json.dumps({"channel": memory.get("channel", {}),
+                             "requested_series": series_record,
                              "recent_completed_episodes": continuity_records,
                              "running_context": legacy_context},
                             ensure_ascii=False)[:6500]
+    series_instruction = ("Continue the existing series " + series_id +
+                          "; use its unresolved threads, character state, and chronology."
+                          if series_id else "This is a standalone episode unless memory explicitly indicates otherwise.")
     return f"""You are the story editor and visual director for Digital Edge Lab, an original
 faceless short-form channel about technology. {topic_instruction}
+{series_instruction}
 Produce ONE 35-55 second vertical mini-documentary
 with the pacing of a premium science short: an immediate visual hook, a genuine question, an
 escalating explanation, one concrete example, a clear reveal and a payoff line.
@@ -247,8 +255,8 @@ Hard rules:
 Return raw JSON only, no Markdown fences, no commentary."""
 
 
-def generate_episode(client, memory, diagnostics, requested_topic=None):
-    prompt = script_prompt(memory, requested_topic=requested_topic)
+def generate_episode(client, memory, diagnostics, requested_topic=None, series_id=None):
+    prompt = script_prompt(memory, requested_topic=requested_topic, series_id=series_id)
     attempts = 0
     last_errors = []
     while attempts < 3:
@@ -609,7 +617,7 @@ def main(argv=None):
     degraded = None
     try:
         episode = load_plan(args.plan) if args.plan else generate_episode(
-            client, memory, diagnostics, requested_topic=args.topic)
+            client, memory, diagnostics, requested_topic=args.topic, series_id=args.series_id)
     except (RuntimeError, GeminiError) as exc:
         if args.plan or not args.fallback_plan:
             fail(f"plan generation failed: {exc}", diagnostics)
