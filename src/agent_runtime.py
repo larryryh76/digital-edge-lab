@@ -38,6 +38,10 @@ TOOL_DECLARATIONS = [
      "parameters": {"type": "OBJECT", "properties": {}}},
     {"name": "prepare_tiktok_manual_upload", "description": "Package the latest QA-passed MP4 for manual TikTok upload when API authorization is unavailable. Does not publish.",
      "parameters": {"type": "OBJECT", "properties": {"title": {"type": "STRING"}} , "required": ["title"]}},
+    {"name": "get_youtube_analytics", "description": "Fetch actual authorized YouTube Analytics for a known video ID and explicit past date range. Requires separate analytics OAuth consent; never invent missing metrics.",
+     "parameters": {"type": "OBJECT", "properties": {
+         "video_id": {"type": "STRING"}, "start_date": {"type": "STRING"}, "end_date": {"type": "STRING"}
+     }, "required": ["video_id", "start_date", "end_date"]}},
     {"name": "upload_youtube_private", "description": "Upload the latest QA-passed MP4 to the user's authorized YouTube account as PRIVATE only. Requires configured OAuth client/token and explicit user request. Never makes it public.",
      "parameters": {"type": "OBJECT", "properties": {"title": {"type": "STRING"}, "description": {"type": "STRING"}} , "required": ["title"]}}
 ]
