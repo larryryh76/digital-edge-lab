@@ -283,11 +283,49 @@ def interpret(message):
                 result = {"ok": True, "message": "Queued job cancelled.", "job": update_job(job["id"], status="cancelled", stage="cancelled")}
             else:
                 result = {"ok": False, "message": "This job is not cancellable in its current state.", "job": job}
-        elif action == "retry" and job["status"] in ("failed", "cancelled"):
+        elif action == "pause" and job["status"] == "queued":
+            result = {"ok": True, "message": "Queued job paused before execution.", "job": update_job(job["id"], status="paused", stage="paused before execution")}
+        elif action == "resume" and job["status"] == "paused":
+            resumed = update_job(job["id"], status="queued", stage="resuming queued job")
+            if job["kind"] == "offline_pilot":
+                threading.Thread(target=execute_pilot, args=(job["id"], job["instruction"]), daemon=True).start()
+            else:
+                result = {"ok": False, "message": "This paused job type has no resume executor.", "job": resumed}
+                conversation("assistant", result["message"], job["id"])
+                return result
+            result = {"ok": True, "message": "Queued job resumed.", "job": resumed}
+        elif action == "retry" and job["status"] in ("failed", "cancelled", "blocked"):
             new = job_create(job["kind"], job["instruction"], status="retrying", stage="retry queued")
             if new["kind"] == "offline_pilot":
                 threading.Thread(target=execute_pilot, args=(new["id"], new["instruction"]), daemon=True).start()
-            result = {"ok": True, "message": "Created a separate retry job; previous logs remain intact.", "job": new}
+            elif new["kind"] == "generated_episode":
+                from channel_memory import ChannelMemory
+                memory = ChannelMemory(MEMORY_PATH)
+                data = memory.load()
+                requested = re.search(r"series about\\s+(.+)$", new["instruction"], re.I)
+                if requested:
+                    series_id = re.sub(r"[^a-z0-9]+", "-", requested.group(1).strip(" .!?").lower()).strip("-")[:64]
+                else:
+                    match = re.search(r"continue\\s+series\\s+([a-z0-9-]+)", new["instruction"], re.I)
+                    series_id = match.group(1) if match else None
+                series = data.get("series", {}).get(series_id) if series_id else None
+                if series:
+                    pending = [ep for ep in data.get("episodes", {}).values()
+                               if ep.get("series_id") == series_id and ep.get("status") == "queued"]
+                    if pending:
+                        episode = sorted(pending, key=lambda ep: ep.get("episode_number") or 0)[-1]
+                    else:
+                        number = len(series.get("episode_ids", [])) + 1
+                        episode_id = f"{series_id}-e{number:02d}"
+                        episode = memory.create_episode(episode_id, title=f"{series['title']} — Episode {number}",
+                            topic=series["title"], series_id=series_id, episode_number=number)
+                    threading.Thread(target=execute_generated_episode,
+                        args=(new["id"], episode.get("topic", series["title"]), series_id, episode["episode_id"]),
+                        daemon=True).start()
+                else:
+                    update_job(new["id"], status="blocked", stage="series context unavailable",
+                               error="Could not identify the series from the original instruction.")
+            result = {"ok": True, "message": "Created a separate retry job; previous logs remain intact. Retry only starts if its required configuration and series context exist.", "job": job_get(new["id"])}
         else:
             result = {"ok": False, "message": f"{action.title()} is not supported for this job type yet; no state was changed.", "job": job}
     else:
