@@ -170,7 +170,6 @@ class Studio:
         if bevel > 0 and obj.type == "MESH":
             mod = obj.modifiers.new("Soft edges", "BEVEL")
             mod.width, mod.segments = bevel, 2
-            obj.modifiers.new("Weighted normals", "WEIGHTED_NORMAL")
         self.objects.append(obj)
         return obj
 
@@ -1178,7 +1177,11 @@ moving_parts = sum(1 for name, report in part_reports.items()
                    or report.get("scale_ratio_min", 1) <= 0.92)
 removed_parts = sum(1 for name, report in part_reports.items()
                     if report.get("final_scale", 1) <= 0.35 * max(report.get("first_scale", 1), 1e-6))
-camera_travel = max(math.dist(samples["hero"][0]["world"], s["world"]) for s in samples["hero"]) if samples.get("hero") else 0.0
+hero_travel = 0.0
+if samples.get("hero"):
+    hero_series = samples["hero"]
+    hero_travel = max(math.dist(hero_series[0]["centroid"], s["centroid"])
+                      for s in hero_series)
 
 trace = {
     "scene_index": index,
@@ -1202,7 +1205,7 @@ trace = {
     "measured": {
         "mover": summary,
         "hero": hero_summary,
-        "camera_displacement": round(camera_travel, 4),
+        "hero_tracked_travel": round(hero_travel, 4),
         "parts_moved": moving_parts,
         "parts_removed": removed_parts,
         "moving_part_names": sorted(name for name, report in part_reports.items()
