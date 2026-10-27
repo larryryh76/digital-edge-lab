@@ -6,7 +6,7 @@ import json
 from unittest.mock import patch
 from pathlib import Path
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "src" / "operator.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "src" / "channel_operator.py"
 spec = importlib.util.spec_from_file_location("del_operator", MODULE_PATH)
 operator = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(operator)
