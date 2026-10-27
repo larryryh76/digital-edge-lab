@@ -46,6 +46,32 @@ env:
   DEL_RENDER_PHASE_BUDGET_SECONDS: "2700"
 
 jobs:
+  free-pilot:
+    name: Fast $0 animated MP4 pilot (no Blender or API)
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install FFmpeg, local narration, and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng fonts-dejavu-core
+      - name: Install Pillow
+        run: python -m pip install --disable-pip-version-check "Pillow>=10.0.0"
+      - name: Compile free engine
+        run: python -m py_compile scripts/free_video_engine.py
+      - name: Render first real vertical video
+        run: python scripts/free_video_engine.py
+      - name: Upload actual MP4 and QA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-edge-lab-first-free-video
+          path: output/video/*
+          if-no-files-found: error
+          retention-days: 14
+
   verify:
     name: Offline checks and renderer smoke test
     runs-on: ubuntu-latest
