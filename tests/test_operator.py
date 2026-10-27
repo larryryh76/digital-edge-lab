@@ -69,6 +69,39 @@ class OperatorTests(unittest.TestCase):
             finally:
                 operator.DB_PATH = old
 
+    def test_model_cancel_tool_cancels_queued_job(self):
+        old_db = operator.DB_PATH
+        with tempfile.TemporaryDirectory() as temp:
+            operator.DB_PATH = Path(temp) / "jobs.sqlite3"
+            try:
+                job = operator.job_create("offline_pilot", "pilot")
+                result = operator._agent_tool("cancel_job", {"job_id": job["id"]})
+                self.assertTrue(result["cancelled"])
+                self.assertEqual(operator.job_get(job["id"])["status"], "cancelled")
+            finally:
+                operator.DB_PATH = old_db
+
+    def test_model_retry_tool_creates_separate_retry_without_overwriting_old_logs(self):
+        old_db = operator.DB_PATH
+        with tempfile.TemporaryDirectory() as temp:
+            operator.DB_PATH = Path(temp) / "jobs.sqlite3"
+            try:
+                failed = operator.job_create("offline_pilot", "pilot", status="failed", stage="failed")
+                operator.update_job(failed["id"], error="original failure evidence")
+                class FakeThread:
+                    def __init__(self, **kwargs):
+                        self.kwargs = kwargs
+                    def start(self):
+                        pass
+                with patch.object(operator.threading, "Thread", FakeThread):
+                    result = operator._agent_tool("retry_job", {"job_id": failed["id"]})
+                self.assertTrue(result["retry_started"])
+                self.assertNotEqual(result["job"]["id"], failed["id"])
+                self.assertEqual(operator.job_get(failed["id"])["error"], "original failure evidence")
+                self.assertEqual(result["job"]["status"], "retrying")
+            finally:
+                operator.DB_PATH = old_db
+
     def test_latest_artifact_requires_report_and_nonempty_mp4(self):
         old_root = operator.ROOT
         with tempfile.TemporaryDirectory() as temp:
