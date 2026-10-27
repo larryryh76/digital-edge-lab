@@ -230,6 +230,36 @@ def _latest_verified_video():
     raise RuntimeError("Run-report says delivery passed, but its referenced MP4 is missing or empty.")
 
 
+def _safe_job_summary(job):
+    """Keep model/UI job responses bounded; retain real status and useful failure evidence."""
+    raw = job.get("result") if isinstance(job.get("result"), dict) else {}
+    report = raw.get("report") if isinstance(raw.get("report"), dict) else {}
+    delivery = raw.get("delivery") if isinstance(raw.get("delivery"), dict) else {}
+    result = {}
+    for key in ("exit_code", "series_id", "episode_id"):
+        if key in raw:
+            result[key] = raw[key]
+    if report:
+        result["report"] = {key: report.get(key) for key in
+                            ("status", "title", "topic", "video_file", "delivery_path", "failed_gates")
+                            if key in report}
+    if delivery:
+        result["delivery"] = {key: delivery.get(key) for key in ("video_path", "bytes") if key in delivery}
+        if isinstance(delivery.get("report"), dict):
+            result["delivery"]["report"] = {key: delivery["report"].get(key)
+                for key in ("status", "title", "topic", "video_file") if key in delivery["report"]}
+    return {key: job.get(key) for key in
+            ("id", "kind", "instruction", "status", "stage", "created_at", "updated_at", "pid")
+            if key in job} | {"error": str(job.get("error") or "")[:1600], "result": result}
+
+
+def _safe_jobs(limit=20, statuses=None):
+    jobs = jobs_list(100)
+    if statuses:
+        jobs = [job for job in jobs if job.get("status") in statuses]
+    return [_safe_job_summary(job) for job in jobs[:max(1, min(20, int(limit)))] ]
+
+
 def _research_topic(topic):
     """Run a bounded Gemini Google Search-grounded research request and persist source notes."""
     topic = str(topic).strip()
@@ -297,7 +327,7 @@ def _agent_tool(name, args):
     from channel_memory import ChannelMemory
     memory = ChannelMemory(MEMORY_PATH)
     if name == "list_jobs":
-        return {"jobs": jobs_list(args.get("limit", 20))}
+        return {"jobs": _safe_jobs(args.get("limit", 20))}
     if name == "get_channel_memory":
         data = memory.load()
         series_id = args.get("series_id")
@@ -433,7 +463,7 @@ def _agent_tool(name, args):
     if name == "diagnose_recent_failures":
         limit = args.get("limit", 10)
         failures = [j for j in jobs_list(100) if j.get("status") in ("failed", "blocked", "cancelled", "interrupted")]
-        return {"failures": failures[:limit], "count": len(failures),
+        return {"failures": [_safe_job_summary(j) for j in failures[:limit]], "count": len(failures),
                 "note": "These are persisted operator job records; they do not prove the root cause beyond their stored error evidence."}
     if name == "inspect_latest_artifact":
         video, report = _latest_verified_video()
@@ -574,7 +604,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/health":
             return self._send(200, {"ok": True, "service": "digital-edge-operator", "database": str(DB_PATH)})
         if path == "/api/jobs":
-            return self._send(200, {"jobs": jobs_list()})
+            return self._send(200, {"jobs": _safe_jobs(25)})
         if path == "/api/conversation":
             return self._send(200, {"messages": recent_conversation()})
         if path.startswith("/api/jobs/"):
