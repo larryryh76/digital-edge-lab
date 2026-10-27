@@ -17,9 +17,15 @@ Digital Edge Lab is a zero-budget-first production workflow for original faceles
 | Source URL reachability | Automated partial check | HTTP reachability is not evidence that a source supports a claim; human fact-checking remains required. |
 | Transactional narrator memory | Implemented in pipeline ordering | Candidate memory is written only after render/media QA; workflow commits it only after successful job completion. |
 | Failure diagnostics | Implemented; verify on each failed run | Failure artifact upload is guarded with `always()` and includes available output/log files. |
-| YouTube OAuth/upload/scheduling/analytics | Not implemented | Owner account authorization and private upload testing are separate future milestones. |
-| TikTok authorization/upload/scheduling/analytics | Not implemented | Developer access and platform approval are not verified. |
+| YouTube OAuth/private upload | Integrated tool/module; real-account test pending | Agent can request a private upload through the official API module. OAuth client, owner consent, optional dependencies and quota are required. Public posting is not exposed as an agent tool. |
+| TikTok Direct Post | API module + agent manual-package tool; real-account test pending | Direct Post still requires approved app access and creator authorization. The manual package is not a published post. |
 | Automatic weekly production at publish quality | Not yet production-ready | A successful render does not replace manual visual, factual, narration and caption review. |
+
+## AI operator
+
+A local conversational operator is implemented in `src/channel_operator.py` and uses Gemini's native function-calling API through `src/agent_runtime.py`. It validates tool arguments, executes registered production/memory/job/publishing tools, feeds real tool results back to the model, and bounds tool rounds. If `GEMINI_API_KEY` is missing, it explicitly reports that AI reasoning is unavailable rather than pretending to be a model-backed chatbot. Setup: see [`OPERATOR_SETUP.md`](OPERATOR_SETUP.md).
+
+The agent implementation has mocked/offline protocol tests; live model access depends on a valid key, quota and provider availability. This is not yet a hosted autonomous service, and it does not enable public posting.
 
 ## Required account setup
 
