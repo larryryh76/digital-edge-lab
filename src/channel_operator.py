@@ -241,7 +241,7 @@ def _research_topic(topic):
     import requests
     model = os.getenv("DEL_RESEARCH_MODEL", os.getenv("DEL_AGENT_MODEL", "gemini-2.5-flash"))
     prompt = (
-        "Research this topic for a short educational video: " + topic + "\\n"
+        "Research this topic for a short educational video: " + topic + "\n"
         "Use Google Search grounding. Return concise findings, dates/context, uncertainties, "
         "and avoid unsupported statistics. Distinguish established facts from interpretation. "
         "Do not invent citations; source URLs will be taken from grounding metadata."
@@ -261,7 +261,7 @@ def _research_topic(topic):
     try:
         payload = response.json()
         candidate = payload["candidates"][0]
-        findings = "\\n".join(p.get("text", "") for p in candidate["content"]["parts"] if p.get("text")).strip()
+        findings = "\n".join(p.get("text", "") for p in candidate["content"]["parts"] if p.get("text")).strip()
         metadata = candidate.get("groundingMetadata", {})
         chunks = metadata.get("groundingChunks", [])
     except (ValueError, KeyError, IndexError, TypeError) as exc:
