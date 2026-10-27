@@ -36,6 +36,29 @@ class CaptionTests(unittest.TestCase):
     def test_empty_narration_yields_no_cards(self):
         self.assertEqual(narration.caption_cards("", 3.0), [])
 
+    def test_caption_alignment_runs_on_real_cards(self):
+        """Regression: the gate raised NameError after every scene had rendered."""
+        import media_qa
+
+        beats = [{"id": "b1", "role": "hook",
+                  "narration": "Four memory channels become one cheaper pipe."}]
+        windows = [{"index": 0, "beat_id": "b1", "start": 0.0, "end": 4.6,
+                    "duration": 4.6, "frames": 110, "narration": beats[0]["narration"]}]
+        cards = [narration.caption_cards(beats[0]["narration"], 4.6)]
+        result = media_qa.caption_alignment(cards, windows, beats)
+        self.assertTrue(result["passed"], result["failures"])
+
+    def test_captions_that_stop_early_are_rejected(self):
+        import media_qa
+
+        beats = [{"id": "b1", "role": "hook", "narration": "one two three four"}]
+        windows = [{"index": 0, "beat_id": "b1", "start": 0.0, "end": 6.0,
+                    "duration": 6.0, "frames": 144, "narration": beats[0]["narration"]}]
+        cards = [[{"lines": ["one two"], "start": 0.0, "end": 1.5}]]
+        result = media_qa.caption_alignment(cards, windows, beats)
+        self.assertFalse(result["passed"])
+        self.assertTrue(any("stop at" in failure for failure in result["failures"]))
+
 
 class GateTests(unittest.TestCase):
     def test_all_gates_pass_gives_no_failures(self):

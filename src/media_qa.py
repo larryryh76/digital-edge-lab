@@ -416,7 +416,8 @@ def caption_alignment(cards_by_scene, windows, beats):
             failures.append(f"scene {window['index'] + 1} has no captions")
             continue
         spoken = set(beat["narration"].lower().split())
-        caption_words = set(" ".join(card["lines"]).lower().split())
+        caption_words = set(" ".join(" ".join(card["lines"]) for card in cards)
+                            .lower().split())
         if not caption_words.issubset(spoken):
             failures.append(f"scene {window['index'] + 1} captions contain words that are "
                             f"not spoken in its beat")
