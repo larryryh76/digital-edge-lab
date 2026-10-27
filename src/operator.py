@@ -127,6 +127,8 @@ def execute_pilot(job_id, instruction):
                     stage = line.split("]", 1)[0].lstrip("[")[:100]
                     update_job(job_id, stage=stage)
             code = process.wait()
+            if job_get(job_id) and job_get(job_id)["status"] == "cancelled":
+                return
             tail = "\n".join(output[-80:])[-16000:]
             if code == 0:
                 update_job(job_id, status="completed", stage="verified pipeline exit", pid=None,
@@ -167,6 +169,8 @@ def execute_generated_episode(job_id, topic, series_id, episode_id):
             if line.startswith("["):
                 update_job(job_id, stage=line.split("]", 1)[0].lstrip("[")[:100])
         code = process.wait()
+        if job_get(job_id) and job_get(job_id)["status"] == "cancelled":
+            return
         tail = "\n".join(output[-100:])[-18000:]
         report_path = ROOT / "output" / "run-report.json"
         report = None
@@ -211,7 +215,7 @@ def interpret(message):
         from channel_memory import ChannelMemory
         memory = ChannelMemory(MEMORY_PATH)
         data = memory.load()
-        match = re.search(r"continue\\s+series\\s+([a-z0-9-]+)", low)
+        match = re.search(r"continue\s+series\s+([a-z0-9-]+)", low)
         series_id = match.group(1) if match else None
         if series_id:
             series = data.get("series", {}).get(series_id)
@@ -302,11 +306,11 @@ def interpret(message):
                 from channel_memory import ChannelMemory
                 memory = ChannelMemory(MEMORY_PATH)
                 data = memory.load()
-                requested = re.search(r"series about\\s+(.+)$", new["instruction"], re.I)
+                requested = re.search(r"series about\s+(.+)$", new["instruction"], re.I)
                 if requested:
                     series_id = re.sub(r"[^a-z0-9]+", "-", requested.group(1).strip(" .!?").lower()).strip("-")[:64]
                 else:
-                    match = re.search(r"continue\\s+series\\s+([a-z0-9-]+)", new["instruction"], re.I)
+                    match = re.search(r"continue\s+series\s+([a-z0-9-]+)", new["instruction"], re.I)
                     series_id = match.group(1) if match else None
                 series = data.get("series", {}).get(series_id) if series_id else None
                 if series:
