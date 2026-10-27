@@ -159,6 +159,44 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
         raise PublishingError("YouTube upload outcome is uncertain; inspect the channel before retrying. Duplicate upload blocked.") from exc
 
 
+def build_youtube_analytics_service(client_secret_file=None, token_file=None):
+    """Authorize a separate, least-privilege analytics token; never assume upload OAuth grants analytics."""
+    client_secret_file = Path(client_secret_file or os.getenv("YOUTUBE_OAUTH_CLIENT_FILE", "secrets/youtube-client.json"))
+    token_file = Path(token_file or os.getenv("YOUTUBE_ANALYTICS_TOKEN_FILE", "secrets/youtube-analytics-token.json"))
+    if not client_secret_file.is_file():
+        raise PublishingError("YouTube OAuth client file missing; set YOUTUBE_OAUTH_CLIENT_FILE before analytics.")
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        from googleapiclient.discovery import build
+    except ImportError as exc:
+        raise PublishingError("Install optional publishing dependencies: google-api-python-client google-auth-oauthlib google-auth-httplib2") from exc
+    scopes = ["https://www.googleapis.com/auth/yt-analytics.readonly",
+              "https://www.googleapis.com/auth/youtube.readonly"]
+    credentials = None
+    if token_file.is_file():
+        try:
+            credentials = Credentials.from_authorized_user_file(str(token_file), scopes)
+            if not credentials.has_scopes(scopes):
+                credentials = None
+        except (ValueError, OSError):
+            credentials = None
+    if not credentials or not credentials.valid:
+        if credentials and credentials.expired and credentials.refresh_token:
+            credentials.refresh(Request())
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file(str(client_secret_file), scopes)
+            credentials = flow.run_local_server(port=0, open_browser=False)
+        token_file.parent.mkdir(parents=True, exist_ok=True)
+        token_file.write_text(credentials.to_json(), encoding="utf-8")
+        try:
+            token_file.chmod(0o600)
+        except OSError:
+            pass
+    return build("youtubeAnalytics", "v2", credentials=credentials, cache_discovery=False)
+
+
 def fetch_video_analytics(video_id, start_date, end_date, *, analytics_service=None):
     """Query available metrics for an explicit date range and authorized service."""
     if analytics_service is None:
