@@ -136,6 +136,9 @@ class GeminiToolAgent:
         for _round in range(self.max_rounds):
             model_content, parts = self._call_model(contents)
             calls = [p["functionCall"] for p in parts if isinstance(p, dict) and isinstance(p.get("functionCall"), dict)]
+            # Research must be persisted before a production tool can start in the same model turn.
+            priority = {"research_topic": 0, "get_channel_memory": 1, "list_jobs": 1}
+            calls.sort(key=lambda item: priority.get(str(item.get("name", "")), 2))
             if not calls:
                 answer = "\n".join(p.get("text", "") for p in parts if isinstance(p, dict) and p.get("text")).strip()
                 if not answer:
