@@ -26,6 +26,16 @@ class OperatorTests(unittest.TestCase):
             finally:
                 operator.DB_PATH = old
 
+    def test_job_summaries_keep_errors_bounded_and_drop_full_log_tails(self):
+        summary = operator._safe_job_summary({
+            "id": "job-1", "kind": "offline_pilot", "status": "failed",
+            "stage": "failed", "error": "actual error",
+            "result": {"exit_code": 1, "log_tail": "x" * 20000}
+        })
+        self.assertEqual(summary["error"], "actual error")
+        self.assertNotIn("log_tail", summary["result"])
+        self.assertEqual(summary["result"]["exit_code"], 1)
+
     def test_conversation_survives_separate_database_connections(self):
         old = operator.DB_PATH
         with tempfile.TemporaryDirectory() as temp:
