@@ -193,19 +193,36 @@ def script_prompt(memory, requested_topic=None, series_id=None):
         "ending": str(ep.get("ending", ""))[:250], "unresolved": ep.get("unresolved", [])[:8],
         "sources": ep.get("sources", [])[:4]
     } for ep in completed]
+    research_items = memory.get("research", []) if isinstance(memory.get("research", []), list) else []
+    if requested_topic:
+        requested_words = {w for w in re.findall(r"[a-z0-9]+", requested_topic.lower()) if len(w) > 3}
+        relevant_research = []
+        for item in research_items:
+            topic_words = {w for w in re.findall(r"[a-z0-9]+", str(item.get("topic", "")).lower()) if len(w) > 3}
+            if requested_words & topic_words:
+                relevant_research.append(item)
+        research_items = relevant_research[-4:]
+    else:
+        research_items = research_items[-3:]
+    research_context = [{
+        "topic": item.get("topic", ""), "findings": str(item.get("findings", ""))[:1400],
+        "sources": item.get("sources", [])[:6],
+        "verification_status": item.get("verification_status", "review_required")
+    } for item in research_items]
     series_record = memory.get("series", {}).get(series_id) if series_id else None
     continuity = json.dumps({"channel": memory.get("channel", {}),
                              "requested_series": series_record,
                              "recent_completed_episodes": continuity_records,
-                             "running_context": legacy_context},
-                            ensure_ascii=False)[:6500]
+                             "running_context": legacy_context,
+                             "grounded_research_notes": research_context},
+                            ensure_ascii=False)[:9000]
     series_instruction = ("Continue the existing series " + series_id +
                           "; use its unresolved threads, character state, and chronology."
                           if series_id else "This is a standalone episode unless memory explicitly indicates otherwise.")
     return f"""You are the story editor and visual director for Digital Edge Lab, an original
 faceless short-form channel about technology. {topic_instruction}
 {series_instruction}
-Produce ONE 35-55 second vertical mini-documentary
+Use the supplied channel memory and any relevant grounded research notes in the context JSON below. Research notes are evidence leads, not proof that every claim is true; avoid unsupported specifics and preserve source URLs in the output.\nProduce ONE 35-55 second vertical mini-documentary
 with the pacing of a premium science short: an immediate visual hook, a genuine question, an
 escalating explanation, one concrete example, a clear reveal and a payoff line.
 
