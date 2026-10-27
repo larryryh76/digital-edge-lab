@@ -20,6 +20,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT / "src"))
 DB_PATH = Path(os.getenv("DEL_OPERATOR_DB", ROOT / "output" / "operator.sqlite3"))
 MEMORY_PATH = Path(os.getenv("DEL_CHANNEL_MEMORY", ROOT / "memory" / "channel-memory.json"))
 PLAN_PATH = Path(os.getenv("DEL_PILOT_PLAN", ROOT / "plans" / "quantization-on-device.json"))
