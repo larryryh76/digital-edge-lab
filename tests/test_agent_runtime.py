@@ -27,7 +27,7 @@ class FakeSession:
 
 
 def response(parts):
-    return {"candidates": [{"content": {"role": "model", "parts": parts}}]}
+    return FakeResponse({"candidates": [{"content": {"role": "model", "parts": parts}}]})
 
 
 class GeminiToolAgentTests(unittest.TestCase):
