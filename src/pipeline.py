@@ -555,8 +555,15 @@ def prepare_dirs():
         if target.exists():
             shutil.rmtree(target)
         target.mkdir(parents=True)
+    # Remove only known generated artifacts. The operator's SQLite database and
+    # any future state/config files live in output/ too and must survive a render.
+    generated_files = {
+        "episode-plan.json", "narration.txt", "digital-edge-lab-pilot.mp4",
+        "contact-sheet.jpg", "run-report.json", "channel-memory.json",
+        "diagnostics.json",
+    }
     for stale in OUT.iterdir():
-        if stale.is_file() and stale.name != ".gitkeep":
+        if stale.is_file() and stale.name in generated_files:
             stale.unlink()
     return OUT / "render", OUT / "cards", OUT / "delivery"
 
