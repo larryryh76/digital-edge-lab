@@ -139,6 +139,7 @@ class GeminiToolAgent:
             contents.append(model_content)
             for call in calls:
                 name = str(call.get("name", ""))
+                args = {}
                 try:
                     args = _validate_arguments(name, call.get("args", {}))
                     result = execute_tool(name, args)
