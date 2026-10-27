@@ -308,6 +308,19 @@ def normalize_blender_output(requested, index):
     return requested
 
 
+# Software-rendered EEVEE costs ~2.1s per frame on a 4-core hosted runner; the
+# budget is measured, not guessed, and scales with the scene so a legitimately
+# long beat cannot be reported as a renderer failure.
+SECONDS_PER_FRAME_BUDGET = 4.0
+RENDER_STARTUP_SECONDS = 120
+
+
+def render_timeout(frames, override=None):
+    if override:
+        return override
+    return int(RENDER_STARTUP_SECONDS + frames * SECONDS_PER_FRAME_BUDGET)
+
+
 def render_scene(episode, scene, window, work, diagnostics):
     index = scene["index"]
     spec = dict(scene)
@@ -333,7 +346,8 @@ def render_scene(episode, scene, window, work, diagnostics):
              "--python", str(ROOT / "src" / "blender_scene.py"),
              "--", str(spec_path), str(raw), str(index), str(len(episode["scenes"])),
              f"{seconds:.4f}"],
-            stdout=log, stderr=subprocess.STDOUT, text=True, env=env, timeout=600,
+            stdout=log, stderr=subprocess.STDOUT, text=True, env=env,
+            timeout=render_timeout(window["frames"]),
         )
     if result.returncode:
         tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]

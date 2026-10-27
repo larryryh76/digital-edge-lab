@@ -23,15 +23,23 @@ from pathlib import Path
 FPS = 24
 SCENE_TAIL_SECONDS = 0.18
 MIN_BEAT_SECONDS = 0.45
+# A narrator physically cannot deliver a line slower than this. Any hosted TTS
+# response outside the band means the model spoke something other than the line
+# (run #84: a 15-word line came back as 40s of audio because the long style
+# paragraph was read aloud), so it is rejected instead of becoming a scene.
+MIN_SECONDS_PER_WORD = 0.15
+MAX_SECONDS_PER_WORD = 1.15
 
-VOICE_DIRECTION = (
-    "Voice direction for Edge, the Digital Edge Lab narrator: sound like a real, confident "
-    "documentary storyteller speaking to one curious person. Warm, mid-low register, natural "
-    "conversational rhythm, subtle curiosity, restrained emotion, clean consonants, short "
-    "intentional pauses at commas and reveals. Emphasise only the key words. Do not sound "
-    "robotic, overexcited, salesy, or like a news bulletin. Do not add words, ad-libs, or "
-    "sound effects. Read the supplied line verbatim.\n\n"
-)
+# Kept to a single clause: the longer the style text, the more likely a speech
+# model performs it as narration instead of treating it as direction.
+STYLE_BRIEF = "Read this one line warmly and confidently, documentary style:"
+
+
+def plausibility(text, seconds):
+    """Return (plausible, seconds_per_word) for one spoken line."""
+    words = max(1, len(text.split()))
+    rate = seconds / words
+    return MIN_SECONDS_PER_WORD <= rate <= MAX_SECONDS_PER_WORD, rate
 
 
 class NarrationError(RuntimeError):
@@ -62,16 +70,16 @@ def mean_volume_db(path):
     return float(match.group(1)) if match else None
 
 
-def gemini_tts(client, text, out_path, model):
-    """Synthesise one beat with the hosted TTS model."""
+def _tts_request(client, prompt, out_path, model):
+    """One hosted TTS request; writes a wav and returns it."""
     parts = client.generate(
         model,
-        [{"text": VOICE_DIRECTION + text}],
+        [{"text": prompt}],
         {
             "responseModalities": ["AUDIO"],
             "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": "Charon"}}},
         },
-        deadline_seconds=140,
+        deadline_seconds=120,
         attempts_per_model=2,
         label="tts",
     )
@@ -94,6 +102,31 @@ def gemini_tts(client, text, out_path, model):
                 raise NarrationError(f"could not decode TTS audio: {result.stderr[-300:]}")
             return out_path
     raise NarrationError("TTS response contained no audio payload")
+
+
+def gemini_tts(client, text, out_path, model, *, log=None):
+    """Synthesise one beat, verifying the audio really is that one line.
+
+    The styled prompt is tried first; if the result cannot plausibly be this
+    line, the bare line is retried before the scene is allowed to use it. A
+    response that is wrong twice fails the episode with the measured rates.
+    """
+    attempts = []
+    for prompt, mode in ((f"{STYLE_BRIEF} {text}", "styled"), (text, "bare")):
+        _tts_request(client, prompt, out_path, model)
+        seconds = probe_duration(out_path)
+        ok, rate = plausibility(text, seconds)
+        attempts.append({"mode": mode, "seconds": round(seconds, 3),
+                         "seconds_per_word": round(rate, 3), "accepted": ok})
+        if ok:
+            if log:
+                log({"stage": "tts_verified", **attempts[-1]})
+            return out_path
+        Path(out_path).unlink(missing_ok=True)
+    raise NarrationError(
+        "hosted TTS returned audio that cannot be this line "
+        f"({len(text.split())} words): {json.dumps(attempts)}"
+    )
 
 
 def find_local_voice():
@@ -153,6 +186,13 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
         if spoken < MIN_BEAT_SECONDS:
             raise NarrationError(
                 f"beat {i + 1} narration is only {spoken:.2f}s; refusing to ship a truncated line"
+            )
+        ok, rate = plausibility(beat["narration"], spoken)
+        if not ok:
+            raise NarrationError(
+                f"beat {i + 1} narration is {spoken:.2f}s for "
+                f"{len(beat['narration'].split())} words ({rate:.2f}s/word); the voice "
+                "did not read this beat's line"
             )
         level = mean_volume_db(raw)
         if level is None or level < -45:
