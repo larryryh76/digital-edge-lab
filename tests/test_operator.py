@@ -26,33 +26,46 @@ class OperatorTests(unittest.TestCase):
             finally:
                 operator.DB_PATH = old
 
-    def test_create_series_persists_and_reports_missing_key(self):
-        old_db, old_memory = operator.DB_PATH, operator.MEMORY_PATH
+    def test_missing_model_key_is_not_misrepresented_as_ai(self):
+        old = operator.DB_PATH
         with tempfile.TemporaryDirectory() as temp:
             operator.DB_PATH = Path(temp) / "jobs.sqlite3"
-            operator.MEMORY_PATH = Path(temp) / "memory.json"
-            operator.MEMORY_PATH.write_text(json.dumps({"channel_name": "Digital Edge Lab",
-                "recent_topics": [], "running_context": [], "principles": []}), encoding="utf-8")
             try:
                 operator.connect().close()
                 with patch.dict(os.environ, {}, clear=True):
                     result = operator.interpret("Create a new series about the fall of ancient Rome")
-                self.assertTrue(result["ok"])
-                self.assertEqual(result["series"]["title"], "the fall of ancient Rome")
+                self.assertFalse(result["ok"])
+                self.assertIn("GEMINI_API_KEY is missing", result["message"])
+                self.assertEqual(result["tool_calls"], [])
+            finally:
+                operator.DB_PATH = old
+
+    def test_real_tool_executor_persists_series_and_reports_missing_key(self):
+        old_db, old_memory = operator.DB_PATH, operator.MEMORY_PATH
+        with tempfile.TemporaryDirectory() as temp:
+            operator.DB_PATH = Path(temp) / "jobs.sqlite3"
+            operator.MEMORY_PATH = Path(temp) / "memory.json"
+            try:
+                operator.connect().close()
+                with patch.dict(os.environ, {}, clear=True):
+                    result = operator._agent_tool("start_episode", {
+                        "topic": "The fall of ancient Rome", "continue_existing": False})
+                self.assertTrue(result["blocked"])
                 self.assertEqual(result["job"]["status"], "blocked")
                 migrated = json.loads(operator.MEMORY_PATH.read_text(encoding="utf-8"))
                 self.assertIn("the-fall-of-ancient-rome", migrated["series"])
             finally:
                 operator.DB_PATH, operator.MEMORY_PATH = old_db, old_memory
 
-    def test_unsupported_instruction_is_reported_honestly(self):
+    def test_missing_model_key_does_not_claim_publishing_completed(self):
         old = operator.DB_PATH
         with tempfile.TemporaryDirectory() as temp:
             operator.DB_PATH = Path(temp) / "jobs.sqlite3"
             try:
-                result = operator.interpret("Publish my next seven videos publicly")
+                with patch.dict(os.environ, {}, clear=True):
+                    result = operator.interpret("Publish my next seven videos publicly")
                 self.assertFalse(result["ok"])
-                self.assertIn("no safe executor", result["message"])
+                self.assertIn("GEMINI_API_KEY is missing", result["message"])
             finally:
                 operator.DB_PATH = old
 
