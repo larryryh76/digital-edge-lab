@@ -1,0 +1,41 @@
+name: Digital Edge Lab — Quick AI story prompt
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "Optional topic; leave blank and AI will choose one"
+        required: false
+        type: string
+  schedule:
+    - cron: "0 10 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digital-edge-lab-quick-story
+  cancel-in-progress: false
+
+jobs:
+  generate-story-prompt:
+    name: Choose topic and write production-ready story prompt
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_TEXT_MODEL: gemini-2.5-flash
+      EPISODE_TOPIC: ${{ inputs.topic }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - name: Check out channel memory
+        uses: actions/checkout@v4
+      - name: Generate detailed story prompt (no Blender or rendering)
+        run: python src/quick_story.py
+      - name: Save prompt as a downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-edge-lab-story-prompt-${{ github.run_number }}
+          path: output/story-prompt/*
+          if-no-files-found: error
+          retention-days: 14
