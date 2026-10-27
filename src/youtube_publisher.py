@@ -37,8 +37,6 @@ def content_fingerprint(video_path, metadata):
     with open(video_path, "rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
-    canonical = json.dumps(validate_metadata(metadata), sort_keys=True).encode()
-    digest.update(canonical)
     return digest.hexdigest()
 
 
@@ -96,6 +94,12 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
     previous = state.get(fingerprint)
     if previous and previous.get("video_id"):
         return {**previous, "duplicate_prevented": True}
+    if previous and previous.get("status") in ("uploading", "uncertain"):
+        raise PublishingError("An earlier upload may have reached YouTube. Reconcile the channel before retrying; duplicate upload blocked.")
+    state[fingerprint] = {"status": "uploading", "fingerprint": fingerprint, "metadata": meta}
+    temp = state_path.with_suffix(".tmp")
+    temp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+    os.replace(temp, state_path)
     try:
         from googleapiclient.http import MediaFileUpload
         body = {"snippet": {"title": meta["title"], "description": meta["description"],
@@ -120,10 +124,18 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
         os.replace(temp, state_path)
         return result
     except PublishingError:
+        state[fingerprint]["status"] = "uncertain"
+        temp = state_path.with_suffix(".tmp")
+        temp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        os.replace(temp, state_path)
         raise
     except Exception as exc:
-        # Never log access tokens or request headers.
-        raise PublishingError("YouTube upload failed; inspect local diagnostics and retry only after checking channel uploads to avoid duplicates: " + str(exc)[:500]) from exc
+        state[fingerprint]["status"] = "uncertain"
+        state[fingerprint]["error"] = str(exc)[:500]
+        temp = state_path.with_suffix(".tmp")
+        temp.write_text(json.dumps(state, indent=2), encoding="utf-8")
+        os.replace(temp, state_path)
+        raise PublishingError("YouTube upload outcome is uncertain; inspect the channel before retrying. Duplicate upload blocked.") from exc
 
 
 def fetch_video_analytics(video_id, *, analytics_service=None):
