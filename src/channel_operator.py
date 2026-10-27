@@ -239,7 +239,7 @@ def _research_topic(topic):
     if not api_key:
         raise RuntimeError("Grounded research requires GEMINI_API_KEY; no research request was made.")
     import requests
-    model = os.getenv("DEL_RESEARCH_MODEL", os.getenv("DEL_AGENT_MODEL", "gemini-2.5-flash"))
+    model = os.getenv("DEL_RESEARCH_MODEL", os.getenv("DEL_AGENT_MODEL", "gemini-3.8-flash"))
     prompt = (
         "Research this topic for a short educational video: " + topic + "\n"
         "Use Google Search grounding. Return concise findings, dates/context, uncertainties, "
@@ -502,7 +502,7 @@ def _agent_chat(message):
         return {**response, "message": assistant_text}
     except AgentError as exc:
         response = {"ok": False, "message": str(exc), "provider": "Google Gemini",
-                    "model": os.getenv("DEL_AGENT_MODEL", "gemini-2.5-flash"), "tool_calls": []}
+                    "model": os.getenv("DEL_AGENT_MODEL", "gemini-3.8-flash"), "tool_calls": []}
         conversation("assistant", response["message"])
         return response
     except Exception as exc:
