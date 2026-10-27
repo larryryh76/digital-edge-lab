@@ -21,7 +21,9 @@ If `GEMINI_API_KEY` is absent or rejected, the chat explicitly reports that mode
 - “Show my current jobs and explain which ones are still running.”
 - “Create an episode about how Roman roads changed the empire.”
 - “Continue the last unfinished episode and preserve its continuity.”
+- “Research ancient Rome using grounded sources, then produce a Short about the strongest finding.”
 - “Diagnose the recent production failures from the stored logs.”
+- “Cancel the current render” or “retry job JOB_ID” (the model selects the real persisted job ID from job results).
 - “Run the offline pilot, then inspect the actual report and video.”
 - “Prepare the latest verified video for manual TikTok upload.”
 - “Upload the latest verified video to YouTube as private.”
