@@ -26,6 +26,19 @@ class OperatorTests(unittest.TestCase):
             finally:
                 operator.DB_PATH = old
 
+    def test_conversation_survives_separate_database_connections(self):
+        old = operator.DB_PATH
+        with tempfile.TemporaryDirectory() as temp:
+            operator.DB_PATH = Path(temp) / "operator.sqlite3"
+            try:
+                operator.conversation("user", "Remember this instruction.")
+                operator.connect().close()
+                history = operator.recent_conversation()
+                self.assertEqual(history[-1]["role"], "user")
+                self.assertEqual(history[-1]["message"], "Remember this instruction.")
+            finally:
+                operator.DB_PATH = old
+
     def test_missing_model_key_is_not_misrepresented_as_ai(self):
         old = operator.DB_PATH
         with tempfile.TemporaryDirectory() as temp:
