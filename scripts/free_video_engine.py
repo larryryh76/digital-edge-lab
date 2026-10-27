@@ -175,12 +175,12 @@ def main():
     topic = os.environ.get("EPISODE_TOPIC","").strip() or DEFAULT_TOPIC
     # This zero-API pilot has a complete editorial fallback; no secret/key/network required.
     narration = [
-      "What if an AI could remember the useful parts of a conversation, without keeping every single word?",
-      "The trick is not a bigger brain. It is a system that stores selected facts, goals, and decisions outside the conversation.",
-      "When a new question arrives, the system searches that memory and brings back the details that actually matter.",
-      "The strongest setup links facts to context. A preference, a project decision, and a recent result should not be treated as unrelated scraps.",
-      "Then memory gets updated. New information can correct old assumptions, while stale details can be dropped instead of repeated forever.",
-      "That is the real idea: not magical perfect memory, but a deliberate loop of storing, retrieving, checking, and updating. Useful AI depends on what it recalls, and when."
+      "What if AI remembered the useful parts, without keeping every word?",
+      "The trick is a system that stores selected facts, goals, and decisions outside the chat.",
+      "When a new question arrives, it retrieves only the details that matter.",
+      "Context links facts together, so preferences and project decisions are not isolated scraps.",
+      "Memory must update too: correct old assumptions and drop stale details.",
+      "No magic. Just store, retrieve, check, and update. Useful AI depends on what it recalls, and when."
     ]
     captions = [
       "A conversation ends. The useful details should not disappear.",
@@ -199,7 +199,7 @@ def main():
     work.mkdir(parents=True,exist_ok=True)
     voice = work / "narration.wav"
     full_script = " ".join(narration)
-    subprocess.run(["espeak-ng","-v","en-us+f3","-s","154","-p","44","-a","165","-w",str(voice),full_script],check=True,timeout=90)
+    subprocess.run(["espeak-ng","-v","en-us+f3","-s","178","-p","44","-a","165","-w",str(voice),full_script],check=True,timeout=90)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     mp4 = OUT / f"digital-edge-lab-{stamp}.mp4"
     # Stream raw frames to ffmpeg: fast, deterministic, genuinely animated, no Blender/GPU.
