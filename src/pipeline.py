@@ -167,8 +167,11 @@ def enum_documentation():
     return ENUM_DOC
 
 
-def script_prompt(memory):
+def script_prompt(memory, requested_topic=None):
     recent = [t.get("topic") for t in memory.get("recent_topics", [])[-12:]]
+    topic_instruction = ("Requested episode topic: " + str(requested_topic) +
+                         ". Stay focused on this topic; do not substitute a generic topic."
+                         if requested_topic else "Choose a fresh topic consistent with channel memory.")
     # Bound continuity context to keep prompts useful without exploding token cost.
     legacy_context = [str(item)[:500] for item in memory.get("running_context", [])[-8:]]
     episode_store = memory.get("episodes", {})
@@ -193,7 +196,8 @@ def script_prompt(memory):
                              "running_context": legacy_context},
                             ensure_ascii=False)[:6500]
     return f"""You are the story editor and visual director for Digital Edge Lab, an original
-faceless short-form channel about technology. Produce ONE 35-55 second vertical mini-documentary
+faceless short-form channel about technology. {topic_instruction}
+Produce ONE 35-55 second vertical mini-documentary
 with the pacing of a premium science short: an immediate visual hook, a genuine question, an
 escalating explanation, one concrete example, a clear reveal and a payoff line.
 
@@ -243,8 +247,8 @@ Hard rules:
 Return raw JSON only, no Markdown fences, no commentary."""
 
 
-def generate_episode(client, memory, diagnostics):
-    prompt = script_prompt(memory)
+def generate_episode(client, memory, diagnostics, requested_topic=None):
+    prompt = script_prompt(memory, requested_topic=requested_topic)
     attempts = 0
     last_errors = []
     while attempts < 3:
@@ -557,11 +561,18 @@ def main(argv=None):
     parser.add_argument("--fallback-plan",
                         help="checked-in plan used only when the API is unavailable; the "
                              "report is then labelled degraded, never generated")
+    parser.add_argument("--topic", help="requested topic for generated episode (requires Gemini)")
+    parser.add_argument("--series-id", help="stable series ID for QA-gated story memory")
+    parser.add_argument("--episode-id", help="stable episode ID for duplicate prevention")
     parser.add_argument("--keep-output", action="store_true")
     args = parser.parse_args(argv)
 
     if args.offline and not args.plan:
         fail("--offline requires --plan")
+    if args.offline and args.topic:
+        fail("--topic requires generated mode; offline mode only accepts a checked-in --plan")
+    if args.series_id and not args.episode_id:
+        fail("--series-id requires --episode-id so episode memory remains idempotent")
 
     work, cards_dir, delivery = prepare_dirs()
     diagnostics = Diagnostics(OUT / "diagnostics.json")
@@ -578,8 +589,10 @@ def main(argv=None):
     print("Digital Edge Lab: building one pilot episode (not publishing).", flush=True)
 
     memory_file = ROOT / "memory" / "channel-memory.json"
+    from channel_memory import ChannelMemory
+    memory_store = ChannelMemory(memory_file)
     try:
-        memory = json.loads(memory_file.read_text(encoding="utf-8"))
+        memory = memory_store.load()
     except (OSError, json.JSONDecodeError):
         memory = {"persona": "Edge", "channel_name": "Digital Edge Lab",
                   "recent_topics": [], "running_context": [], "principles": []}
@@ -595,7 +608,8 @@ def main(argv=None):
 
     degraded = None
     try:
-        episode = load_plan(args.plan) if args.plan else generate_episode(client, memory, diagnostics)
+        episode = load_plan(args.plan) if args.plan else generate_episode(
+            client, memory, diagnostics, requested_topic=args.topic)
     except (RuntimeError, GeminiError) as exc:
         if args.plan or not args.fallback_plan:
             fail(f"plan generation failed: {exc}", diagnostics)
@@ -714,6 +728,12 @@ def main(argv=None):
         "degraded": degraded,
         "title": episode["title"],
         "topic": episode["topic"],
+        "summary": " ".join(episode["narration"].split())[:1200],
+        "hook": episode["beats"][0].get("narration", ""),
+        "ending": episode["beats"][-1].get("narration", ""),
+        "characters": [{"label": scene.get("subject", {}).get("label", ""),
+                        "kind": scene.get("subject", {}).get("kind", "")}
+                       for scene in episode.get("scenes", [])][:12],
         "origin": episode["origin"],
         "scene_count": len(episode["scenes"]),
         "narration": {
@@ -792,6 +812,19 @@ def main(argv=None):
         fail("delivery rejected by QA: " + ", ".join(failed_gates), diagnostics)
     diagnostics.set("run", dict(diagnostics.data["run"], status=report["status"],
                                  degraded=bool(degraded)))
+
+    # Structured story state is committed only after every delivery QA gate passed.
+    if args.episode_id:
+        try:
+            current_memory = memory_store.load()
+            if args.episode_id not in current_memory.get("episodes", {}):
+                memory_store.create_episode(args.episode_id, title=episode["title"],
+                                            topic=episode["topic"], series_id=args.series_id)
+            memory_store.complete_episode(args.episode_id, report)
+            print(f"[memory] committed QA-passed episode {args.episode_id}", flush=True)
+        except Exception as exc:
+            fail(f"delivery passed but structured story memory could not be committed: {exc}",
+                 diagnostics)
 
     # Candidate narrator memory is written only after every gate passed.
     candidate = dict(memory)
