@@ -20,6 +20,10 @@ MAX_HISTORY = 16
 TOOL_DECLARATIONS = [
     {"name": "list_jobs", "description": "Read persistent production jobs and their actual status, stage, errors, and results.",
      "parameters": {"type": "OBJECT", "properties": {"limit": {"type": "INTEGER", "minimum": 1, "maximum": 50}}}},
+    {"name": "cancel_job", "description": "Cancel a queued job or send termination to its actual running subprocess. Requires an exact persisted job ID.",
+     "parameters": {"type": "OBJECT", "properties": {"job_id": {"type": "STRING"}}, "required": ["job_id"]}},
+    {"name": "retry_job", "description": "Create a new retry job for a failed, blocked or cancelled job without overwriting its previous logs. Only registered job types with a real executor can be retried.",
+     "parameters": {"type": "OBJECT", "properties": {"job_id": {"type": "STRING"}}, "required": ["job_id"]}},
     {"name": "get_channel_memory", "description": "Read saved channel identity, series, completed episodes, continuity, research and publishing records.",
      "parameters": {"type": "OBJECT", "properties": {"series_id": {"type": "STRING"}}}},
     {"name": "research_topic", "description": "Research a topic with Gemini Google Search grounding. Store the returned findings and grounded source URLs in channel memory. This is source-backed research, not proof that every claim is independently verified.",
