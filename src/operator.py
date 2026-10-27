@@ -142,6 +142,54 @@ def execute_pilot(job_id, instruction):
             PROCESSES.pop(job_id, None)
 
 
+def execute_generated_episode(job_id, topic, series_id, episode_id):
+    """Generate a topic-directed episode through the real Gemini + narration + Blender pipeline."""
+    current = job_get(job_id)
+    if not current or current["status"] not in ("queued", "retrying"):
+        return
+    if not os.getenv("GEMINI_API_KEY"):
+        update_job(job_id, status="blocked", stage="missing GEMINI_API_KEY",
+                   error="Set GEMINI_API_KEY in the local environment, then retry this job.")
+        return
+    update_job(job_id, status="running", stage="research/story planning", error=None)
+    conversation("system", "Started topic-directed Gemini episode generation and the real production pipeline.", job_id)
+    command = [sys.executable, str(ROOT / "src" / "pipeline.py"),
+               "--topic", topic, "--series-id", series_id, "--episode-id", episode_id]
+    try:
+        process = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True, bufsize=1)
+        PROCESSES[job_id] = process
+        update_job(job_id, pid=process.pid, stage="research/story planning")
+        output = []
+        for line in process.stdout:
+            line = line.rstrip()
+            output.append(line)
+            if line.startswith("["):
+                update_job(job_id, stage=line.split("]", 1)[0].lstrip("[")[:100])
+        code = process.wait()
+        tail = "\n".join(output[-100:])[-18000:]
+        report_path = ROOT / "output" / "run-report.json"
+        report = None
+        if code == 0 and report_path.is_file():
+            try:
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                report = None
+        if code == 0 and report and report.get("status") in ("verified_delivery", "verified_degraded_delivery"):
+            update_job(job_id, status="completed", stage="QA-passed episode delivered", pid=None,
+                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail}))
+            conversation("assistant", "Episode passed the pipeline's delivery QA gates. Review the generated MP4 and report before publishing.", job_id)
+        else:
+            update_job(job_id, status="failed", stage="failed or QA rejected", pid=None,
+                       error=tail[-6000:] or "Pipeline exited without a QA-passed run-report.",
+                       result_json=json.dumps({"exit_code": code, "report": report, "log_tail": tail}))
+            conversation("assistant", "Episode generation failed or did not pass delivery QA. No completed episode was claimed.", job_id)
+    except Exception as exc:
+        update_job(job_id, status="failed", stage="failed to launch", pid=None, error=str(exc)[:6000])
+    finally:
+        PROCESSES.pop(job_id, None)
+
+
 def interpret(message):
     """Small deterministic command router; unknown commands are never claimed as done."""
     text = str(message).strip()
@@ -170,13 +218,24 @@ def interpret(message):
             series = data["series"][slug]
             result = {"ok": True, "message": "That series already exists; no duplicate was created.", "series": series}
         else:
-            series = {"series_id": slug, "title": topic, "status": "planned", "episode_ids": [],
-                      "created_at": now(), "operator_note": "Series metadata recorded; episode research/story generation adapter is not yet connected."}
+            series = {"series_id": slug, "title": topic, "status": "active", "episode_ids": [],
+                      "created_at": now(), "editorial_note": "Episode memory is committed only after delivery QA passes."}
             data["series"][slug] = series
             memory.save(data)
-            job = job_create("series_request", text, status="blocked", stage="awaiting research/story adapter")
-            update_job(job["id"], result_json=json.dumps({"series_id": slug, "blocked_reason": "The current pipeline accepts a checked-in episode plan; autonomous research/story-plan generation is not yet wired into the operator."}))
-            result = {"ok": True, "message": "Series metadata saved to persistent memory. Episode production is honestly marked blocked because the research/story-plan adapter is not yet connected.", "series": series, "job": job_get(job["id"])}
+            if not os.getenv("GEMINI_API_KEY"):
+                job = job_create("generated_episode", text, status="blocked", stage="missing GEMINI_API_KEY")
+                update_job(job["id"], result_json=json.dumps({"series_id": slug, "blocked_reason": "Set GEMINI_API_KEY locally to enable topic-directed generation."}))
+                result = {"ok": True, "message": "Series saved. Episode generation is blocked until GEMINI_API_KEY is configured; no video was claimed.", "series": series, "job": job_get(job["id"])}
+            else:
+                episode_number = len(series.get("episode_ids", [])) + 1
+                episode_id = f"{slug}-e{episode_number:02d}"
+                memory.create_episode(episode_id, title=f"{topic} — Episode {episode_number}",
+                                      topic=topic, series_id=slug, episode_number=episode_number)
+                job = job_create("generated_episode", text)
+                thread = threading.Thread(target=execute_generated_episode,
+                    args=(job["id"], topic, slug, episode_id), daemon=True)
+                thread.start()
+                result = {"ok": True, "message": "Series and episode request saved. The real Gemini-to-Blender pipeline has started; progress and final QA are read from the subprocess.", "series": memory.load()["series"][slug], "job": job_get(job["id"])}
     elif low.startswith(("pause ", "resume ", "cancel ", "retry ")):
         action, _, target = low.partition(" ")
         job = job_get(target.strip())
@@ -203,7 +262,7 @@ def interpret(message):
         else:
             result = {"ok": False, "message": f"{action.title()} is not supported for this job type yet; no state was changed.", "job": job}
     else:
-        result = {"ok": False, "message": "Command understood as a request, but no safe executor is registered. Supported now: status, why did render fail, run pilot, create a new series about TOPIC, cancel JOB_ID, retry JOB_ID."}
+        result = {"ok": False, "message": "Command understood as a request, but no safe executor is registered. Supported now: status, why did render fail, run pilot, create a new series about TOPIC (requires GEMINI_API_KEY for generation), cancel JOB_ID, retry JOB_ID."}
     conversation("assistant", result["message"], (result.get("job") or {}).get("id"))
     return result
 
