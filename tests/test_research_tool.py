@@ -50,7 +50,7 @@ class GroundedResearchTests(unittest.TestCase):
             try:
                 response = FakeResponse()
                 response.json = lambda: {"candidates": [{
-                    "content": {"parts": [{"text": "Some claims without grounding."}],
+                    "content": {"parts": [{"text": "Some claims without grounding."}]},
                     "groundingMetadata": {"groundingChunks": []}
                 }]}
                 with patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"}, clear=True), \
