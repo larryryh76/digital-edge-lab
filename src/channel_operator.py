@@ -420,6 +420,9 @@ def _agent_chat(message):
     try:
         response = GeminiToolAgent().run(message, history, _agent_tool)
         assistant_text = response.get("message", "")
+        for tool_call in response.get("tool_calls", []):
+            # Preserve evidence of model-selected actions and actual tool outcomes across restarts.
+            conversation("system", "Agent tool result: " + json.dumps(tool_call, ensure_ascii=False)[:6500])
         conversation("assistant", assistant_text)
         return {**response, "message": assistant_text}
     except AgentError as exc:
