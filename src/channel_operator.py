@@ -309,6 +309,65 @@ def _agent_tool(name, args):
             context["research"] = context.get("research", [])[-20:]
             context["production_history"] = context.get("production_history", [])[-20:]
         return {"found": True, "memory": context}
+    if name == "cancel_job":
+        job_id = str(args["job_id"]).strip()
+        job = job_get(job_id)
+        if not job:
+            raise ValueError("No job exists with that exact ID.")
+        process = PROCESSES.get(job_id)
+        if process and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=3)
+            cancelled = update_job(job_id, status="cancelled", stage="cancelled by operator", pid=None)
+            conversation("system", "Cancellation sent to actual subprocess for job " + job_id, job_id)
+            return {"cancelled": True, "job": cancelled, "evidence": "subprocess termination requested"}
+        if job["status"] in ("queued", "retrying", "paused", "blocked"):
+            cancelled = update_job(job_id, status="cancelled", stage="cancelled before execution")
+            return {"cancelled": True, "job": cancelled, "evidence": "job was not actively running"}
+        return {"cancelled": False, "job": job, "reason": "job is already terminal or has no active subprocess"}
+    if name == "retry_job":
+        job_id = str(args["job_id"]).strip()
+        old_job = job_get(job_id)
+        if not old_job:
+            raise ValueError("No job exists with that exact ID.")
+        if old_job["status"] not in ("failed", "cancelled", "blocked", "interrupted"):
+            raise ValueError("Only failed, cancelled, blocked or interrupted jobs can be retried.")
+        new_job = job_create(old_job["kind"], old_job["instruction"], status="retrying", stage="retry queued")
+        old_result = old_job.get("result") if isinstance(old_job.get("result"), dict) else {}
+        if old_job["kind"] == "offline_pilot":
+            threading.Thread(target=execute_pilot, args=(new_job["id"], new_job["instruction"]), daemon=True).start()
+            return {"retry_started": True, "previous_job_id": job_id, "job": job_get(new_job["id"])}
+        if old_job["kind"] == "generated_episode":
+            from channel_memory import ChannelMemory
+            data = memory.load()
+            series_id = old_result.get("series_id")
+            episode_id = old_result.get("episode_id")
+            if not series_id or not episode_id:
+                topic_key = old_job["instruction"].strip().casefold()
+                matches = [ep for ep in data.get("episodes", {}).values()
+                           if str(ep.get("topic", "")).strip().casefold() == topic_key
+                           and ep.get("status") in ("queued", "failed", "interrupted")]
+                if matches:
+                    ep = sorted(matches, key=lambda item: item.get("episode_number") or 0)[-1]
+                    series_id, episode_id = ep.get("series_id"), ep.get("episode_id")
+            episode = data.get("episodes", {}).get(episode_id) if episode_id else None
+            if not series_id or not episode:
+                update_job(new_job["id"], status="blocked", stage="episode context unavailable",
+                           error="Could not safely recover the original series/episode ID; no duplicate episode was created.")
+                return {"retry_started": False, "previous_job_id": job_id, "job": job_get(new_job["id"])}
+            update_job(new_job["id"], result_json=json.dumps({"series_id": series_id, "episode_id": episode_id}))
+            threading.Thread(target=execute_generated_episode,
+                args=(new_job["id"], episode.get("topic", old_job["instruction"]), series_id, episode_id),
+                daemon=True).start()
+            return {"retry_started": True, "previous_job_id": job_id, "series_id": series_id,
+                    "episode_id": episode_id, "job": job_get(new_job["id"])}
+        update_job(new_job["id"], status="blocked", stage="no retry executor",
+                   error="No retry executor is registered for job type " + old_job["kind"])
+        return {"retry_started": False, "previous_job_id": job_id, "job": job_get(new_job["id"])}
     if name == "research_topic":
         return _research_topic(args["topic"])
     if name == "start_episode":
@@ -359,6 +418,7 @@ def _agent_tool(name, args):
             return {"started": False, "blocked": True, "reason": "GEMINI_API_KEY is missing; the episode was not generated.",
                     "series_id": series_id, "episode_id": episode_id, "job": job_get(blocked["id"])}
         job = job_create("generated_episode", topic)
+        update_job(job["id"], result_json=json.dumps({"series_id": series_id, "episode_id": episode_id}))
         thread = threading.Thread(target=execute_generated_episode,
             args=(job["id"], episode_topic if continue_existing else topic, series_id, episode_id), daemon=True)
         thread.start()
