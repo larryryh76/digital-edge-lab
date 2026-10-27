@@ -132,14 +132,23 @@ def execute_pilot(job_id, instruction):
             if job_get(job_id) and job_get(job_id)["status"] == "cancelled":
                 return
             tail = "\n".join(output[-80:])[-16000:]
+            delivery = None
+            delivery_error = None
             if code == 0:
-                update_job(job_id, status="completed", stage="verified pipeline exit", pid=None,
-                           result_json=json.dumps({"exit_code": code, "log_tail": tail}))
-                conversation("assistant", "Offline pilot completed successfully. Inspect the run-report and video artifact before publishing.", job_id)
+                try:
+                    video_path, report = _latest_verified_video()
+                    delivery = {"report": report, "video_path": str(video_path), "bytes": video_path.stat().st_size}
+                except Exception as exc:
+                    delivery_error = str(exc)
+            if code == 0 and delivery:
+                update_job(job_id, status="completed", stage="QA-passed artifact verified", pid=None,
+                           result_json=json.dumps({"exit_code": code, "delivery": delivery, "log_tail": tail}))
+                conversation("assistant", "Offline pilot passed report and MP4 existence checks. Visual review is still required before publishing.", job_id)
             else:
-                update_job(job_id, status="failed", stage="failed", pid=None,
-                           error=tail[-6000:], result_json=json.dumps({"exit_code": code, "log_tail": tail}))
-                conversation("assistant", "Pilot failed. The stored error and log tail contain the actual failure; no delivery was claimed.", job_id)
+                failure = delivery_error or tail[-6000:] or "Pipeline exited unsuccessfully."
+                update_job(job_id, status="failed", stage="failed or delivery QA missing", pid=None,
+                           error=failure[-6000:], result_json=json.dumps({"exit_code": code, "delivery_error": delivery_error, "log_tail": tail}))
+                conversation("assistant", "Pilot did not produce a confirmed QA-passed artifact. No completion was claimed.", job_id)
         except Exception as exc:
             update_job(job_id, status="failed", stage="failed to launch", pid=None, error=str(exc)[:6000])
         finally:
