@@ -5,7 +5,8 @@ import types
 from unittest.mock import patch
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from youtube_publisher import (validate_metadata, PublishingError, upload_video, content_fingerprint,\n                              fetch_video_analytics, build_youtube_analytics_service)
+from youtube_publisher import (validate_metadata, PublishingError, upload_video, content_fingerprint,
+                              fetch_video_analytics, build_youtube_analytics_service)
 
 
 class YouTubePublisherTests(unittest.TestCase):
