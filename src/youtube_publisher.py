@@ -156,12 +156,18 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
         raise PublishingError("YouTube upload outcome is uncertain; inspect the channel before retrying. Duplicate upload blocked.") from exc
 
 
-def fetch_video_analytics(video_id, *, analytics_service=None):
-    """Analytics requires a separately authorized YouTube Analytics API scope."""
+def fetch_video_analytics(video_id, start_date, end_date, *, analytics_service=None):
+    """Query available metrics for an explicit date range and authorized service."""
     if analytics_service is None:
         raise PublishingError("YouTube Analytics service must be authorized with the yt-analytics.readonly scope")
-    response = analytics_service.reports().query(
-        ids="channel==MINE", startDate="2000-01-01", endDate="2099-12-31",
+    try:
+        start = datetime.fromisoformat(str(start_date)).date()
+        end = datetime.fromisoformat(str(end_date)).date()
+    except ValueError as exc:
+        raise ValueError("start_date and end_date must be ISO dates (YYYY-MM-DD)") from exc
+    if end < start or end > datetime.now(timezone.utc).date():
+        raise ValueError("analytics date range must be ordered and cannot end in the future")
+    return analytics_service.reports().query(
+        ids="channel==MINE", startDate=start.isoformat(), endDate=end.isoformat(),
         metrics="views,likes,comments,estimatedMinutesWatched",
         filters="video==" + video_id).execute()
-    return response
