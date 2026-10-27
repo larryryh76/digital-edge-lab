@@ -8,6 +8,7 @@ import json
 import os
 import hashlib
 from pathlib import Path
+from datetime import datetime, timezone
 
 
 class PublishingError(RuntimeError):
@@ -81,8 +82,8 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
     if path.suffix.lower() != ".mp4":
         raise PublishingError("only validated MP4 files can be uploaded")
     meta = validate_metadata(metadata)
-    if meta["privacyStatus"] != "private" and not approval:
-        raise PublishingError("explicit approval is required for non-private publication")
+    if (meta["privacyStatus"] != "private" or meta["publishAt"]) and not approval:
+        raise PublishingError("explicit approval is required for public, unlisted, or scheduled publication")
     try:
         from googleapiclient.http import MediaFileUpload
     except ImportError as exc:
@@ -105,10 +106,13 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
     temp.write_text(json.dumps(state, indent=2), encoding="utf-8")
     os.replace(temp, state_path)
     try:
-        body = {"snippet": {"title": meta["title"], "description": meta["description"],
-                            "tags": meta["tags"], "categoryId": meta["categoryId"]},
-                "status": {"privacyStatus": meta["privacyStatus"],
-                           "selfDeclaredMadeForKids": meta["madeForKids"]}}
+        snippet = {"title": meta["title"], "description": meta["description"],
+                   "tags": meta["tags"], "categoryId": meta["categoryId"]}
+        body_status = {"privacyStatus": meta["privacyStatus"],
+                       "selfDeclaredMadeForKids": meta["madeForKids"]}
+        if meta["publishAt"]:
+            body_status["publishAt"] = meta["publishAt"]
+        body = {"snippet": snippet, "status": body_status}
         request = service.videos().insert(part="snippet,status", body=body,
             media_body=MediaFileUpload(str(path), mimetype="video/mp4", resumable=True))
         response = None
@@ -119,12 +123,23 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
         if not video_id:
             raise PublishingError("YouTube returned no video ID")
         result = {"video_id": video_id, "url": "https://www.youtube.com/watch?v=" + video_id,
-                  "status": meta["privacyStatus"], "fingerprint": fingerprint,
-                  "metadata": meta}
+                  "status": "scheduled" if meta["publishAt"] else meta["privacyStatus"],
+                  "fingerprint": fingerprint, "metadata": meta}
+        # Save the platform ID immediately. Optional post-upload failures must not
+        # cause the video itself to be uploaded again on retry.
         state[fingerprint] = result
         temp = state_path.with_suffix(".tmp")
         temp.write_text(json.dumps(state, indent=2), encoding="utf-8")
         os.replace(temp, state_path)
+        if meta["playlistId"]:
+            service.playlistItems().insert(part="snippet", body={"snippet": {
+                "playlistId": meta["playlistId"], "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute()
+        if meta["thumbnailPath"]:
+            thumbnail = Path(meta["thumbnailPath"])
+            if not thumbnail.is_file():
+                raise PublishingError("video uploaded as " + video_id + " but thumbnail file is missing")
+            service.thumbnails().set(videoId=video_id,
+                media_body=MediaFileUpload(str(thumbnail), mimetype="image/jpeg")).execute()
         return result
     except PublishingError:
         state[fingerprint]["status"] = "uncertain"
