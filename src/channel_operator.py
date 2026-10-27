@@ -249,7 +249,7 @@ def _research_topic(topic):
     try:
         response = requests.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-            params={"key": api_key},
+            headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
             json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
                   "tools": [{"google_search": {}}],
                   "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1400}},
