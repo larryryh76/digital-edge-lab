@@ -83,6 +83,10 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
     meta = validate_metadata(metadata)
     if meta["privacyStatus"] != "private" and not approval:
         raise PublishingError("explicit approval is required for non-private publication")
+    try:
+        from googleapiclient.http import MediaFileUpload
+    except ImportError as exc:
+        raise PublishingError("Install optional publishing dependencies: google-api-python-client google-auth-oauthlib google-auth-httplib2") from exc
     if service is None:
         service = build_youtube_service()
     state_path = Path(state_file)
@@ -101,7 +105,6 @@ def upload_video(video_path, metadata, *, approval=False, service=None, state_fi
     temp.write_text(json.dumps(state, indent=2), encoding="utf-8")
     os.replace(temp, state_path)
     try:
-        from googleapiclient.http import MediaFileUpload
         body = {"snippet": {"title": meta["title"], "description": meta["description"],
                             "tags": meta["tags"], "categoryId": meta["categoryId"]},
                 "status": {"privacyStatus": meta["privacyStatus"],
