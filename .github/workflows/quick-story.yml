@@ -1,5 +1,4 @@
-name: Digital Edge Lab — Quick AI story prompt
-
+name: Digital Edge Lab — AI story and video
 on:
   workflow_dispatch:
     inputs:
@@ -18,24 +17,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  generate-story-prompt:
-    name: Choose topic and write production-ready story prompt
+  generate-video:
+    name: Choose topic, write story, generate and validate MP4
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 15
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GEMINI_TEXT_MODEL: gemini-2.5-flash
+      GEMINI_VIDEO_MODEL: gemini-omni-1.1-flash
       EPISODE_TOPIC: ${{ inputs.topic }}
       PYTHONUNBUFFERED: "1"
     steps:
       - name: Check out channel memory
         uses: actions/checkout@v4
-      - name: Generate detailed story prompt (no Blender or rendering)
+      - name: Generate detailed story prompt
         run: python scripts/quick_story.py
-      - name: Save prompt as a downloadable artifact
+      - name: Generate actual vertical video with native audio
+        run: python scripts/generate_video.py
+      - name: Save prompt, MP4 and verification metadata
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: digital-edge-lab-story-prompt-${{ github.run_number }}
-          path: output/story-prompt/*
-          if-no-files-found: error
+          name: digital-edge-lab-episode-${{ github.run_number }}
+          path: |
+            output/story-prompt/*
+            output/video/*
+          if-no-files-found: warn
           retention-days: 14
