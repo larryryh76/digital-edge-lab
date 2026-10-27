@@ -115,8 +115,8 @@ class ParallelRenderTests(unittest.TestCase):
 
     def test_actual_encoded_delivery_qa_remains_in_pipeline(self):
         source = (ROOT / "src" / "pipeline.py").read_text()
-        self.assertIn("media_qa.delivery_media", source)
-        self.assertIn("media_qa.final_motion", source)
+        self.assertIn("media_qa.verify_delivery", source)
+        self.assertIn("media_qa.motion_stats", source)
         self.assertIn("decide_failures(", source)
 
 
