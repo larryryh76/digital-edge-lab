@@ -48,6 +48,27 @@ env:
   DEL_RENDER_PHASE_BUDGET_SECONDS: "2700"
 
 jobs:
+  fast-tests:
+    name: Fast Python tests (no Blender bootstrap)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install Python dependencies
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile and run offline unit tests
+        run: |
+          set -euo pipefail
+          python -m compileall -q src tests
+          python -m unittest discover -s tests -v
+
   verify:
     name: Offline checks and renderer smoke test
     runs-on: ubuntu-latest
