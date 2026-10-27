@@ -46,6 +46,8 @@ class GeminiToolAgentTests(unittest.TestCase):
         self.assertIn("One is queued", result["message"])
         self.assertEqual(executed, [("list_jobs", {"limit": 2})])
         self.assertEqual(len(session.calls), 2)
+        self.assertNotIn("test-key", session.calls[0][0])
+        self.assertEqual(session.calls[0][1]["headers"]["x-goog-api-key"], "test-key")
         followup = session.calls[1][1]["json"]["contents"]
         self.assertTrue(any("functionResponse" in part for item in followup
                             for part in item.get("parts", [])))
