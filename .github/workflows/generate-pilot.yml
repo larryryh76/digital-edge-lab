@@ -42,6 +42,8 @@ env:
   FFMPEG_STATIC_URL: https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
   FFMPEG_STATIC_SHA256: abda8d77ce8309141f83ab8edf0596834087c52467f6badf376a6a2a4c87cf67
   BLENDER_URL: https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz
+  DEL_RENDER_WORKERS: "2"
+  DEL_RENDER_PHASE_BUDGET_SECONDS: "2700"
 
 jobs:
   verify:
@@ -188,7 +190,7 @@ jobs:
     name: Render and verify one complete pilot
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
