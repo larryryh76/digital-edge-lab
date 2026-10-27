@@ -43,4 +43,6 @@ Analytics requires a separate OAuth scope and a correctly authorized YouTube Ana
 
 ## TikTok
 
-No TikTok upload is claimed. Official Content Posting API access, creator authorization, and applicable app review/permissions must be obtained before publishing can be enabled.
+`src/tiktok_publisher.py` implements the official Content Posting API Direct Post flow: creator privacy options are queried first, the approved post is initialized, MP4 bytes are uploaded in bounded chunks, and the returned publish ID is checked through the official status endpoint. It defaults to `SELF_ONLY`, requires explicit `approval=True`, marks AI-generated content, and persists uncertain outcomes to block blind duplicate retries.
+
+One-time requirements: register a TikTok developer app, add Content Posting API, obtain approval for the `video.publish` scope, authorize the creator account, and set `TIKTOK_ACCESS_TOKEN` in the local environment. Unaudited apps are restricted to private viewing by TikTok. The implementation has not been verified against a real authorized creator account in this repository, so real publishing remains unverified until credentials and approval are available. When access is missing, `prepare_for_manual_upload` creates a package explicitly marked `ready_for_manual_upload`, not published.
