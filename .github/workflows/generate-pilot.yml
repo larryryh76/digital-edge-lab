@@ -154,11 +154,12 @@ jobs:
             exit 1
           fi
           blender --version | head -1
-          # Fail here, with a clear message, if the GPU backend cannot start.
-          LIBGL_ALWAYS_SOFTWARE=1 blender -b --factory-startup --python-expr \
-            "import gpu; print('GPU_RENDERER=' + gpu.platform.renderer_get()); print('GPU_BACKEND=' + gpu.platform.backend_type_get())" \
-            | tee /tmp/gpu-check.txt
-          grep -q "GPU_RENDERER=" /tmp/gpu-check.txt
+          # Fail here, with a clear message, if EEVEE cannot start its GPU backend.
+          rm -f /tmp/gpucheck_0001.png
+          LIBGL_ALWAYS_SOFTWARE=1 blender -b --factory-startup -E BLENDER_EEVEE_NEXT \
+            -o /tmp/gpucheck_ -F PNG -f 1 | tail -5
+          test -s /tmp/gpucheck_0001.png
+          echo "EEVEE background render OK ($(stat -c%s /tmp/gpucheck_0001.png) byte probe frame)"
 
       - name: Verify render toolchain
         run: |
@@ -291,11 +292,12 @@ jobs:
             exit 1
           fi
           blender --version | head -1
-          # Fail here, with a clear message, if the GPU backend cannot start.
-          LIBGL_ALWAYS_SOFTWARE=1 blender -b --factory-startup --python-expr \
-            "import gpu; print('GPU_RENDERER=' + gpu.platform.renderer_get()); print('GPU_BACKEND=' + gpu.platform.backend_type_get())" \
-            | tee /tmp/gpu-check.txt
-          grep -q "GPU_RENDERER=" /tmp/gpu-check.txt
+          # Fail here, with a clear message, if EEVEE cannot start its GPU backend.
+          rm -f /tmp/gpucheck_0001.png
+          LIBGL_ALWAYS_SOFTWARE=1 blender -b --factory-startup -E BLENDER_EEVEE_NEXT \
+            -o /tmp/gpucheck_ -F PNG -f 1 | tail -5
+          test -s /tmp/gpucheck_0001.png
+          echo "EEVEE background render OK ($(stat -c%s /tmp/gpucheck_0001.png) byte probe frame)"
 
       - name: Verify render toolchain
         run: |
