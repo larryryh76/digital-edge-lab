@@ -12,6 +12,9 @@ class YouTubePublisherTests(unittest.TestCase):
     def test_metadata_validation_and_private_default(self):
         meta = validate_metadata({"title": "Episode", "description": "Test"})
         self.assertEqual(meta["privacyStatus"], "private")
+        self.assertEqual(meta["publishAt"], "")
+        self.assertEqual(meta["playlistId"], "")
+        self.assertEqual(meta["thumbnailPath"], "")
         with self.assertRaises(ValueError):
             validate_metadata({"title": ""})
         with self.assertRaises(ValueError):
