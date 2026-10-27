@@ -15,9 +15,10 @@ The service binds to `127.0.0.1:8765` by default. It is intended for local use o
 - `GET /api/conversation` — persisted conversation history
 - `POST /api/chat` with `{"message":"run pilot"}` — run the real checked-in offline pilot
 - `POST /api/chat` with `{"message":"what are you working on?"}` — read real job state
-- `POST /api/chat` with `{"message":"create a new series about the fall of ancient Rome"}` — persist series metadata; the response explicitly marks episode generation blocked until a research/story-plan adapter is connected
+- `POST /api/chat` with `{"message":"create a new series about the fall of ancient Rome"}` — save series memory and start the actual topic-directed Gemini-to-Blender pipeline when `GEMINI_API_KEY` is configured
+- `POST /api/chat` with `{"message":"continue series fall-of-ancient-rome"}` — create a stable next episode ID and generate with that series' completed-episode context
 
-The operator does not claim unsupported actions have succeeded. Publishing, autonomous research, episode-plan generation, pause/resume of active rendering, and TikTok upload are not presented as implemented. SQLite job history persists under `output/operator.sqlite3` by default.
+The operator does not claim unsupported actions have succeeded. Gemini-driven topic/scene-plan generation and the existing source-validation stage are wired into the real pipeline; independent web-research fact-checking and full pause/resume of an active Blender process remain incomplete. Publishing is implemented as an explicit integration module but still requires account authorization and has not been verified against real platform credentials. SQLite job history persists under `output/operator.sqlite3` by default.
 
 ## Channel memory
 
