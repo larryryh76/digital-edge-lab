@@ -170,8 +170,9 @@ THING. AT THE RIGHT TIME."
 def main():
     if not shutil.which("ffmpeg"):
         print("ERROR: ffmpeg is required (install it in the workflow).",file=sys.stderr); return 2
-    if not shutil.which("espeak-ng"):
-        print("ERROR: espeak-ng is required (install it in the workflow).",file=sys.stderr); return 2
+    voice_bin = shutil.which("espeak-ng") or shutil.which("espeak")
+    if not voice_bin:
+        print("ERROR: espeak-ng or espeak is required for local narration.",file=sys.stderr); return 2
     topic = os.environ.get("EPISODE_TOPIC","").strip() or DEFAULT_TOPIC
     # This zero-API pilot has a complete editorial fallback; no secret/key/network required.
     narration = [
@@ -199,7 +200,7 @@ def main():
     work.mkdir(parents=True,exist_ok=True)
     voice = work / "narration.wav"
     full_script = " ".join(narration)
-    subprocess.run(["espeak-ng","-v","en-us+f3","-s","178","-p","44","-a","165","-w",str(voice),full_script],check=True,timeout=90)
+    subprocess.run([voice_bin,"-v","en-us+f3","-s","178","-p","44","-a","165","-w",str(voice),full_script],check=True,timeout=90)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     mp4 = OUT / f"digital-edge-lab-{stamp}.mp4"
     # Stream raw frames to ffmpeg: fast, deterministic, genuinely animated, no Blender/GPU.
@@ -230,7 +231,7 @@ def main():
     if not has_audio or video.get("width") != W or video.get("height") != H or duration < 28:
         mp4.unlink(missing_ok=True)
         print(f"ERROR: QA failed: duration={duration}, video={video}, audio={has_audio}",file=sys.stderr); return 1
-    meta={"status":"verified_pilot_generated","engine":"Digital Edge Lab procedural cinematic engine v1","created_at_utc":datetime.now(timezone.utc).isoformat(),"topic":topic,"file":mp4.name,"bytes":mp4.stat().st_size,"duration_seconds":round(duration,2),"resolution":f"{W}x{H}","fps":FPS,"audio_stream":"present","narration":"espeak-ng synthetic voice","music":"procedurally generated low-level pink-noise ambience","api_cost":"$0; no external model/API calls","qa":["valid MP4","vertical 9:16","audio stream present","30-second moving-frame render"]}
+    meta={"status":"verified_pilot_generated","engine":"Digital Edge Lab procedural cinematic engine v1","created_at_utc":datetime.now(timezone.utc).isoformat(),"topic":topic,"file":mp4.name,"bytes":mp4.stat().st_size,"duration_seconds":round(duration,2),"resolution":f"{W}x{H}","fps":FPS,"audio_stream":"present","narration":f"{Path(voice_bin).name} synthetic voice","music":"procedurally generated low-level pink-noise ambience","api_cost":"$0; no external model/API calls","qa":["valid MP4","vertical 9:16","audio stream present","30-second moving-frame render"]}
     (OUT/f"{mp4.stem}.json").write_text(json.dumps(meta,indent=2)+"\n",encoding="utf-8")
     print("PILOT VERIFIED:",json.dumps(meta),flush=True)
     return 0
