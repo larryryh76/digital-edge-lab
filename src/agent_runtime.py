@@ -22,6 +22,8 @@ TOOL_DECLARATIONS = [
      "parameters": {"type": "OBJECT", "properties": {"limit": {"type": "INTEGER", "minimum": 1, "maximum": 50}}}},
     {"name": "get_channel_memory", "description": "Read saved channel identity, series, completed episodes, continuity, research and publishing records.",
      "parameters": {"type": "OBJECT", "properties": {"series_id": {"type": "STRING"}}}},
+    {"name": "research_topic", "description": "Research a topic with Gemini Google Search grounding. Store the returned findings and grounded source URLs in channel memory. This is source-backed research, not proof that every claim is independently verified.",
+     "parameters": {"type": "OBJECT", "properties": {"topic": {"type": "STRING"}}, "required": ["topic"]}},
     {"name": "start_episode", "description": "Start a real Gemini-to-narration-to-Blender episode pipeline for a topic. Use continue_existing=true to continue the chosen or latest active series.",
      "parameters": {"type": "OBJECT", "properties": {
          "topic": {"type": "STRING", "description": "Specific episode topic or series subject"},
