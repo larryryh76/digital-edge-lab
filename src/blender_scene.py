@@ -28,8 +28,8 @@ from mathutils import Vector
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scene_spec  # noqa: E402  (Blender entry point; import after sys.path setup)
 
-RENDER_W, RENDER_H, RENDER_FPS = 540, 960, 24
-SAMPLES = 10
+RENDER_W, RENDER_H, RENDER_FPS = 360, 640, 24
+SAMPLES = 1  # CPU-only CI preview; upscale final delivery after render
 
 # --- palette ---------------------------------------------------------------
 PALETTE = {
