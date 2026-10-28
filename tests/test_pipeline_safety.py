@@ -142,6 +142,24 @@ class SourceTests(unittest.TestCase):
         self.assertFalse(result["checks"][0]["reachable"])
 
 
+class NarrationEditorialQualityTests(unittest.TestCase):
+    def test_script_prompt_requires_a_delayed_distinct_reveal(self):
+        prompt = pipeline.script_prompt({"recent_topics": []})
+        self.assertIn("final 20-25% of the narration", prompt)
+        self.assertIn("short payoff", prompt)
+        self.assertIn("curiosity gap", prompt)
+
+    def test_script_prompt_targets_concise_spoken_rhythm(self):
+        prompt = pipeline.script_prompt({"recent_topics": []})
+        self.assertIn("90-105 spoken words", prompt)
+        self.assertIn("short impact line", prompt)
+        self.assertIn("not a flat announcer", prompt)
+
+    def test_piper_uses_sentence_breathing_room_and_measured_pacing(self):
+        self.assertIn('"--sentence_silence", "0.26", "--length_scale", "1.15"', narration.__dict__.get("__source__", "") or
+                      (ROOT / "src" / "narration.py").read_text(encoding="utf-8"))
+
+
 class WorkflowContractTests(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")

@@ -21,7 +21,7 @@ import subprocess
 from pathlib import Path
 
 FPS = 24
-SCENE_TAIL_SECONDS = 0.18
+SCENE_TAIL_SECONDS = 0.28
 MIN_BEAT_SECONDS = 0.45
 # A narrator physically cannot deliver a line slower than this. Any hosted TTS
 # response outside the band means the model spoke something other than the line
@@ -32,7 +32,7 @@ MAX_SECONDS_PER_WORD = 1.15
 
 # Kept to a single clause: the longer the style text, the more likely a speech
 # model performs it as narration instead of treating it as direction.
-STYLE_BRIEF = "Natural, energetic male documentary voice; speak only this exact line:"
+STYLE_BRIEF = "Confident, warm, conversational male documentary narration. Natural emphasis and phrasing; speak only the exact line that follows:"
 
 
 def plausibility(text, seconds):
@@ -112,7 +112,7 @@ def gemini_tts(client, text, out_path, model, *, log=None):
     response that is wrong twice fails the episode with the measured rates.
     """
     attempts = []
-    for prompt, mode in ((text, "bare"), (f"{STYLE_BRIEF} {text}", "styled")):
+    for prompt, mode in ((f"{STYLE_BRIEF} {text}", "styled"), (text, "bare")):
         _tts_request(client, prompt, out_path, model)
         seconds = probe_duration(out_path)
         ok, rate = plausibility(text, seconds)
@@ -151,7 +151,7 @@ def local_tts(text, out_path, binary):
             raise NarrationError("Piper selected but PIPER_MODEL is missing")
         result = subprocess.run(
             [shutil.which("piper"), "--model", model, "--output_file", str(out_path),
-             "--sentence_silence", "0.18", "--length_scale", "1.18"],
+             "--sentence_silence", "0.26", "--length_scale", "1.15"],
             input=text, check=False, capture_output=True, text=True, timeout=45,
         )
     else:
