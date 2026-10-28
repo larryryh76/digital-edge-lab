@@ -32,7 +32,7 @@ MAX_SECONDS_PER_WORD = 1.15
 
 # Kept to a single clause: the longer the style text, the more likely a speech
 # model performs it as narration instead of treating it as direction.
-STYLE_BRIEF = "Grounded male voice, lower-mid register, varied intonation, relaxed pace, natural pauses. Speak only this line:"
+STYLE_BRIEF = "Conversational male narrator; warm low-mid pitch, expressive cadence, relaxed pace, natural pauses. Read only:"
 
 
 def plausibility(text, seconds):
@@ -149,17 +149,22 @@ def local_tts(text, out_path, binary):
         model = os.environ.get("PIPER_MODEL")
         if not model or not Path(model).is_file():
             raise NarrationError("Piper selected but PIPER_MODEL is missing")
+        # Ryan-medium is a locally cached neural voice, not formant speech.
+        # Slightly slower delivery and more sentence-final breathing room reduce
+        # the rushed, clipped sound without artificially lowering pitch. Piper's
+        # noise controls stay close to model defaults to avoid adding hiss.
         result = subprocess.run(
             [shutil.which("piper"), "--model", model, "--output_file", str(out_path),
-             "--sentence_silence", "0.24", "--length_scale", "1.08"],
+             "--sentence_silence", "0.32", "--length_scale", "1.04",
+             "--noise_scale", "0.667", "--noise_w", "0.8"],
             input=text, check=False, capture_output=True, text=True, timeout=45,
         )
     else:
-        # Keep fallback speech measured and less hurried; this is for diagnostics
-        # only because formant synthesis still sounds distinctly synthetic.
+        # Last-resort diagnostic voice only. eSpeak is formant synthesis, so
+        # rate/pitch tuning can make it less harsh but cannot make it sound human.
         result = subprocess.run(
-            [binary, "-v", "en-us", "-s", "158", "-p", "48", "-g", "7",
-             "-w", str(out_path), text],
+            [binary, "-v", "en-us", "-s", "148", "-p", "43", "-g", "5",
+             "-a", "165", "-w", str(out_path), text],
             check=False, capture_output=True, text=True, timeout=45,
         )
     if result.returncode or not Path(out_path).exists():
