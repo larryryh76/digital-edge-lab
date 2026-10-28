@@ -84,8 +84,8 @@ class PipelineContractTests(unittest.TestCase):
 
     def test_report_states_honest_publication_state(self):
         self.assertIn('"publication_ready": False', PIPELINE)
-        self.assertIn('"youtube": "not_implemented"', PIPELINE)
-        self.assertIn('"tiktok": "not_implemented"', PIPELINE)
+        self.assertIn('"youtube": "private_upload_tool_available_requires_oauth"', PIPELINE)
+        self.assertIn('"tiktok": "manual_upload_package_available_direct_post_requires_authorization"', PIPELINE)
         self.assertIn("HUMAN_REVIEW_REQUIRED", PIPELINE)
 
     def test_narration_timing_comes_from_measured_audio(self):
