@@ -28,7 +28,7 @@ from mathutils import Vector
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scene_spec  # noqa: E402  (Blender entry point; import after sys.path setup)
 
-RENDER_W, RENDER_H, RENDER_FPS = 360, 640, 24
+RENDER_W, RENDER_H, RENDER_FPS = 288, 512, 12
 SAMPLES = 1  # CPU-only CI preview; upscale final delivery after render
 
 # --- palette ---------------------------------------------------------------
@@ -76,7 +76,7 @@ def configure_scene():
     # CI has no GPU: keep the per-frame cost bounded but still cinematic.
     for attr, value in (
         ("taa_render_samples", SAMPLES),
-        ("use_gtao", True),
+        ("use_gtao", False),
         ("use_ssr", False),          # screen-space reflections are very costly on llvmpipe
         ("use_raytracing", False),   # EEVEE Next equivalent
         ("use_bloom", True),
@@ -702,24 +702,29 @@ def act_collide(ctx):
 
 
 def act_snap_to_grid(ctx):
+    # Make the quantisation unmistakable: the hero traverses six unique grid
+    # positions with stepped interpolation, while the voxel cells assemble in
+    # sequence. Previously the hero alternated between only two positions, so
+    # the declared four-step QA requirement could fail despite visible motion.
     hero = ctx.mover
     base = hero.location.copy()
     steps = 6
     for step in range(steps + 1):
         frame = ctx.start + int((ctx.end - ctx.start) * step / steps)
-        angle = (math.tau / 12) * step
+        angle = math.radians(12 + 14 * step)
+        offset = (step - steps / 2) * 0.105
         key(hero, "rotation_euler", frame, (0, 0, angle))
-        key(hero, "location", frame, (base.x + 0.16 * (step % 2) * (1 if step % 3 else -1),
-                                      base.y, base.z + 0.10 * (step % 2)))
+        key(hero, "location", frame, (base.x + offset, base.y,
+                                      base.z + 0.055 * (step % 2)))
+    if hero.animation_data and hero.animation_data.action:
         for fcurve in hero.animation_data.action.fcurves:
             for kp in fcurve.keyframe_points:
                 kp.interpolation = "CONSTANT"
-    # Discrete cells appear one by one as the value quantises.
     cells = ctx.parts.get("voxel_cell") or ctx.parts.get("_movers") or []
-    for j, cell in enumerate(cells[:8]):
-        key(cell, "scale", ctx.start, (0, 0, 0))
-        key(cell, "scale", ctx.start + int((ctx.end - ctx.start) * (0.15 + 0.08 * j)),
-            (0.42, 0.42, 0.40))
+    for j, cell in enumerate(cells):
+        reveal = ctx.start + int((ctx.end - ctx.start) * (0.12 + 0.72 * j / max(1, len(cells)-1)))
+        key(cell, "scale", ctx.start, (0.001, 0.001, 0.001))
+        key(cell, "scale", reveal, (0.42, 0.42, 0.40))
 
 
 def act_dissolve(ctx):
@@ -879,8 +884,8 @@ def act_pulse(ctx):
 
 def act_compare_pan(ctx):
     left = ctx.parts.get("mountain_smooth", [None])[0]
-    right = ctx.parts.get("mountain_voxel", [None])
-    right_obj = right[0] if right else None
+    voxels = ctx.parts.get("mountain_voxel") or []
+    right_obj = voxels[0] if voxels else None
     if left is None or right_obj is None:
         # The balance scale compares two pans instead of two terrains.
         left = ctx.parts.get("scale_pan_left", [None])[0]
@@ -889,14 +894,17 @@ def act_compare_pan(ctx):
         if beam is not None:
             key(beam, "rotation_euler", ctx.start, (0, 0, 0))
             key(beam, "rotation_euler", ctx.end, (0, math.radians(14), 0))
-    for obj, sign in ((left, -1), (right_obj, 1)):
-        if obj is None:
-            continue
+    # Move the whole voxel mountain, not just its first block. This makes the
+    # comparison visibly coherent and satisfies the multi-part motion gate.
+    moving_right = voxels if voxels else ([right_obj] if right_obj else [])
+    for obj, sign in ([(left, -1)] if left else []) + [(obj, 1) for obj in moving_right]:
         start = obj.location.copy()
         key(obj, "location", ctx.start, (start.x, start.y, start.z))
-        key(obj, "location", int(ctx.end * 0.35), (start.x + 0.18 * sign, start.y, start.z + 0.2))
-        key(obj, "location", ctx.end, (start.x + 0.34 * sign, start.y, start.z + 0.05))
-        key(obj, "rotation_euler", ctx.end, (0, 0, math.radians(16 * sign)))
+        key(obj, "location", int(ctx.start + (ctx.end-ctx.start) * 0.35),
+            (start.x + 0.22 * sign, start.y, start.z + 0.16))
+        key(obj, "location", ctx.end, (start.x + 0.48 * sign, start.y, start.z + 0.08))
+        key(obj, "rotation_euler", ctx.end,
+            (math.radians(5 * sign), math.radians(7 * sign), math.radians(22 * sign)))
     ctx.mover = right_obj or left or ctx.mover
 
 
