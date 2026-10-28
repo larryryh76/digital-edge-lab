@@ -66,7 +66,7 @@ class TtsPlausibilityTest(unittest.TestCase):
     def test_direction_paragraph_cannot_leak_back_into_the_prompt(self):
         self.assertNotIn("Voice direction for Edge", narration.STYLE_BRIEF)
         self.assertLessEqual(len(narration.STYLE_BRIEF.split()), 15)
-        self.assertIn("lower-mid register", narration.STYLE_BRIEF)
+        self.assertIn("warm low-mid pitch", narration.STYLE_BRIEF)
         self.assertIn("varied intonation", narration.STYLE_BRIEF)
         self.assertFalse(narration.plausibility(LINE, 40.4)[0])
         self.assertTrue(narration.plausibility(LINE, 5.9)[0])
