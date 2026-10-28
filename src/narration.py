@@ -112,7 +112,7 @@ def gemini_tts(client, text, out_path, model, *, log=None):
     response that is wrong twice fails the episode with the measured rates.
     """
     attempts = []
-    for prompt, mode in ((f"{STYLE_BRIEF} {text}", "styled"), (text, "bare")):
+    for prompt, mode in ((text, "bare"), (f"{STYLE_BRIEF} {text}", "styled")):
         _tts_request(client, prompt, out_path, model)
         seconds = probe_duration(out_path)
         ok, rate = plausibility(text, seconds)
@@ -130,6 +130,12 @@ def gemini_tts(client, text, out_path, model, *, log=None):
 
 
 def find_local_voice():
+    # Prefer a cached neural voice. eSpeak remains a deterministic emergency
+    # fallback for CI diagnostics, not the preferred narration engine.
+    model = Path(__import__("os").environ.get("PIPER_MODEL", ""))
+    piper = shutil.which("piper")
+    if piper and model.is_file() and Path(str(model) + ".json").is_file():
+        return "piper"
     for binary in ("espeak-ng", "espeak"):
         path = shutil.which(binary)
         if path:
@@ -138,10 +144,24 @@ def find_local_voice():
 
 
 def local_tts(text, out_path, binary):
-    result = subprocess.run(
-        [binary, "-v", "en-us", "-s", "168", "-p", "44", "-g", "6", "-w", str(out_path), text],
-        check=False, capture_output=True, text=True, timeout=90,
-    )
+    if binary == "piper":
+        import os
+        model = os.environ.get("PIPER_MODEL")
+        if not model or not Path(model).is_file():
+            raise NarrationError("Piper selected but PIPER_MODEL is missing")
+        result = subprocess.run(
+            [shutil.which("piper"), "--model", model, "--output_file", str(out_path),
+             "--sentence_silence", "0.18"],
+            input=text, check=False, capture_output=True, text=True, timeout=45,
+        )
+    else:
+        # Keep fallback speech measured and less hurried; this is for diagnostics
+        # only because formant synthesis still sounds distinctly synthetic.
+        result = subprocess.run(
+            [binary, "-v", "en-us", "-s", "158", "-p", "48", "-g", "7",
+             "-w", str(out_path), text],
+            check=False, capture_output=True, text=True, timeout=45,
+        )
     if result.returncode or not Path(out_path).exists():
         raise NarrationError(f"local voice failed: {result.stderr[-300:]}")
     return out_path
@@ -178,7 +198,7 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
         raw = work_dir / f"beat_{i:02d}.wav"
         if use_local:
             local_tts(beat["narration"], raw, local)
-            engine = "espeak-ng"
+            engine = "piper-neural" if local == "piper" else "espeak-ng-fallback"
         else:
             gemini_tts(client, beat["narration"], raw, tts_model)
             engine = client.actual_models.get("tts") or tts_model
@@ -235,8 +255,8 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
             f"narration timeline drift: expected {cursor:.2f}s, measured {total:.2f}s"
         )
     report = {
-        "engine": "espeak-ng-fallback" if use_local else "gemini-tts",
-        "publication_quality_voice": not use_local,
+        "engine": ("piper-neural" if local == "piper" else "espeak-ng-fallback") if use_local else "gemini-tts",
+        "publication_quality_voice": (not use_local) or local == "piper",
         "model": tts_model,
         "total_seconds": round(total, 3),
         "beats": report_beats,
