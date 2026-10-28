@@ -223,14 +223,15 @@ def script_prompt(memory, requested_topic=None, series_id=None):
 faceless short-form channel about technology. {topic_instruction}
 {series_instruction}
 Use the supplied channel memory and any relevant grounded research notes in the context JSON below. Research notes are evidence leads, not proof that every claim is true; avoid unsupported specifics and preserve source URLs in the output.
-Produce ONE 40-50 second vertical mini-documentary. Optimize for a spoken delivery around 145-160 words per minute, with room for short dramatic pauses. Target 90-115 spoken words total; never pad the story just to reach a duration.
-Storytelling must feel like one human storyteller guiding the viewer through a discovery, not seven disconnected facts:
-1. Open on a surprising, specific visual consequence in the first 1-2 seconds.
-2. Raise one clear question the viewer wants answered.
-3. Build a causal chain: each beat should make the next beat necessary.
-4. Use one concrete analogy or example that the visuals can actually demonstrate.
-5. Deliver a precise reveal, then finish with a short memorable payoff that answers the opening question.
-Use natural spoken English: contractions where appropriate, varied sentence length, clear subject-verb phrasing, and punctuation that gives a voice room to breathe. Write for the ear, not the page. Avoid generic intros, rhetorical filler, repeated restatements, breathless clauses, fake suspense, lists disguised as narration, and phrases like “imagine this,” “here’s the thing,” or “what if I told you.” Avoid awkward abbreviations and strings of numbers; spell numbers out when that makes speech clearer. Every line must sound natural when read aloud in isolation and connect smoothly to the previous line. Never include stage directions, voice instructions, sound cues, or camera instructions in narration text.
+Produce ONE 40-50 second vertical mini-documentary. Target 90-105 spoken words, usually 145-155 words per minute, and leave real breathing room between thought units. Do not pad the runtime with extra words.
+EDITORIAL RHYTHM IS A REQUIREMENT:
+1. Hook in the first 1-2 seconds: begin with a concrete consequence, contradiction, or visual problem—not a greeting or broad question.
+2. Open a curiosity gap: make the viewer understand what is at stake, while withholding the mechanism.
+3. Escalate causally: each beat changes the viewer's understanding and makes the next beat necessary.
+4. Explain the mechanism with one visual, concrete analogy; avoid stacking facts.
+5. Hold the main reveal until roughly the final 20-25% of the narration. Give it its own clean, short sentence/beat; do not explain the payoff before the reveal.
+6. Pay off the opening image/question with one memorable consequence, not a generic summary or call to action.
+VOICE PERFORMANCE: write for a confident, warm, conversational male documentary narrator—not a flat announcer, not a breathless trailer, and not a synthetic-sounding list. Use varied sentence lengths: short impact line, fuller explanatory line, then a short reveal/payoff. Use commas for natural thought pauses, em dashes only when they help spoken rhythm, and periods to create clean resets. Use contrast and precise word choice to make the key idea land; do not use all-caps, repeated exclamation marks, or explicit [pause]/[emphasis] directions. Each beat must be easy to say in one breath, with no tangled clauses. Prefer contractions and everyday words. Delete any sentence that repeats information, delays the answer without adding tension, or sounds written rather than spoken. Never put stage directions, voice instructions, sound cues, or camera instructions inside narration text.
 
 You write a *typed* scene plan that a 3D renderer can actually build. The renderer has a fixed
 catalogue. You must choose from it exactly; scenes are rejected if they do not match.
@@ -244,10 +245,14 @@ beats: 6-8 objects, each {{"id": "b1", "role": "<role>", "narration": "<one or t
 - The first beat's role must be "hook"; the last must be "payoff"; use at least 5 distinct roles.
 - Each narration is 10-19 words of natural, speakable English and describes what the viewer is
   seeing at that moment. No greetings, filler, generic hooks, or "did you know".
-- Total narration must be 90-115 words, usually 12-17 words per beat. Target 40-50 seconds at
-  145-160 words per minute; use punctuation for natural pauses, not extra filler.
-- The beats must form one causal story, not independent facts: hook/question, setup, escalation,
-  mechanism, concrete example, reveal, payoff. Each line should advance the answer.
+- Total narration must be 90-105 words, usually 11-16 words per beat. Target 40-50 seconds at
+  145-155 words per minute, allowing genuine pauses; never add filler to hit duration.
+- The reveal belongs around the final 20-25% of narration and must get a distinct beat. Do not
+  reveal the mechanism too early, then repeat it in the ending.
+- The beats must form one causal story: visual hook, curiosity gap, setup, escalation, mechanism,
+  concrete example, delayed reveal, concise payoff. Every beat must advance the answer.
+- Make the rhythm audible from punctuation and sentence length: short hook, fuller explanation,
+  a clean reveal, short payoff. No all-caps emphasis, stage directions, or generic summary endings.
 - Read every line aloud mentally before returning it. Rewrite any line that sounds like an article,
   has awkward jargon, repeats the prior beat, or would require an unnatural breath.
 
