@@ -222,9 +222,15 @@ def script_prompt(memory, requested_topic=None, series_id=None):
     return f"""You are the story editor and visual director for Digital Edge Lab, an original
 faceless short-form channel about technology. {topic_instruction}
 {series_instruction}
-Use the supplied channel memory and any relevant grounded research notes in the context JSON below. Research notes are evidence leads, not proof that every claim is true; avoid unsupported specifics and preserve source URLs in the output.\nProduce ONE 35-55 second vertical mini-documentary
-with the pacing of a premium science short: an immediate visual hook, a genuine question, an
-escalating explanation, one concrete example, a clear reveal and a payoff line.
+Use the supplied channel memory and any relevant grounded research notes in the context JSON below. Research notes are evidence leads, not proof that every claim is true; avoid unsupported specifics and preserve source URLs in the output.
+Produce ONE 40-50 second vertical mini-documentary. Optimize for a spoken delivery around 145-160 words per minute, with room for short dramatic pauses. Target 90-115 spoken words total; never pad the story just to reach a duration.
+Storytelling must feel like one human storyteller guiding the viewer through a discovery, not seven disconnected facts:
+1. Open on a surprising, specific visual consequence in the first 1-2 seconds.
+2. Raise one clear question the viewer wants answered.
+3. Build a causal chain: each beat should make the next beat necessary.
+4. Use one concrete analogy or example that the visuals can actually demonstrate.
+5. Deliver a precise reveal, then finish with a short memorable payoff that answers the opening question.
+Use natural spoken English: contractions where appropriate, varied sentence length, clear subject-verb phrasing, and punctuation that gives a voice room to breathe. Write for the ear, not the page. Avoid generic intros, rhetorical filler, repeated restatements, breathless clauses, fake suspense, lists disguised as narration, and phrases like “imagine this,” “here’s the thing,” or “what if I told you.” Avoid awkward abbreviations and strings of numbers; spell numbers out when that makes speech clearer. Every line must sound natural when read aloud in isolation and connect smoothly to the previous line. Never include stage directions, voice instructions, sound cues, or camera instructions in narration text.
 
 You write a *typed* scene plan that a 3D renderer can actually build. The renderer has a fixed
 catalogue. You must choose from it exactly; scenes are rejected if they do not match.
@@ -236,9 +242,14 @@ title, description, topic, hashtags, sources, beats, scenes.
 
 beats: 6-8 objects, each {{"id": "b1", "role": "<role>", "narration": "<one or two spoken sentences>"}}.
 - The first beat's role must be "hook"; the last must be "payoff"; use at least 5 distinct roles.
-- Each narration is 8-30 words of natural spoken English that describes what the viewer is
-  seeing at that moment. No greetings, no filler, no "did you know".
-- The full narration across all beats must be 80-135 words.
+- Each narration is 10-19 words of natural, speakable English and describes what the viewer is
+  seeing at that moment. No greetings, filler, generic hooks, or "did you know".
+- Total narration must be 90-115 words, usually 12-17 words per beat. Target 40-50 seconds at
+  145-160 words per minute; use punctuation for natural pauses, not extra filler.
+- The beats must form one causal story, not independent facts: hook/question, setup, escalation,
+  mechanism, concrete example, reveal, payoff. Each line should advance the answer.
+- Read every line aloud mentally before returning it. Rewrite any line that sounds like an article,
+  has awkward jargon, repeats the prior beat, or would require an unnatural breath.
 
 scenes: exactly one object per beat, same order, each:
 {{"beat_id": "b1",

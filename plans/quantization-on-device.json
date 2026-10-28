@@ -1,8 +1,13 @@
 {
-  "title": "How a Giant AI Model Fits in Your Pocket",
-  "description": "Quantization, explained with a dial, a mountain and four memory pipes: how 16-bit weights become 4-bit integers and shrink a giant model until it runs on a phone.",
+  "title": "How Big AI Can Fit on Your Phone",
+  "description": "How quantization stores AI model weights with fewer bits, trading a little precision for a much smaller memory footprint that can fit on a phone.",
   "topic": "Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
-  "hashtags": ["#AI", "#Quantization", "#OnDeviceAI", "#TechExplained"],
+  "hashtags": [
+    "#AI",
+    "#Quantization",
+    "#OnDeviceAI",
+    "#TechExplained"
+  ],
   "sources": [
     {
       "name": "Dettmers et al., LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale",
@@ -24,37 +29,37 @@
     {
       "id": "b1",
       "role": "hook",
-      "narration": "A top-tier AI model needs more than a hundred gigabytes of memory before it can answer a single question."
+      "narration": "A powerful AI model can need more memory than a phone can spare."
     },
     {
       "id": "b2",
       "role": "setup",
-      "narration": "Put that on a phone, and the memory runs out before the model even finishes loading."
+      "narration": "That is why even a fast phone can struggle before the model answers."
     },
     {
       "id": "b3",
       "role": "escalate",
-      "narration": "The fix is not a smaller model. It is a cheaper way to store each of its numbers."
+      "narration": "The trick is to shrink the numbers inside the model, not throw the model away."
     },
     {
       "id": "b4",
       "role": "mechanism",
-      "narration": "Sixteen-bit floats keep thousands of tiny steps. Four-bit integers keep exactly sixteen."
+      "narration": "With four bits, each weight has sixteen possible values instead of thousands."
     },
     {
       "id": "b5",
       "role": "example",
-      "narration": "The shape survives. A smooth surface and a blocky copy still describe the same mountain."
+      "narration": "Think of a smooth mountain rebuilt from blocks: the shape stays recognizable."
     },
     {
       "id": "b6",
       "role": "reveal",
-      "narration": "Four memory channels become one, and the data moving into the chip drops by seventy-five percent."
+      "narration": "Those smaller weights can cut memory use dramatically, though some accuracy may be lost."
     },
     {
       "id": "b7",
       "role": "payoff",
-      "narration": "A quarter of the memory, on the device in your pocket, answering in real time."
+      "narration": "That trade-off is what lets more AI run right on your phone."
     }
   ],
   "scenes": [
@@ -66,16 +71,35 @@
         "material": "glass",
         "color": "cyan"
       },
-      "action": {"kind": "compress", "intensity": 0.9},
-      "environment": {"kind": "clamp_rig", "props": ["rail", "posts"]},
-      "camera": {"framing": "extreme_close_up", "move": "push_in"},
-      "lighting": {"mood": "dramatic"},
+      "action": {
+        "kind": "compress",
+        "intensity": 0.9
+      },
+      "environment": {
+        "kind": "clamp_rig",
+        "props": [
+          "rail",
+          "posts"
+        ]
+      },
+      "camera": {
+        "framing": "extreme_close_up",
+        "move": "push_in"
+      },
+      "lighting": {
+        "mood": "dramatic"
+      },
       "from_state": "a huge translucent sphere fills the frame, ringed by glowing circuit nodes",
       "to_state": "the sphere is crushed visibly smaller and the rim ring tightens around it",
       "on_screen_text": "100 GB OF WEIGHTS",
       "qa": {
-        "must_show": ["glass sphere", "glowing rim"],
-        "must_change": ["sphere compresses in scale"]
+        "must_show": [
+          "glass sphere",
+          "glowing rim"
+        ],
+        "must_change": [
+          "sphere compresses in scale"
+        ]
       }
     },
     {
@@ -86,16 +110,31 @@
         "material": "metal",
         "color": "steel"
       },
-      "action": {"kind": "descend", "intensity": 0.8},
-      "environment": {"kind": "phone_bench"},
-      "camera": {"framing": "close_up", "move": "push_in"},
-      "lighting": {"mood": "cool"},
+      "action": {
+        "kind": "descend",
+        "intensity": 0.8
+      },
+      "environment": {
+        "kind": "phone_bench"
+      },
+      "camera": {
+        "framing": "close_up",
+        "move": "push_in"
+      },
+      "lighting": {
+        "mood": "cool"
+      },
       "from_state": "a phone stands on a bench with a heavy mass hanging above it",
       "to_state": "the mass has descended onto the phone and a red impact flare expands",
       "on_screen_text": "NOT ENOUGH MEMORY",
       "qa": {
-        "must_show": ["phone chassis", "phone screen"],
-        "must_change": ["heavy mass travels down onto the phone"]
+        "must_show": [
+          "phone chassis",
+          "phone screen"
+        ],
+        "must_change": [
+          "heavy mass travels down onto the phone"
+        ]
       }
     },
     {
@@ -106,16 +145,32 @@
         "material": "metal",
         "color": "gold"
       },
-      "action": {"kind": "spin", "intensity": 0.7},
-      "environment": {"kind": "workbench"},
-      "camera": {"framing": "extreme_close_up", "move": "orbit"},
-      "lighting": {"mood": "clinical"},
+      "action": {
+        "kind": "spin",
+        "intensity": 0.7
+      },
+      "environment": {
+        "kind": "workbench"
+      },
+      "camera": {
+        "framing": "extreme_close_up",
+        "move": "orbit"
+      },
+      "lighting": {
+        "mood": "clinical"
+      },
       "from_state": "a dial with fine tick marks and a needle pointing up",
       "to_state": "the needle has swept around the dial while the body stays still",
       "on_screen_text": "ONE NUMBER",
       "qa": {
-        "must_show": ["dial body", "dial needle", "tick marks"],
-        "must_change": ["needle rotates around the dial"]
+        "must_show": [
+          "dial body",
+          "dial needle",
+          "tick marks"
+        ],
+        "must_change": [
+          "needle rotates around the dial"
+        ]
       }
     },
     {
@@ -126,16 +181,31 @@
         "material": "voxel",
         "color": "gold"
       },
-      "action": {"kind": "snap_to_grid", "intensity": 0.8},
-      "environment": {"kind": "grid_floor"},
-      "camera": {"framing": "close_up", "move": "push_in"},
-      "lighting": {"mood": "cool"},
+      "action": {
+        "kind": "snap_to_grid",
+        "intensity": 0.8
+      },
+      "environment": {
+        "kind": "grid_floor"
+      },
+      "camera": {
+        "framing": "close_up",
+        "move": "push_in"
+      },
+      "lighting": {
+        "mood": "cool"
+      },
       "from_state": "blocks assemble one at a time into a stepped approximation of a sphere",
       "to_state": "the blocks have snapped through discrete positions into a fixed grid",
       "on_screen_text": "SIXTEEN FIXED STEPS",
       "qa": {
-        "must_show": ["voxel blocks", "grid frame"],
-        "must_change": ["blocks snap through discrete quantized positions"]
+        "must_show": [
+          "voxel blocks",
+          "grid frame"
+        ],
+        "must_change": [
+          "blocks snap through discrete quantized positions"
+        ]
       }
     },
     {
@@ -146,16 +216,31 @@
         "material": "stone",
         "color": "copper"
       },
-      "action": {"kind": "compare_pan", "intensity": 0.6},
-      "environment": {"kind": "open_terrain"},
-      "camera": {"framing": "wide", "move": "pan_right"},
-      "lighting": {"mood": "warm"},
+      "action": {
+        "kind": "compare_pan",
+        "intensity": 0.6
+      },
+      "environment": {
+        "kind": "open_terrain"
+      },
+      "camera": {
+        "framing": "wide",
+        "move": "pan_right"
+      },
+      "lighting": {
+        "mood": "warm"
+      },
       "from_state": "a smooth peak stands beside a blocky voxel peak of the same height",
       "to_state": "both peaks drift and rotate as the camera moves between them",
       "on_screen_text": "SAME SHAPE",
       "qa": {
-        "must_show": ["smooth mountain", "voxel mountain"],
-        "must_change": ["both terrain models move and rotate"]
+        "must_show": [
+          "smooth mountain",
+          "voxel mountain"
+        ],
+        "must_change": [
+          "both terrain models move and rotate"
+        ]
       }
     },
     {
@@ -166,16 +251,31 @@
         "material": "metal",
         "color": "copper"
       },
-      "action": {"kind": "collapse_to_one", "intensity": 0.9},
-      "environment": {"kind": "chip_cavity"},
-      "camera": {"framing": "medium", "move": "push_in"},
-      "lighting": {"mood": "cool"},
+      "action": {
+        "kind": "collapse_to_one",
+        "intensity": 0.9
+      },
+      "environment": {
+        "kind": "chip_cavity"
+      },
+      "camera": {
+        "framing": "medium",
+        "move": "push_in"
+      },
+      "lighting": {
+        "mood": "cool"
+      },
       "from_state": "four copper pipes carry data in parallel",
       "to_state": "the four pipes shrink away and one wide cyan channel carries the flow",
-      "on_screen_text": "75% LESS DATA",
+      "on_screen_text": "LESS MEMORY",
       "qa": {
-        "must_show": ["four pipes", "merged channel"],
-        "must_change": ["four pipes collapse into a single channel"]
+        "must_show": [
+          "four pipes",
+          "merged channel"
+        ],
+        "must_change": [
+          "four pipes collapse into a single channel"
+        ]
       }
     },
     {
@@ -186,16 +286,31 @@
         "material": "metal",
         "color": "steel"
       },
-      "action": {"kind": "pulse", "intensity": 0.7},
-      "environment": {"kind": "phone_bench"},
-      "camera": {"framing": "medium", "move": "pull_out"},
-      "lighting": {"mood": "dramatic"},
+      "action": {
+        "kind": "pulse",
+        "intensity": 0.7
+      },
+      "environment": {
+        "kind": "phone_bench"
+      },
+      "camera": {
+        "framing": "medium",
+        "move": "pull_out"
+      },
+      "lighting": {
+        "mood": "dramatic"
+      },
       "from_state": "the phone sits dark on the bench",
       "to_state": "the phone pulses twice and expanding rings carry light outward",
       "on_screen_text": "RUNS LOCALLY",
       "qa": {
-        "must_show": ["phone chassis", "phone screen"],
-        "must_change": ["phone pulses and emits expanding rings"]
+        "must_show": [
+          "phone chassis",
+          "phone screen"
+        ],
+        "must_change": [
+          "phone pulses and emits expanding rings"
+        ]
       }
     }
   ]

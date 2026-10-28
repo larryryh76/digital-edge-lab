@@ -50,12 +50,10 @@ class TtsPlausibilityTest(unittest.TestCase):
     def setUp(self):
         self.work = Path(tempfile.mkdtemp(prefix="del-tts-"))
 
-    def test_styled_prompt_that_reads_the_direction_is_rejected_and_retried(self):
-        client = FakeClient(lambda prompt: 40.4 if prompt != LINE else 5.9)
+    def test_bare_line_is_tried_first_to_prevent_directions_being_spoken(self):
+        client = FakeClient(lambda prompt: 5.9 if prompt == LINE else 40.4)
         out = narration.gemini_tts(client, LINE, self.work / "beat.wav", "fake-tts")
-        self.assertEqual(len(client.prompts), 2)
-        self.assertEqual(client.prompts[1], LINE, "retry must send only the line")
-        self.assertTrue(client.prompts[0].endswith(LINE))
+        self.assertEqual(client.prompts, [LINE], "valid bare narration should not pay for another TTS call")
         measured = narration.probe_duration(out)
         self.assertAlmostEqual(measured, 5.9, delta=0.1)
 

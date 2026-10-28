@@ -298,7 +298,14 @@ jobs:
           rm -f /tmp/blender.tar.xz
           sudo ln -sf /opt/blender/blender /usr/local/bin/blender
 
-      - name: Install local voice and fonts
+      - name: Restore cached Piper voice model
+        id: piper-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/piper-voice
+          key: piper-en-us-lessac-medium-v1
+
+      - name: Install local neural voice and fonts
         timeout-minutes: 8
         run: |
           set -euo pipefail
@@ -308,6 +315,19 @@ jobs:
           timeout 360 sudo apt-get $APT install -y --no-install-recommends \
             -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
             espeak-ng fonts-dejavu-core
+          python -m pip install --disable-pip-version-check piper-tts
+          VOICE_DIR="${{ runner.temp }}/piper-voice"
+          mkdir -p "$VOICE_DIR"
+          if [ ! -s "$VOICE_DIR/en_US-lessac-medium.onnx" ] || [ ! -s "$VOICE_DIR/en_US-lessac-medium.onnx.json" ]; then
+            curl -fL --retry 2 --connect-timeout 15 --max-time 180 \
+              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx" \
+              -o "$VOICE_DIR/en_US-lessac-medium.onnx"
+            curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
+              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json" \
+              -o "$VOICE_DIR/en_US-lessac-medium.onnx.json"
+          fi
+          echo "PIPER_MODEL=$VOICE_DIR/en_US-lessac-medium.onnx" >> "$GITHUB_ENV"
+          command -v piper
           espeak-ng --version | head -1
 
       - name: Resolve Blender runtime libraries
