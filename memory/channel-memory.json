@@ -185,6 +185,11 @@
       "title": "How Big AI Can Fit on Your Phone",
       "topic": "Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
       "created_at_utc": "2026-10-28T16:28:42.194299+00:00"
+    },
+    {
+      "title": "How Big AI Can Fit on Your Phone",
+      "topic": "Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
+      "created_at_utc": "2026-10-28T20:46:17.452113+00:00"
     }
   ],
   "running_context": [
@@ -199,6 +204,7 @@
     "Episode: Why Video Fades to Black: The Hidden Math of Bitrate Crushing — Video Compression Macroblocks and Adaptive Bitrate Allocation",
     "Episode: The Strawberry Paradox: Why AI Can't Count — LLM Tokenization and Subword Encoding",
     "Episode: How a Giant AI Model Fits in Your Pocket — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
+    "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware"
   ],
