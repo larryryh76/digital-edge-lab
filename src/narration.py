@@ -32,7 +32,7 @@ MAX_SECONDS_PER_WORD = 1.15
 
 # Kept to a single clause: the longer the style text, the more likely a speech
 # model performs it as narration instead of treating it as direction.
-STYLE_BRIEF = "Conversational male narrator; warm low-mid pitch, varied intonation, expressive cadence, relaxed pace, natural pauses. Read only:"
+STYLE_BRIEF = "Male narrator; warm low-mid pitch, varied intonation, expressive cadence, relaxed pace, natural pauses. Read only:"
 
 
 def plausibility(text, seconds):
