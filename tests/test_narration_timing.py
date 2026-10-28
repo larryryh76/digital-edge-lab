@@ -50,16 +50,24 @@ class TtsPlausibilityTest(unittest.TestCase):
     def setUp(self):
         self.work = Path(tempfile.mkdtemp(prefix="del-tts-"))
 
-    def test_bare_line_is_tried_first_to_prevent_directions_being_spoken(self):
-        client = FakeClient(lambda prompt: 5.9 if prompt == LINE else 40.4)
+    def test_style_direction_is_applied_before_bare_retry(self):
+        client = FakeClient(lambda prompt: 5.9)
         out = narration.gemini_tts(client, LINE, self.work / "beat.wav", "fake-tts")
-        self.assertEqual(client.prompts, [LINE], "valid bare narration should not pay for another TTS call")
+        self.assertEqual(client.prompts, [f"{narration.STYLE_BRIEF} {LINE}"])
         measured = narration.probe_duration(out)
         self.assertAlmostEqual(measured, 5.9, delta=0.1)
 
+    def test_bare_line_is_retry_only_when_styled_audio_is_implausible(self):
+        client = FakeClient(lambda prompt: 40.4 if prompt.startswith(narration.STYLE_BRIEF) else 5.9)
+        out = narration.gemini_tts(client, LINE, self.work / "beat.wav", "fake-tts")
+        self.assertEqual(client.prompts, [f"{narration.STYLE_BRIEF} {LINE}", LINE])
+        self.assertAlmostEqual(narration.probe_duration(out), 5.9, delta=0.1)
+
     def test_direction_paragraph_cannot_leak_back_into_the_prompt(self):
         self.assertNotIn("Voice direction for Edge", narration.STYLE_BRIEF)
-        self.assertLess(len(narration.STYLE_BRIEF.split()), 16)
+        self.assertLessEqual(len(narration.STYLE_BRIEF.split()), 15)
+        self.assertIn("lower-mid register", narration.STYLE_BRIEF)
+        self.assertIn("varied intonation", narration.STYLE_BRIEF)
         self.assertFalse(narration.plausibility(LINE, 40.4)[0])
         self.assertTrue(narration.plausibility(LINE, 5.9)[0])
 
