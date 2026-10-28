@@ -32,7 +32,7 @@ MAX_SECONDS_PER_WORD = 1.15
 
 # Kept to a single clause: the longer the style text, the more likely a speech
 # model performs it as narration instead of treating it as direction.
-STYLE_BRIEF = "Warm, clear male storyteller; natural phrasing, restrained emphasis. Speak only this line:"
+STYLE_BRIEF = "Grounded male voice, lower-mid register, varied intonation, relaxed pace, natural pauses. Speak only this line:"
 
 
 def plausibility(text, seconds):
@@ -112,7 +112,7 @@ def gemini_tts(client, text, out_path, model, *, log=None):
     response that is wrong twice fails the episode with the measured rates.
     """
     attempts = []
-    for prompt, mode in ((text, "bare"), (f"{STYLE_BRIEF} {text}", "styled")):
+    for prompt, mode in ((f"{STYLE_BRIEF} {text}", "styled"), (text, "bare")):
         _tts_request(client, prompt, out_path, model)
         seconds = probe_duration(out_path)
         ok, rate = plausibility(text, seconds)
