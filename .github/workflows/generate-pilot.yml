@@ -30,11 +30,12 @@ on:
     - cron: "0 10 * * *"
 
 concurrency:
-  group: digital-edge-lab-${{ github.ref }}
-  cancel-in-progress: false
+  # Only the newest run for a given workflow/ref should consume a runner.
+  group: digital-edge-lab-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -214,6 +215,9 @@ jobs:
         run: python tests/render_smoke.py
 
   pilot:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    permissions:
+      contents: write
     name: Render and verify one complete pilot
     needs: verify
     runs-on: ubuntu-latest
