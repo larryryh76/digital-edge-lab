@@ -393,8 +393,8 @@ jobs:
         run: |
           requested="${REQUESTED_MODE:-}"
           if [ -z "$requested" ]; then
-            # Pull-request and push builds verify the engine deterministically; the
-            # generated path (Gemini script + hosted voice) runs on dispatch/nightly.
+            # Pull requests stay deterministic and fast. Main pushes use Gemini's hosted
+            # male voice when the key exists; dispatch/nightly can also use generated mode.
             case "${GITHUB_EVENT_NAME}" in
               workflow_dispatch|schedule) requested=generated ;;
               push)
