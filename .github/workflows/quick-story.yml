@@ -7,15 +7,13 @@ on:
         description: "Optional topic; leave blank and AI will choose one"
         required: false
         type: string
-  schedule:
-    - cron: "0 10 * * *"
 
 permissions:
   contents: read
 
 concurrency:
-  group: digital-edge-lab-quick-story
-  cancel-in-progress: false
+  group: digital-edge-lab-quick-story-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   generate-story-prompt:
