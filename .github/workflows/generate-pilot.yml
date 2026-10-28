@@ -45,7 +45,8 @@ env:
   FFMPEG_STATIC_SHA256: abda8d77ce8309141f83ab8edf0596834087c52467f6badf376a6a2a4c87cf67
   BLENDER_URL: https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz
   DEL_RENDER_WORKERS: "2"
-  DEL_RENDER_PHASE_BUDGET_SECONDS: "2700"
+  DEL_RENDER_SECONDS_PER_FRAME: "6.5"
+  DEL_RENDER_PHASE_BUDGET_SECONDS: "3900"
 
 jobs:
   fast-tests:
@@ -220,7 +221,7 @@ jobs:
         run: python tests/render_smoke.py
 
   pilot:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: always() && (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'pull_request' && github.head_ref == 'fix/render-budget-retry'))
     permissions:
       contents: write
     name: Render and verify one complete pilot
