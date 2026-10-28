@@ -62,6 +62,13 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: requirements.txt
+      - name: Install FFmpeg required by narration tests
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
       - name: Install Python dependencies
         timeout-minutes: 5
         run: python -m pip install --disable-pip-version-check -r requirements.txt
