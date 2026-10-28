@@ -32,7 +32,7 @@ MAX_SECONDS_PER_WORD = 1.15
 
 # Kept to a single clause: the longer the style text, the more likely a speech
 # model performs it as narration instead of treating it as direction.
-STYLE_BRIEF = "Use a natural, confident, energetic male documentary voice with conversational phrasing and varied emphasis; speak only this exact line:"
+STYLE_BRIEF = "Natural, energetic male documentary voice; speak only this exact line:"
 
 
 def plausibility(text, seconds):
