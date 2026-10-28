@@ -7,12 +7,6 @@ output/*
 
 # Local OAuth credentials and persistent operator state
 secrets/
-
-# Local OAuth credentials and persistent operator state
 output/operator.sqlite3*
-
-# Local OAuth credentials and persistent operator state
 output/publishing/
-
-# Local OAuth credentials and persistent operator state
 memory/*.bak
