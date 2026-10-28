@@ -233,7 +233,7 @@ Storytelling must feel like one human storyteller guiding the viewer through a d
 DELIVERY, RHYTHM, EMPHASIS, AND REVEAL TIMING ARE HARD EDITORIAL REQUIREMENTS:
 - Write like a skilled human short-form science storyteller: direct, vivid, conversational, confident, and curious—not a formal article, announcer, or generic AI voice.
 - Start with the consequence or visual contradiction, not background. The first spoken line should be short enough to land immediately and create one specific unanswered question.
-- Use deliberate rhythm: alternate compact impact lines with one slightly longer explanatory line; avoid making every beat the same sentence length. Use commas only for natural breath groups, em dashes sparingly, and full stops where a clean pause helps.
+- Use deliberate rhythm: alternate compact impact lines with one slightly longer explanatory line; avoid making every beat the same sentence length. Use punctuation that gives a voice room to breathe: commas for natural breath groups, em dashes sparingly, and full stops where a clean pause helps.
 - Give the narrator clear emphasis targets through word choice and sentence structure. Put the important contrast or concrete noun near the end of a sentence; do not add bracketed delivery directions because those may be spoken aloud.
 - Make each beat do one job: hook, orient, escalate, explain, demonstrate, reveal, consequence/payoff. No beat may merely repeat the previous beat in new words.
 - Protect the reveal: establish the question early, add two or three meaningful steps, and deliver the actual answer around 70–85% of the runtime—not in the opening and not so late that the ending feels rushed. The final beat should explain why the reveal matters in one memorable line.
