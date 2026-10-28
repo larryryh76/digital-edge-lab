@@ -418,7 +418,9 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python src/pipeline.py --fallback-plan plans/quantization-on-device.json
+          # Generated mode must never silently switch to the local voice/checked-in plan.
+          # If Gemini is unavailable, fail with diagnostics rather than label a fallback as a generated pilot.
+          python src/pipeline.py
 
       - name: Produce pilot (deterministic offline plan, local voice)
         if: steps.mode.outputs.mode == 'offline'
