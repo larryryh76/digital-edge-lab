@@ -232,6 +232,18 @@ Storytelling must feel like one human storyteller guiding the viewer through a d
 5. Deliver a precise reveal, then finish with a short memorable payoff that answers the opening question.
 Use natural spoken English: contractions where appropriate, varied sentence length, clear subject-verb phrasing, and punctuation that gives a voice room to breathe. Write for the ear, not the page. Avoid generic intros, rhetorical filler, repeated restatements, breathless clauses, fake suspense, lists disguised as narration, and phrases like “imagine this,” “here’s the thing,” or “what if I told you.” Avoid awkward abbreviations and strings of numbers; spell numbers out when that makes speech clearer. Every line must sound natural when read aloud in isolation and connect smoothly to the previous line. Never include stage directions, voice instructions, sound cues, or camera instructions in narration text.
 
+DELIVERY, RHYTHM, EMPHASIS, CONCISION, AND REVEAL TIMING:
+- Write a spoken performance, not a paragraph broken into seven chunks. Use a mix of short impact lines and longer explanatory lines; avoid giving every beat the same sentence rhythm.
+- The hook should be concrete and visual, ideally one short sentence. Give the viewer a specific mystery, consequence, or contradiction immediately; do not explain it away in the hook.
+- Keep each beat to one job. Prefer 8–16 words per beat, with occasional shorter hook/reveal/payoff lines. Remove any clause that does not move the question forward.
+- Build tension through cause and effect, not hype words. Each beat should add evidence or change what the viewer believes.
+- Hold the key mechanism or answer until the reveal beat. Before the reveal, plant only the minimum clues needed to make the answer satisfying; do not accidentally reveal it in setup or escalation.
+- Make the reveal precise and understandable in one pass. Follow it with a consequence or memorable payoff that changes the meaning of the opening image.
+- Use punctuation as performance cues: commas for quick turns, periods for clean landings, and an occasional em dash for a deliberate pivot. Do not use repeated ellipses or all-caps emphasis.
+- Assign emotional movement across the story: curious hook → focused investigation → rising stakes → brief pause/reveal → satisfying, concise payoff. The voice should sound confident and alive, never shouty, salesy, or uniformly dramatic.
+- Plan the spoken line and visible action together. A reveal must coincide with the visual event that proves it; a pause must not leave the viewer staring at an unrelated static shot.
+- End on the answer or implication. No “like and subscribe,” recap paragraph, or second ending.
+
 You write a *typed* scene plan that a 3D renderer can actually build. The renderer has a fixed
 catalogue. You must choose from it exactly; scenes are rejected if they do not match.
 

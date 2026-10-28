@@ -183,5 +183,24 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(len(plan["beats"]), len(plan["scenes"]))
 
 
+class NarrationRhythmTests(unittest.TestCase):
+    def test_reveal_and_hook_receive_deliberate_pause(self):
+        self.assertGreater(narration.pause_after_role("reveal"),
+                           narration.pause_after_role("setup"))
+        self.assertGreater(narration.pause_after_role("hook"),
+                           narration.pause_after_role("setup"))
+        self.assertGreater(narration.pause_after_role("payoff"),
+                           narration.pause_after_role("setup"))
+
+    def test_fast_local_voice_is_marked_for_pace_correction(self):
+        self.assertEqual(narration.TARGET_LOCAL_WPM, 158)
+        self.assertEqual(narration.LOCAL_WPM_FAST_THRESHOLD, 168)
+
+    def test_story_prompt_targets_concision_and_delayed_reveal(self):
+        self.assertIn("DELIVERY, RHYTHM, EMPHASIS, CONCISION, AND REVEAL TIMING", PIPELINE)
+        self.assertIn("Hold the key mechanism or answer until the reveal beat", PIPELINE)
+        self.assertIn("Each beat to one job", PIPELINE)
+
+
 if __name__ == "__main__":
     unittest.main()
