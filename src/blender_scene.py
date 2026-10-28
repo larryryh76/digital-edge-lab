@@ -652,7 +652,7 @@ def act_descend(ctx):
         key(obj, "location", ctx.mid, (obj.location.x, obj.location.y, offset - 0.80))
         key(obj, "location", ctx.end, (obj.location.x, obj.location.y, offset - 1.45))
     key(mass, "rotation_euler", ctx.end, (0, 0, math.radians(12)))
-    flare = ctx.add(ctx.torus("impact_flare", (0, -0.2, 1.62), 0.4, 0.03, ctx.mats["alert"],
+    flare = ctx.add(ctx.studio.torus("impact_flare", (0, -0.2, 1.62), 0.4, 0.03, ctx.mats["alert"],
                               rot=(math.radians(90), 0, 0)), part=None)
     key(flare, "scale", ctx.start, (0.3, 0.3, 0.3))
     key(flare, "scale", ctx.mid, (0.9, 0.9, 0.9))
@@ -668,7 +668,7 @@ def act_fall(ctx):
     key(hero, "location", int(ctx.end * 0.74), (hero.location.x, hero.location.y, start_z + 0.42))
     key(hero, "location", ctx.end, (hero.location.x, hero.location.y, start_z))
     key(hero, "rotation_euler", ctx.end, (math.radians(14), 0, math.radians(24)))
-    ctx.add(ctx.torus("impact_ring", (hero.location.x, hero.location.y + 0.1, start_z - 0.4),
+    ctx.add(ctx.studio.torus("impact_ring", (hero.location.x, hero.location.y + 0.1, start_z - 0.4),
                       0.6, 0.03, ctx.mats["accent"], rot=(math.radians(90), 0, 0)), part=None)
 
 
@@ -694,7 +694,7 @@ def act_collide(ctx):
         key(partner, "location", int(ctx.end * 0.75), (pstart.x + 0.22, pstart.y, pstart.z))
         key(partner, "location", ctx.end, (pstart.x + 0.06, pstart.y, pstart.z))
         key(partner, "rotation_euler", ctx.end, (0, 0, math.radians(-9)))
-    spark = ctx.add(ctx.sphere("collision_spark", (0, -0.5, 1.55), 0.16, ctx.mats["accent"]), part=None)
+    spark = ctx.add(ctx.studio.sphere("collision_spark", (0, -0.5, 1.55), 0.16, ctx.mats["accent"]), part=None)
     key(spark, "scale", ctx.start, (0.1, 0.1, 0.1))
     key(spark, "scale", int(ctx.end * 0.62), (0.1, 0.1, 0.1))
     key(spark, "scale", int(ctx.end * 0.74), (1.5, 1.5, 1.5))
@@ -786,7 +786,7 @@ def act_flow(ctx):
     target_x = -hero.location.x if abs(hero.location.x) > 0.05 else 1.4
     packets = []
     for j in range(3):
-        packets.append(ctx.add(ctx.sphere(f"flow_packet{j}", (-2.2, -0.55, 1.5), 0.13,
+        packets.append(ctx.add(ctx.studio.sphere(f"flow_packet{j}", (-2.2, -0.55, 1.5), 0.13,
                                           ctx.mats["accent"]), part=None))
     for j, packet in enumerate(packets):
         offset = j * 0.16
@@ -822,7 +822,7 @@ def act_scan(ctx):
     if glass is not None:
         key(glass, "location", ctx.start, (start.x - 0.9, start.y, start.z + 0.5))
         key(glass, "location", ctx.end, (start.x + 0.95, start.y, start.z - 0.45))
-    reveal = ctx.add(ctx.box("scan_reveal_panel", (0, -0.3, 1.35), (1.0, 0.02, 0.7),
+    reveal = ctx.add(ctx.studio.box("scan_reveal_panel", (0, -0.3, 1.35), (1.0, 0.02, 0.7),
                              ctx.mats["accent"], 0.0), part=None)
     key(reveal, "scale", ctx.start, (0.05, 1, 0.05))
     key(reveal, "scale", ctx.end, (1.0, 1, 1.0))
@@ -848,7 +848,7 @@ def act_reveal(ctx):
 
 def act_transform(ctx):
     hero = ctx.mover
-    second = ctx.add(ctx.box("transform_target", (hero.location.x + 1.35, hero.location.y,
+    second = ctx.add(ctx.studio.box("transform_target", (hero.location.x + 1.35, hero.location.y,
                                                   hero.location.z),
                              (0.95, 0.8, 1.15), ctx.mats["steel"], 0.05), part=None)
     key(second, "scale", ctx.start, (0.02, 0.02, 0.02))
@@ -869,7 +869,7 @@ def act_pulse(ctx):
     key(hero, "scale", int(ctx.end * 0.8), (1.34, 1.34, 1.34))
     key(hero, "scale", ctx.end, (1.05, 1.05, 1.05))
     for j, radius in enumerate((1.0, 1.35, 1.7)):
-        ring = ctx.add(ctx.torus(f"pulse_ring{j}", (hero.location.x, hero.location.y, hero.location.z),
+        ring = ctx.add(ctx.studio.torus(f"pulse_ring{j}", (hero.location.x, hero.location.y, hero.location.z),
                                  radius, 0.025, ctx.mats["accent"],
                                  rot=(math.radians(90), 0, 0)), part=None)
         key(ring, "scale", ctx.start + int((ctx.end - ctx.start) * 0.15 * j),
