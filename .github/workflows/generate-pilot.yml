@@ -28,11 +28,11 @@ on:
   schedule:
     - cron: "0 10 * * *"
 
-# Give each commit an independent verification group. A stalled older Blender setup
-# must not prevent the latest source revision from being tested.
+# Keep only the newest run for a workflow/ref. The previous SHA-based group
+# allowed every superseded Blender bootstrap to continue consuming runners.
 concurrency:
-  group: digital-edge-lab-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: false
+  group: digital-edge-lab-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write
@@ -49,6 +49,7 @@ env:
 
 jobs:
   fast-tests:
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
     name: Fast Python tests (no Blender bootstrap)
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -95,7 +96,8 @@ jobs:
           python -m unittest discover -s tests -v
 
   verify:
-    name: Offline checks and renderer smoke test
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    name: Full renderer certification (manual or scheduled only)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -235,6 +237,7 @@ jobs:
         run: python tests/render_smoke.py
 
   pilot:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     name: Render and verify one complete pilot
     # Pull requests also render a complete deterministic offline pilot after the
     # unit suite passes, so merge decisions have end-to-end artifact evidence.
