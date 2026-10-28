@@ -167,10 +167,62 @@ def enum_documentation():
     return ENUM_DOC
 
 
-def script_prompt(memory):
+def script_prompt(memory, requested_topic=None, series_id=None):
     recent = [t.get("topic") for t in memory.get("recent_topics", [])[-12:]]
+    topic_instruction = ("Requested episode topic: " + str(requested_topic) +
+                         ". Stay focused on this topic; do not substitute a generic topic."
+                         if requested_topic else "Choose a fresh topic consistent with channel memory.")
+    # Bound continuity context to keep prompts useful without exploding token cost.
+    legacy_context = [str(item)[:500] for item in memory.get("running_context", [])[-8:]]
+    episode_store = memory.get("episodes", {})
+    if isinstance(episode_store, dict):
+        episode_records = list(episode_store.values())
+    elif isinstance(episode_store, list):
+        episode_records = episode_store
+    else:
+        episode_records = []
+    completed = [ep for ep in episode_records
+                 if ep.get("status") in ("completed", "completed_degraded", "legacy_completed")]
+    if series_id:
+        completed = [ep for ep in completed if ep.get("series_id") == series_id]
+    completed = completed[-8:]
+    continuity_records = [{
+        "episode_id": ep.get("episode_id"), "series_id": ep.get("series_id"),
+        "episode_number": ep.get("episode_number"), "title": ep.get("title"),
+        "summary": str(ep.get("summary", ""))[:350], "characters": ep.get("characters", [])[:8],
+        "ending": str(ep.get("ending", ""))[:250], "unresolved": ep.get("unresolved", [])[:8],
+        "sources": ep.get("sources", [])[:4]
+    } for ep in completed]
+    research_items = memory.get("research", []) if isinstance(memory.get("research", []), list) else []
+    if requested_topic:
+        requested_words = {w for w in re.findall(r"[a-z0-9]+", requested_topic.lower()) if len(w) > 3}
+        relevant_research = []
+        for item in research_items:
+            topic_words = {w for w in re.findall(r"[a-z0-9]+", str(item.get("topic", "")).lower()) if len(w) > 3}
+            if requested_words & topic_words:
+                relevant_research.append(item)
+        research_items = relevant_research[-4:]
+    else:
+        research_items = research_items[-3:]
+    research_context = [{
+        "topic": item.get("topic", ""), "findings": str(item.get("findings", ""))[:1400],
+        "sources": item.get("sources", [])[:6],
+        "verification_status": item.get("verification_status", "review_required")
+    } for item in research_items]
+    series_record = memory.get("series", {}).get(series_id) if series_id else None
+    continuity = json.dumps({"channel": memory.get("channel", {}),
+                             "requested_series": series_record,
+                             "recent_completed_episodes": continuity_records,
+                             "running_context": legacy_context,
+                             "grounded_research_notes": research_context},
+                            ensure_ascii=False)[:9000]
+    series_instruction = ("Continue the existing series " + series_id +
+                          "; use its unresolved threads, character state, and chronology."
+                          if series_id else "This is a standalone episode unless memory explicitly indicates otherwise.")
     return f"""You are the story editor and visual director for Digital Edge Lab, an original
-faceless short-form channel about technology. Produce ONE 35-55 second vertical mini-documentary
+faceless short-form channel about technology. {topic_instruction}
+{series_instruction}
+Use the supplied channel memory and any relevant grounded research notes in the context JSON below. Research notes are evidence leads, not proof that every claim is true; avoid unsupported specifics and preserve source URLs in the output.\nProduce ONE 35-55 second vertical mini-documentary
 with the pacing of a premium science short: an immediate visual hook, a genuine question, an
 escalating explanation, one concrete example, a clear reveal and a payoff line.
 
@@ -211,12 +263,17 @@ Hard rules:
   statistics or URLs.
 - Sources: 2-3 real, reputable URLs as {{"name","url","supports"}}; prefer primary docs or papers.
 - Avoid recent topics: {recent}
+- CONTINUITY MEMORY (authoritative where it contains established facts): {continuity}
+- Do not contradict completed-episode facts, character identities, established timelines, or unresolved
+  plot points. If continuing a series, advance its unresolved thread rather than repeating its recap.
+  If the new topic is unrelated, do not force old characters or plot details into it.
+- Treat source URLs in memory as leads, not proof: retain only sources you can substantiate.
 
 Return raw JSON only, no Markdown fences, no commentary."""
 
 
-def generate_episode(client, memory, diagnostics):
-    prompt = script_prompt(memory)
+def generate_episode(client, memory, diagnostics, requested_topic=None, series_id=None):
+    prompt = script_prompt(memory, requested_topic=requested_topic, series_id=series_id)
     attempts = 0
     last_errors = []
     while attempts < 3:
@@ -515,8 +572,15 @@ def prepare_dirs():
         if target.exists():
             shutil.rmtree(target)
         target.mkdir(parents=True)
+    # Remove only known generated artifacts. The operator's SQLite database and
+    # any future state/config files live in output/ too and must survive a render.
+    generated_files = {
+        "episode-plan.json", "narration.txt", "digital-edge-lab-pilot.mp4",
+        "contact-sheet.jpg", "run-report.json", "channel-memory.json",
+        "diagnostics.json",
+    }
     for stale in OUT.iterdir():
-        if stale.is_file() and stale.name != ".gitkeep":
+        if stale.is_file() and stale.name in generated_files:
             stale.unlink()
     return OUT / "render", OUT / "cards", OUT / "delivery"
 
@@ -529,11 +593,18 @@ def main(argv=None):
     parser.add_argument("--fallback-plan",
                         help="checked-in plan used only when the API is unavailable; the "
                              "report is then labelled degraded, never generated")
+    parser.add_argument("--topic", help="requested topic for generated episode (requires Gemini)")
+    parser.add_argument("--series-id", help="stable series ID for QA-gated story memory")
+    parser.add_argument("--episode-id", help="stable episode ID for duplicate prevention")
     parser.add_argument("--keep-output", action="store_true")
     args = parser.parse_args(argv)
 
     if args.offline and not args.plan:
         fail("--offline requires --plan")
+    if args.offline and args.topic:
+        fail("--topic requires generated mode; offline mode only accepts a checked-in --plan")
+    if args.series_id and not args.episode_id:
+        fail("--series-id requires --episode-id so episode memory remains idempotent")
 
     work, cards_dir, delivery = prepare_dirs()
     diagnostics = Diagnostics(OUT / "diagnostics.json")
@@ -550,8 +621,10 @@ def main(argv=None):
     print("Digital Edge Lab: building one pilot episode (not publishing).", flush=True)
 
     memory_file = ROOT / "memory" / "channel-memory.json"
+    from channel_memory import ChannelMemory
+    memory_store = ChannelMemory(memory_file)
     try:
-        memory = json.loads(memory_file.read_text(encoding="utf-8"))
+        memory = memory_store.load()
     except (OSError, json.JSONDecodeError):
         memory = {"persona": "Edge", "channel_name": "Digital Edge Lab",
                   "recent_topics": [], "running_context": [], "principles": []}
@@ -567,7 +640,8 @@ def main(argv=None):
 
     degraded = None
     try:
-        episode = load_plan(args.plan) if args.plan else generate_episode(client, memory, diagnostics)
+        episode = load_plan(args.plan) if args.plan else generate_episode(
+            client, memory, diagnostics, requested_topic=args.topic, series_id=args.series_id)
     except (RuntimeError, GeminiError) as exc:
         if args.plan or not args.fallback_plan:
             fail(f"plan generation failed: {exc}", diagnostics)
@@ -686,6 +760,12 @@ def main(argv=None):
         "degraded": degraded,
         "title": episode["title"],
         "topic": episode["topic"],
+        "summary": " ".join(episode["narration"].split())[:1200],
+        "hook": episode["beats"][0].get("narration", ""),
+        "ending": episode["beats"][-1].get("narration", ""),
+        "characters": [{"label": scene.get("subject", {}).get("label", ""),
+                        "kind": scene.get("subject", {}).get("kind", "")}
+                       for scene in episode.get("scenes", [])][:12],
         "origin": episode["origin"],
         "scene_count": len(episode["scenes"]),
         "narration": {
@@ -706,7 +786,7 @@ def main(argv=None):
         "gates": gates,
         "failed_gates": failed_gates,
         "video_file": final.name,
-        "publishing": {"youtube": "not_implemented", "tiktok": "not_implemented"},
+        "publishing": {"youtube": "private_upload_tool_available_requires_oauth", "tiktok": "manual_upload_package_available_direct_post_requires_authorization"},
         "editorial_review": {
             "source_claim_support": "HUMAN_REVIEW_REQUIRED",
             "publication_ready": False,
@@ -764,6 +844,19 @@ def main(argv=None):
         fail("delivery rejected by QA: " + ", ".join(failed_gates), diagnostics)
     diagnostics.set("run", dict(diagnostics.data["run"], status=report["status"],
                                  degraded=bool(degraded)))
+
+    # Structured story state is committed only after every delivery QA gate passed.
+    if args.episode_id:
+        try:
+            current_memory = memory_store.load()
+            if args.episode_id not in current_memory.get("episodes", {}):
+                memory_store.create_episode(args.episode_id, title=episode["title"],
+                                            topic=episode["topic"], series_id=args.series_id)
+            memory_store.complete_episode(args.episode_id, report)
+            print(f"[memory] committed QA-passed episode {args.episode_id}", flush=True)
+        except Exception as exc:
+            fail(f"delivery passed but structured story memory could not be committed: {exc}",
+                 diagnostics)
 
     # Candidate narrator memory is written only after every gate passed.
     candidate = dict(memory)
