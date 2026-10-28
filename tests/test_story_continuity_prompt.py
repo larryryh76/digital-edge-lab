@@ -29,6 +29,15 @@ class StoryContinuityPromptTests(unittest.TestCase):
         self.assertNotIn("Unrelated ocean note", prompt)
         self.assertIn("grounded research notes", prompt)
 
+    def test_prompt_enforces_human_spoken_pacing_and_a_causal_story(self):
+        prompt = pipeline.script_prompt({"recent_topics": [], "running_context": [],
+                                         "channel": {}, "episodes": {}, "research": []})
+        self.assertIn("90-115 spoken words total", prompt)
+        self.assertIn("145-160 words per minute", prompt)
+        self.assertIn("one human storyteller", prompt)
+        self.assertIn("punctuation that gives a voice room to breathe", prompt)
+        self.assertIn("Never include stage directions", prompt)
+
     def test_completed_episode_facts_are_included_in_bounded_prompt(self):
         memory = {
             "recent_topics": [{"topic": "Old topic"}],
