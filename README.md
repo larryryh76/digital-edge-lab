@@ -17,8 +17,8 @@ Digital Edge Lab is a zero-budget-first production workflow for original faceles
 | Source URL reachability | Automated partial check | HTTP reachability is not evidence that a source supports a claim; human fact-checking remains required. |
 | Transactional narrator memory | Implemented in pipeline ordering | Candidate memory is written only after render/media QA; workflow commits it only after successful job completion. |
 | Failure diagnostics | Implemented; verify on each failed run | Failure artifact upload is guarded with `always()` and includes available output/log files. |
-| YouTube OAuth/upload/scheduling/analytics | Not implemented | Owner account authorization and private upload testing are separate future milestones. |
-| TikTok authorization/upload/scheduling/analytics | Not implemented | Developer access and platform approval are not verified. |
+| YouTube OAuth/private upload | Optional official API publisher implemented; live OAuth/account upload not verified | Requires owner-provided OAuth setup and a private-upload test. Scheduling and analytics are not verified. |
+| TikTok publishing | Manual upload package implemented; direct posting requires approved API access and is not live-tested | Developer access, account authorization, and platform approval are not verified. |
 | Automatic weekly production at publish quality | Not yet production-ready | A successful render does not replace manual visual, factual, narration and caption review. |
 
 ## Required account setup
@@ -42,7 +42,7 @@ Digital Edge Lab is a zero-budget-first production workflow for original faceles
 3. Complete the platform's authorization flow and any required audit. Direct posting availability is controlled by TikTok; credentials alone do not guarantee unrestricted posting.
 4. Test in the platform's allowed test/private mode before scheduling public posts.
 
-**Important:** YouTube and TikTok publishing are not enabled in this repository yet. Account login, OAuth consent, app approval, and any account verification must be completed by the account owner. Do not send passwords or API keys in chat.
+**Important:** Publishing modules are present, but live account authorization and platform posting have not been verified. YouTube must remain private-first; TikTok direct posting remains blocked until the required API approval and creator authorization exist. Account login, OAuth consent, app approval, and any account verification must be completed by the account owner. Do not send passwords or API keys in chat.
 
 ## Run the pilot
 
@@ -80,3 +80,8 @@ The 3D renderer is an early-stage procedural renderer, not a replacement for a f
 - Add synthetic/altered-media disclosures when required.
 - Avoid repetitive mass-produced videos; each episode must have a distinct idea, real explanatory value, and meaningful editorial review.
 - Do not enable paid services or billing without explicit approval.
+
+
+## Local AI operator
+
+See [OPERATOR_SETUP.md](OPERATOR_SETUP.md) for the loopback-only operator API, persistent job state, safe tool-calling, and publishing setup boundaries. The operator reports real job stages and blockers; it does not claim public uploads unless the platform confirms them.
