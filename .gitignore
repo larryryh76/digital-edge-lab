@@ -4,3 +4,9 @@ __pycache__/
 .venv/
 output/*
 !output/.gitkeep
+
+# Local OAuth credentials and persistent operator state
+secrets/
+output/operator.sqlite3*
+output/publishing/
+memory/*.bak
