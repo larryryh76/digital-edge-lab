@@ -303,7 +303,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ runner.temp }}/piper-voice
-          key: piper-en-us-lessac-medium-v1
+          key: piper-en-us-ryan-medium-v1
 
       - name: Install local neural voice and fonts
         timeout-minutes: 8
@@ -318,15 +318,15 @@ jobs:
           python -m pip install --disable-pip-version-check piper-tts
           VOICE_DIR="${{ runner.temp }}/piper-voice"
           mkdir -p "$VOICE_DIR"
-          if [ ! -s "$VOICE_DIR/en_US-lessac-medium.onnx" ] || [ ! -s "$VOICE_DIR/en_US-lessac-medium.onnx.json" ]; then
+          if [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx" ] || [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx.json" ]; then
             curl -fL --retry 2 --connect-timeout 15 --max-time 180 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx" \
-              -o "$VOICE_DIR/en_US-lessac-medium.onnx"
+              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx" \
+              -o "$VOICE_DIR/en_US-ryan-medium.onnx"
             curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json" \
-              -o "$VOICE_DIR/en_US-lessac-medium.onnx.json"
+              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json" \
+              -o "$VOICE_DIR/en_US-ryan-medium.onnx.json"
           fi
-          echo "PIPER_MODEL=$VOICE_DIR/en_US-lessac-medium.onnx" >> "$GITHUB_ENV"
+          echo "PIPER_MODEL=$VOICE_DIR/en_US-ryan-medium.onnx" >> "$GITHUB_ENV"
           command -v piper
           espeak-ng --version | head -1
 
@@ -393,10 +393,13 @@ jobs:
         run: |
           requested="${REQUESTED_MODE:-}"
           if [ -z "$requested" ]; then
-            # Pull-request and push builds verify the engine deterministically; the
-            # generated path (Gemini script + hosted voice) runs on dispatch/nightly.
+            # Pull requests stay deterministic and fast. Main pushes use Gemini's hosted
+            # male voice when the key exists; dispatch/nightly can also use generated mode.
             case "${GITHUB_EVENT_NAME}" in
               workflow_dispatch|schedule) requested=generated ;;
+              push)
+                if [ -n "${GEMINI_API_KEY:-}" ]; then requested=generated; else requested=offline; fi
+                ;;
               *) requested=offline ;;
             esac
           fi
