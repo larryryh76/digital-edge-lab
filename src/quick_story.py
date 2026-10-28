@@ -57,6 +57,13 @@ EDITORIAL RULES:
 - Make complex AI/technology concepts understandable through a vivid, concrete story.
 - Never invent statistics, sources, product tests, personal experience, or guaranteed income claims.
 - No generic intro. Hook viewers in the first 1–2 seconds. Every scene must advance the story.
+- Optimize delivery, rhythm, emphasis, concise writing, and reveal timing—not just plot detail.
+- Open with a concrete consequence or visual contradiction and one clear unanswered question.
+- Make each beat perform a distinct job: hook, orient, escalate, explain, demonstrate, reveal, payoff. No repeated facts or filler.
+- Vary sentence length so the narration has a human cadence: short impact lines mixed with occasional explanatory lines. Use contractions and concrete verbs; remove article-like phrasing, jargon, redundant adjectives, and generic transitions.
+- Build curiosity fairly. Do not reveal the central answer in the hook; place the full reveal around 70–85% of the runtime, after two or three meaningful steps. Reserve the ending for why the reveal matters.
+- Write for spoken delivery at roughly 145–160 words per minute, with a short pause after the hook and a clean beat before the reveal. Do not pad to fill time.
+- Make emphasis emerge from word choice, contrast, and sentence structure; never place spoken stage directions inside narration.
 - Create an original, coherent mini-story suitable for a polished cinematic 3D animated vertical video.
 RECENT TOPICS TO AVOID REPEATING:
 {recent_text}
