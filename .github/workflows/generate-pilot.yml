@@ -220,7 +220,7 @@ jobs:
         run: python tests/render_smoke.py
 
   pilot:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     permissions:
       contents: write
     name: Render and verify one complete pilot
