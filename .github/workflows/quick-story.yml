@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: digital-edge-lab-quick-story
-  cancel-in-progress: false
+  group: digital-edge-lab-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate-code:

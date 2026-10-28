@@ -30,11 +30,12 @@ on:
     - cron: "0 10 * * *"
 
 concurrency:
-  group: digital-edge-lab-${{ github.ref }}
-  cancel-in-progress: false
+  # Only the newest run for a given workflow/ref should consume a runner.
+  group: digital-edge-lab-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -47,34 +48,39 @@ env:
   DEL_RENDER_PHASE_BUDGET_SECONDS: "2700"
 
 jobs:
-  free-pilot:
-    name: Fast $0 animated MP4 pilot (no Blender or API)
+  fast-tests:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
+    name: Fast Python tests (no Blender bootstrap)
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Install FFmpeg, local narration, and fonts
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng fonts-dejavu-core
-      - name: Install Pillow
-        run: python -m pip install --disable-pip-version-check "Pillow>=10.0.0"
-      - name: Compile free engine
-        run: python -m py_compile scripts/free_video_engine.py
-      - name: Render first real vertical video
-        run: python scripts/free_video_engine.py
-      - name: Upload actual MP4 and QA report
-        uses: actions/upload-artifact@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: digital-edge-lab-first-free-video
-          path: output/video/*
-          if-no-files-found: error
-          retention-days: 14
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install FFmpeg required by narration tests
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+      - name: Install Python dependencies
+        timeout-minutes: 5
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Compile and run offline unit tests
+        run: |
+          set -euo pipefail
+          python -m compileall -q src tests
+          python -m unittest discover -s tests -v
 
   verify:
-    name: Offline checks and renderer smoke test
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    name: Full renderer certification (manual or scheduled only)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -214,6 +220,9 @@ jobs:
         run: python tests/render_smoke.py
 
   pilot:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    permissions:
+      contents: write
     name: Render and verify one complete pilot
     needs: verify
     runs-on: ubuntu-latest
