@@ -230,7 +230,17 @@ Storytelling must feel like one human storyteller guiding the viewer through a d
 3. Build a causal chain: each beat should make the next beat necessary.
 4. Use one concrete analogy or example that the visuals can actually demonstrate.
 5. Deliver a precise reveal, then finish with a short memorable payoff that answers the opening question.
-Use natural spoken English: contractions where appropriate, varied sentence length, clear subject-verb phrasing, and punctuation that gives a voice room to breathe. Write for the ear, not the page. Avoid generic intros, rhetorical filler, repeated restatements, breathless clauses, fake suspense, lists disguised as narration, and phrases like “imagine this,” “here’s the thing,” or “what if I told you.” Avoid awkward abbreviations and strings of numbers; spell numbers out when that makes speech clearer. Every line must sound natural when read aloud in isolation and connect smoothly to the previous line. Never include stage directions, voice instructions, sound cues, or camera instructions in narration text.
+DELIVERY, RHYTHM, EMPHASIS, AND REVEAL TIMING ARE HARD EDITORIAL REQUIREMENTS:
+- Write like a skilled human short-form science storyteller: direct, vivid, conversational, confident, and curious—not a formal article, announcer, or generic AI voice.
+- Start with the consequence or visual contradiction, not background. The first spoken line should be short enough to land immediately and create one specific unanswered question.
+- Use deliberate rhythm: alternate compact impact lines with one slightly longer explanatory line; avoid making every beat the same sentence length. Use commas only for natural breath groups, em dashes sparingly, and full stops where a clean pause helps.
+- Give the narrator clear emphasis targets through word choice and sentence structure. Put the important contrast or concrete noun near the end of a sentence; do not add bracketed delivery directions because those may be spoken aloud.
+- Make each beat do one job: hook, orient, escalate, explain, demonstrate, reveal, consequence/payoff. No beat may merely repeat the previous beat in new words.
+- Protect the reveal: establish the question early, add two or three meaningful steps, and deliver the actual answer around 70–85% of the runtime—not in the opening and not so late that the ending feels rushed. The final beat should explain why the reveal matters in one memorable line.
+- Use concise spoken language. Remove throat-clearing, redundant adjectives, generic transitions, over-explaining, and filler such as “imagine this,” “here’s the thing,” or “what if I told you.” Prefer concrete verbs and everyday words over jargon.
+- Rhythm target: roughly 145–160 words per minute overall, but allow brief pauses after the hook and immediately before the reveal. Do not pad narration to fill time; let the visual action and short pauses carry the moment.
+- Every line must sound natural when read aloud and connect smoothly to the previous line. Mentally speak the entire script from start to finish and revise any line that is awkward, monotonous, too dense, or gives away the answer too early.
+- Never include stage directions, voice instructions, sound cues, or camera instructions in narration text.
 
 You write a *typed* scene plan that a 3D renderer can actually build. The renderer has a fixed
 catalogue. You must choose from it exactly; scenes are rejected if they do not match.
