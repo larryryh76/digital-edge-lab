@@ -698,6 +698,56 @@ def main(argv=None):
     scene_reports, mid_frames = [], {}
     for scene, window, trace, segment in zip(episode["scenes"], windows, traces, segments):
         report = media_qa.evaluate_scene(scene, window, segment, trace, scene_spec)
+        # One bounded, automatic visual repair retry per failed scene. Preserve the
+        # action and QA thresholds; increase its visual prominence and camera push-in,
+        # then rerender only this scene instead of paying to render the whole episode.
+        if not report["passed"]:
+            original_intensity = scene["action"].get("intensity", 0.7)
+            original_move = scene["camera"].get("move", "push_in")
+            original_framing = scene["camera"].get("framing", "medium")
+            framing_order = ["extreme_close_up", "close_up", "medium", "wide"]
+            try:
+                scene["action"]["intensity"] = 1.0
+                scene["camera"]["move"] = "push_in"
+                if original_framing in framing_order:
+                    scene["camera"]["framing"] = framing_order[max(
+                        0, framing_order.index(original_framing) - 1)]
+                print(f"[qa-repair] scene {scene['index'] + 1} failed; "
+                      "retrying once with stronger subject motion and tighter framing", flush=True)
+                retry_deadline = time.monotonic() + 300
+                retry_clip, retry_trace = render_scene(
+                    episode, scene, window, work, diagnostics,
+                    cancel_event=None, deadline=retry_deadline)
+                retry_final = work / f"final_segment_{scene['index']:02d}.mp4"
+                cards = narration_mod.caption_cards(window["narration"], window["duration"])
+                encode_segment(retry_clip, cards, window["duration"], retry_final, work,
+                               timeout_seconds=240)
+                retry_report = media_qa.evaluate_scene(
+                    scene, window, retry_final, retry_trace, scene_spec)
+                diagnostics.append("scene_qa_retry", {
+                    "scene_index": scene["index"], "first_failures": report.get("failures", []),
+                    "retry_passed": retry_report.get("passed", False),
+                    "retry_failures": retry_report.get("failures", [])})
+                if retry_report["passed"]:
+                    report, trace, segment = retry_report, retry_trace, retry_final
+                    segments[scene["index"]] = retry_final
+                    traces[scene["index"]] = retry_trace
+                    print(f"[qa-repair] scene {scene['index'] + 1} passed on retry", flush=True)
+                else:
+                    print(f"[qa-repair] scene {scene['index'] + 1} still fails after retry: "
+                          f"{retry_report.get('failures', [])}", flush=True)
+                    report = retry_report
+                    segment = retry_final
+            except Exception as retry_exc:
+                diagnostics.append("scene_qa_retry", {
+                    "scene_index": scene["index"], "retry_passed": False,
+                    "retry_error": str(retry_exc)[:1200]})
+                print(f"[qa-repair] scene {scene['index'] + 1} retry failed: {retry_exc}",
+                      flush=True)
+            finally:
+                scene["action"]["intensity"] = original_intensity
+                scene["camera"]["move"] = original_move
+                scene["camera"]["framing"] = original_framing
         scene_reports.append(report)
         midpoint = window["duration"] / 2
         mid_frames[scene["index"]] = media_qa.extract_frame(
