@@ -483,8 +483,32 @@ def render_episode(episode, windows, work, diagnostics):
                 f"scene {scene['index'] + 1}: no render budget remains")
         print(f"[render] scene {scene['index'] + 1}/{len(episode['scenes'])} "
               f"{scene_spec.template_id(scene)} ({window['duration']:.2f}s)", flush=True)
-        clip, trace = render_scene(episode, scene, window, work, diagnostics,
-                                   cancel_event=cancel_event, deadline=deadline)
+        try:
+            clip, trace = render_scene(episode, scene, window, work, diagnostics,
+                                       cancel_event=cancel_event, deadline=deadline)
+        except Exception as first_render_error:
+            # Recover once from transient Blender/process failures before failing the
+            # episode. Keep the repair bounded by the same shared render deadline.
+            if time.monotonic() + 20 >= deadline:
+                raise
+            original_intensity = scene["action"].get("intensity", 0.7)
+            original_move = scene["camera"].get("move", "push_in")
+            original_framing = scene["camera"].get("framing", "medium")
+            framing_order = ["extreme_close_up", "close_up", "medium", "wide"]
+            try:
+                scene["action"]["intensity"] = 1.0
+                scene["camera"]["move"] = "push_in"
+                if original_framing in framing_order:
+                    scene["camera"]["framing"] = framing_order[max(
+                        0, framing_order.index(original_framing) - 1)]
+                print(f"[render-retry] scene {scene['index'] + 1} failed once; "
+                      f"retrying with stronger subject framing: {first_render_error}", flush=True)
+                clip, trace = render_scene(episode, scene, window, work, diagnostics,
+                                           cancel_event=cancel_event, deadline=deadline)
+            finally:
+                scene["action"]["intensity"] = original_intensity
+                scene["camera"]["move"] = original_move
+                scene["camera"]["framing"] = original_framing
         cards = narration_mod.caption_cards(window["narration"], window["duration"])
         final = work / f"final_segment_{scene['index']:02d}.mp4"
         if final.exists():
