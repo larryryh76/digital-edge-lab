@@ -151,6 +151,11 @@ class WorkflowContractTests(unittest.TestCase):
     def setUp(self):
         self.text = WORKFLOW.read_text(encoding="utf-8")
 
+    def test_main_push_uses_full_certification_without_duplicate_fast_runner(self):
+        self.assertIn("if: github.event_name == 'pull_request'\n    name: Fast Python tests", self.text)
+        self.assertIn("name: Full renderer certification", self.text)
+        self.assertIn("name: Render and verify one complete pilot", self.text)
+
     def test_failure_artifact_is_uploaded_regardless_of_success_report(self):
         self.assertRegex(self.text, r"if:\s*\$\{\{\s*failure\(\)[^}]*\}\}")
         self.assertIn("output/**", self.text)
