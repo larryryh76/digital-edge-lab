@@ -56,6 +56,10 @@ def main():
             "lighting": {"mood": "cool"},
             "on_screen_text": "SMOKE",
         }, i, {"b1"})
+        # Longer shots for the previously failing treatments expose end-of-shot
+        # freezes that a 2.75s smoke clip would never exercise.
+        shot_seconds = 8.0 if action == "expand" else (6.0 if subject == "balance_scale" else SECONDS)
+        shot_frames = int(round(shot_seconds * 24))
         spec_path = work / f"scene_{i:02d}.json"
         spec_path.write_text(json.dumps(scene), encoding="utf-8")
         out = work / f"segment_{i:02d}.mp4"
@@ -67,7 +71,7 @@ def main():
                 [blender, "-b", "-t", "2", "--python-exit-code", "1",
                  "--python", str(ROOT / "src" / "blender_scene.py"),
                  "--", str(spec_path), str(out), str(i), str(len(SCENES)),
-                 f"{SECONDS:.3f}"],
+                 f"{shot_seconds:.3f}"],
                 stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=900,
                 env=dict(os.environ, LIBGL_ALWAYS_SOFTWARE="1",
                          GALLIUM_DRIVER="llvmpipe"))
@@ -77,8 +81,8 @@ def main():
             failures.append(f"{subject}/{action}: blender exit {result.returncode}\n"
                             + log_tail[-2500:])
             continue
-        print(f"[smoke] rendered {frames} frames in {elapsed:.1f}s "
-              f"({elapsed / max(frames, 1):.2f}s/frame)", flush=True)
+        print(f"[smoke] rendered {shot_frames} frames in {elapsed:.1f}s "
+              f"({elapsed / max(shot_frames, 1):.2f}s/frame)", flush=True)
         produced = sorted(out.parent.glob(out.stem + "*.mp4"))
         if len(produced) != 1:
             failures.append(f"{subject}/{action}: expected one mp4, got "
@@ -92,8 +96,8 @@ def main():
             failures.append(f"{subject}/{action}: no visual trace")
             continue
         trace = json.loads(trace_path.read_text(encoding="utf-8"))
-        window = {"index": i, "start": 0.0, "end": SECONDS, "duration": SECONDS,
-                  "frames": frames, "narration": "smoke test line"}
+        window = {"index": i, "start": 0.0, "end": shot_seconds, "duration": shot_seconds,
+                  "frames": shot_frames, "narration": "smoke test line"}
         report = media_qa.evaluate_scene(scene, window, out, trace, scene_spec)
         status = "PASS" if report["passed"] else "FAIL"
         print(f"[smoke] {subject}/{action} {status} "
