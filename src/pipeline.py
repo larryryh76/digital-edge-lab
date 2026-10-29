@@ -530,6 +530,10 @@ def render_episode(episode, windows, work, diagnostics):
                 scene["action"]["intensity"] = original_intensity
                 scene["camera"]["move"] = original_move
                 scene["camera"]["framing"] = original_framing
+                if original_repair_profile is None:
+                    scene["action"].pop("repair_profile", None)
+                else:
+                    scene["action"]["repair_profile"] = original_repair_profile
         cards = narration_mod.caption_cards(window["narration"], window["duration"])
         final = work / f"final_segment_{scene['index']:02d}.mp4"
         if final.exists():
@@ -747,22 +751,43 @@ def main(argv=None):
     scene_reports, mid_frames = [], {}
     for scene, window, trace, segment in zip(episode["scenes"], windows, traces, segments):
         report = media_qa.evaluate_scene(scene, window, segment, trace, scene_spec)
-        # One bounded, automatic visual repair retry per failed scene. Preserve the
-        # action and QA thresholds; increase its visual prominence and camera push-in,
-        # then rerender only this scene instead of paying to render the whole episode.
+        # One bounded, failure-specific repair retry. Do not weaken QA thresholds:
+        # select a correction from the failed measurement, preserve the original
+        # scene, and record the exact profile so recurring failures can be fixed in
+        # the renderer rather than hidden by a generic retry.
         if not report["passed"]:
             original_intensity = scene["action"].get("intensity", 0.7)
             original_move = scene["camera"].get("move", "push_in")
             original_framing = scene["camera"].get("framing", "medium")
+            original_repair_profile = scene["action"].get("repair_profile")
+            failures_text = " ".join(str(x).lower() for x in report.get("failures", []))
             framing_order = ["extreme_close_up", "close_up", "medium", "wide"]
-            try:
+            if any(word in failures_text for word in ("rotation", "shrink", "growth", "travel", "displacement", "part", "deform", "flatten", "position")):
+                repair_profile = "action_amplitude"
                 scene["action"]["intensity"] = 1.0
-                scene["camera"]["move"] = "push_in"
+                scene["camera"]["move"] = "static"
                 if original_framing in framing_order:
-                    scene["camera"]["framing"] = framing_order[max(
-                        0, framing_order.index(original_framing) - 1)]
+                    scene["camera"]["framing"] = framing_order[max(0, framing_order.index(original_framing) - 1)]
+            elif any(word in failures_text for word in ("frozen", "unchanged", "motion energy", "static")):
+                repair_profile = "temporal_motion"
+                scene["action"]["intensity"] = 1.0
+                scene["camera"]["move"] = "orbit"
+                scene["camera"]["framing"] = "close_up"
+            elif any(word in failures_text for word in ("camera-only", "background", "screen travel")):
+                repair_profile = "subject_prominence"
+                scene["action"]["intensity"] = 1.0
+                scene["camera"]["move"] = "static"
+                scene["camera"]["framing"] = "extreme_close_up"
+            else:
+                repair_profile = "action_amplitude"
+                scene["action"]["intensity"] = 1.0
+                scene["camera"]["move"] = "static"
+                if original_framing in framing_order:
+                    scene["camera"]["framing"] = framing_order[max(0, framing_order.index(original_framing) - 1)]
+            scene["action"]["repair_profile"] = repair_profile
+            try:
                 print(f"[qa-repair] scene {scene['index'] + 1} failed; "
-                      "retrying once with stronger subject motion and tighter framing", flush=True)
+                      f"profile={repair_profile}; failures={report.get('failures', [])}; retrying once", flush=True)
                 retry_deadline = time.monotonic() + 300
                 retry_clip, retry_trace = render_scene(
                     episode, scene, window, work, diagnostics,
