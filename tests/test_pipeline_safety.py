@@ -193,5 +193,46 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(len(plan["beats"]), len(plan["scenes"]))
 
 
+
+class ProductionContractTests(unittest.TestCase):
+    def test_fallback_plan_does_not_skip_hosted_tts_attempt(self):
+        # Plan generation and TTS are independent services; preserve the preferred voice.
+        plan_fallback = PIPELINE.index("episode = load_plan(args.fallback_plan)")
+        hosted_narration = PIPELINE.index("wav, windows, narration_report = narrate(args.offline)")
+        local_fallback = PIPELINE.index("wav, windows, narration_report = narrate(True)")
+        self.assertLess(plan_fallback, hosted_narration)
+        self.assertLess(hosted_narration, local_fallback)
+        self.assertIn("Hosted narration will still be attempted", PIPELINE)
+
+    def test_degraded_delivery_does_not_claim_espeak_when_engine_may_differ(self):
+        self.assertIn("Narration engine:", PIPELINE)
+        self.assertIn("narration_report.get('engine', 'unknown')", PIPELINE)
+        self.assertNotIn("narration uses the \"local espeak voice\"", PIPELINE)
+
+    def test_fallback_plan_meets_short_form_narration_word_budget(self):
+        plan = json.loads((ROOT / "plans" / "quantization-on-device.json")
+                          .read_text(encoding="utf-8"))
+        counts = [len(beat["narration"].split()) for beat in plan["beats"]]
+        total = sum(counts)
+        self.assertGreaterEqual(len(counts), 6)
+        self.assertTrue(all(10 <= count <= 19 for count in counts), counts)
+        self.assertGreaterEqual(total, 90)
+        self.assertLessEqual(total, 115)
+        # 90–115 words at 145–160 WPM is roughly 34–48 seconds before scene tails;
+        # the actual rendered audio duration is measured and gated separately.
+
+    def test_timing_and_render_budgets_remain_bounded(self):
+        self.assertIn('DEL_RENDER_PHASE_BUDGET_SECONDS: "900"', 
+                      WORKFLOW.read_text(encoding="utf-8"))
+        self.assertIn("RENDER_PHASE_BUDGET_SECONDS = int(os.getenv", PIPELINE)
+        self.assertIn("deadline=retry_deadline", PIPELINE)
+        self.assertIn("retry_deadline = time.monotonic() + 300", PIPELINE)
+
+    def test_quality_gates_reject_bad_media_instead_of_silent_delivery(self):
+        self.assertIn('if failed_gates:', PIPELINE)
+        self.assertIn('fail("delivery rejected by QA: "', PIPELINE)
+        self.assertIn('"narrated_audio_present": narration_report["total_seconds"] > 20', PIPELINE)
+        self.assertIn("mean_volume_db", (ROOT / "src" / "narration.py").read_text(encoding="utf-8"))
+
 if __name__ == "__main__":
     unittest.main()
