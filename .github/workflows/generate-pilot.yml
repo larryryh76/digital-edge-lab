@@ -32,9 +32,9 @@ on:
 concurrency:
   # Only the newest run for a given workflow/ref should consume a runner.
   group: digital-edge-lab-${{ github.workflow }}-${{ github.ref }}
-  # Cancel superseded PR checks, but never kill a main-branch pilot/certification run
-  # just because another commit or scheduled event arrives.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Cancel stale push/manual runs when a newer commit supersedes them; keep scheduled
+  # production runs stable so they are not interrupted by unrelated events.
+  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
