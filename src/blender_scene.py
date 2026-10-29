@@ -705,32 +705,54 @@ def act_fall(ctx):
 
 
 def act_collide(ctx):
+    # A collision is a short, unmistakable action: approach, impact, recoil,
+    # and settle. Do not multiply the starting X coordinate: centred subjects
+    # have x == 0, which previously produced a mathematically static hero.
     hero = ctx.mover
     others = [o for o in ctx.studio.objects
               if o is not hero and o.name.startswith(("block_a", "slab_right", "mountain_voxel",
                                                        "pipe_merged", "node_satellite"))]
     partner = others[0] if others else None
     if partner is None:
-        # Every collision needs a visible reaction: build the target it hits.
         partner = ctx.add(ctx.studio.box(
-            "collision_target", (hero.location.x * 0.35, hero.location.y,
+            "collision_target", (hero.location.x + 0.72, hero.location.y,
                                  hero.location.z), (1.1, 0.9, 1.0),
             ctx.mats["steel"], 0.05), part=None)
     start = hero.location.copy()
-    key(hero, "location", ctx.start, (start.x * 1.9, start.y, start.z))
-    key(hero, "location", int(ctx.end * 0.55), (start.x * 0.95, start.y, start.z))
-    key(hero, "location", ctx.end, (start.x * 0.55, start.y, start.z))
+    # Absolute offsets guarantee meaningful travel regardless of the builder's
+    # initial position. Six beats keep motion visible throughout long shots.
+    checkpoints = [
+        (0.00, (start.x - 0.78, start.y, start.z), 0.0, 1.0),
+        (0.18, (start.x - 0.28, start.y, start.z + 0.08), 7.0, 1.0),
+        (0.36, (start.x + 0.38, start.y, start.z + 0.02), -11.0, 1.10),
+        (0.49, (start.x + 0.12, start.y, start.z - 0.08), 15.0, 0.86),
+        (0.70, (start.x + 0.58, start.y, start.z + 0.10), -8.0, 1.04),
+        (1.00, (start.x + 0.30, start.y, start.z), 0.0, 1.0),
+    ]
+    for progress, location, angle, scale in checkpoints:
+        frame = ctx.start + int((ctx.end - ctx.start) * progress)
+        key(hero, "location", frame, location)
+        key(hero, "rotation_euler", frame,
+            (hero.rotation_euler.x, hero.rotation_euler.y, math.radians(angle)))
+        key(hero, "scale", frame, (scale, scale, scale))
     if partner is not None:
         pstart = partner.location.copy()
-        key(partner, "location", int(ctx.end * 0.6), (pstart.x, pstart.y, pstart.z))
-        key(partner, "location", int(ctx.end * 0.75), (pstart.x + 0.22, pstart.y, pstart.z))
-        key(partner, "location", ctx.end, (pstart.x + 0.06, pstart.y, pstart.z))
-        key(partner, "rotation_euler", ctx.end, (0, 0, math.radians(-9)))
-    spark = ctx.add(ctx.studio.sphere("collision_spark", (0, -0.5, 1.55), 0.16, ctx.mats["accent"]), part=None)
-    key(spark, "scale", ctx.start, (0.1, 0.1, 0.1))
-    key(spark, "scale", int(ctx.end * 0.62), (0.1, 0.1, 0.1))
-    key(spark, "scale", int(ctx.end * 0.74), (1.5, 1.5, 1.5))
-    key(spark, "scale", ctx.end, (0.0, 0.0, 0.0))
+        for progress, dx, dz, angle in (
+            (0.00, 0.0, 0.0, 0.0), (0.38, 0.0, 0.0, 0.0),
+            (0.50, 0.24, 0.10, -13.0), (0.72, 0.12, 0.02, 8.0),
+            (1.00, 0.18, 0.0, -5.0),
+        ):
+            frame = ctx.start + int((ctx.end - ctx.start) * progress)
+            key(partner, "location", frame,
+                (pstart.x + dx, pstart.y, pstart.z + dz))
+            key(partner, "rotation_euler", frame,
+                (partner.rotation_euler.x, partner.rotation_euler.y, math.radians(angle)))
+    spark = ctx.add(ctx.studio.sphere("collision_spark", (start.x + 0.2, -0.5, start.z), 0.16,
+                                      ctx.mats["accent"]), part=None)
+    for progress, scale in ((0.0, 0.01), (0.40, 0.01), (0.47, 1.6),
+                            (0.56, 0.3), (0.64, 1.0), (0.75, 0.01), (1.0, 0.01)):
+        frame = ctx.start + int((ctx.end - ctx.start) * progress)
+        key(spark, "scale", frame, (scale, scale, scale))
 
 
 def act_snap_to_grid(ctx):
