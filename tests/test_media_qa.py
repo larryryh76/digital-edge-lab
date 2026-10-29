@@ -83,7 +83,7 @@ class MotionTests(unittest.TestCase):
 class RendererMotionContractTests(unittest.TestCase):
     def test_expansion_animation_has_intermediate_motion_not_only_endpoints(self):
         source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
-        body = source.split("def act_expand(ctx):", 1)[1].split("\\ndef act_squeeze(ctx):", 1)[0]
+        body = source[source.index("def act_expand(ctx):"):source.index("def act_squeeze(ctx):")]
         self.assertIn("checkpoints =", body)
         self.assertIn("0.78", body)
         self.assertIn('key(hero, "location", frame', body)
@@ -91,7 +91,7 @@ class RendererMotionContractTests(unittest.TestCase):
 
     def test_balance_scale_animation_is_coupled_and_continuous(self):
         source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
-        body = source.split("def act_compare_pan(ctx):", 1)[1].split("\\nACTION_PROGRAMS =", 1)[0]
+        body = source[source.index("def act_compare_pan(ctx):"):source.index("ACTION_PROGRAMS =")]
         self.assertIn("scale_pan_left", body)
         self.assertIn("scale_pan_right", body)
         self.assertIn("scale_chain-1", body)
