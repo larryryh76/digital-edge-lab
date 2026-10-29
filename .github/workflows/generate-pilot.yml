@@ -53,8 +53,8 @@ env:
 
 jobs:
   fast-tests:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
-    name: Fast Python tests (no Blender bootstrap)
+    if: github.event_name == 'pull_request'
+    name: Fast Python tests (PR feedback; main pushes use full certification)
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
