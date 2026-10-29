@@ -84,9 +84,11 @@ jobs:
 
   verify:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    name: Full renderer certification (every main push, manual, or scheduled)
+    name: Full certification and verified pilot (single toolchain bootstrap)
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -172,6 +174,40 @@ jobs:
             espeak-ng fonts-dejavu-core
           espeak-ng --version | head -1
 
+      - name: Restore cached Piper voice model
+        id: piper-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/piper-voice
+          key: piper-en-us-ryan-medium-v1
+
+      - name: Install local neural voice and fonts
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          timeout 240 sudo apt-get $APT update
+          timeout 360 sudo apt-get $APT install -y --no-install-recommends \
+            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
+            espeak-ng fonts-dejavu-core
+          python -m pip install --disable-pip-version-check piper-tts
+          VOICE_DIR="${{ runner.temp }}/piper-voice"
+          mkdir -p "$VOICE_DIR"
+          if [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx" ] || [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx.json" ]; then
+            curl -fL --retry 2 --connect-timeout 15 --max-time 180 \
+              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx" \
+              -o "$VOICE_DIR/en_US-ryan-medium.onnx"
+            curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
+              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json" \
+              -o "$VOICE_DIR/en_US-ryan-medium.onnx.json"
+          fi
+          test -s "$VOICE_DIR/en_US-ryan-medium.onnx"
+          test -s "$VOICE_DIR/en_US-ryan-medium.onnx.json"
+          echo "PIPER_MODEL=$VOICE_DIR/en_US-ryan-medium.onnx" >> "$GITHUB_ENV"
+          command -v piper
+          espeak-ng --version | head -1
+
       - name: Resolve Blender runtime libraries
         timeout-minutes: 8
         run: |
@@ -222,158 +258,6 @@ jobs:
 
       - name: Renderer smoke test on real Blender output
         run: python tests/render_smoke.py
-
-  pilot:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
-    permissions:
-      contents: write
-    name: Render and verify one complete pilot
-    needs: verify
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-          cache-dependency-path: requirements.txt
-
-      - name: Restore cached FFmpeg
-        id: ffmpeg-cache
-        uses: actions/cache@v4
-        with:
-          path: /opt/ffmpeg
-          key: ffmpeg-7.0.2-static-amd64-v1
-
-      - name: Install pinned FFmpeg build
-        if: steps.ffmpeg-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 8
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if curl -sS --fail --connect-timeout 20 --max-time 300 \
-                -o /tmp/ffmpeg.tar.xz "$FFMPEG_STATIC_URL"; then
-              break
-            fi
-            echo "ffmpeg download attempt $attempt failed; retrying"
-            sleep 5
-          done
-          echo "$FFMPEG_STATIC_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c -
-          sudo mkdir -p /opt/ffmpeg
-          sudo tar -xJf /tmp/ffmpeg.tar.xz -C /opt/ffmpeg --strip-components=1
-          sudo ln -sf /opt/ffmpeg/ffmpeg /usr/local/bin/ffmpeg
-          sudo ln -sf /opt/ffmpeg/ffprobe /usr/local/bin/ffprobe
-          rm -f /tmp/ffmpeg.tar.xz
-
-      - name: Put pinned FFmpeg on PATH
-        run: |
-          set -euo pipefail
-          sudo ln -sf /opt/ffmpeg/ffmpeg /usr/local/bin/ffmpeg
-          sudo ln -sf /opt/ffmpeg/ffprobe /usr/local/bin/ffprobe
-          ffmpeg -version | head -1
-
-      - name: Restore cached Blender
-        id: blender-cache
-        uses: actions/cache@v4
-        with:
-          path: /opt/blender
-          key: blender-4.2.11-linux-x64
-
-      - name: Install pinned Blender
-        if: steps.blender-cache.outputs.cache-hit != 'true'
-        timeout-minutes: 10
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3; do
-            if curl -sS --fail --connect-timeout 20 --max-time 420 \
-                -o /tmp/blender.tar.xz "$BLENDER_URL"; then
-              break
-            fi
-            echo "blender download attempt $attempt failed; retrying"
-            sleep 5
-          done
-          sudo mkdir -p /opt/blender
-          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
-          rm -f /tmp/blender.tar.xz
-          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
-
-      - name: Restore cached Piper voice model
-        id: piper-cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/piper-voice
-          key: piper-en-us-ryan-medium-v1
-
-      - name: Install local neural voice and fonts
-        timeout-minutes: 8
-        run: |
-          set -euo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
-          timeout 240 sudo apt-get $APT update
-          timeout 360 sudo apt-get $APT install -y --no-install-recommends \
-            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-            espeak-ng fonts-dejavu-core
-          python -m pip install --disable-pip-version-check piper-tts
-          VOICE_DIR="${{ runner.temp }}/piper-voice"
-          mkdir -p "$VOICE_DIR"
-          if [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx" ] || [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx.json" ]; then
-            curl -fL --retry 2 --connect-timeout 15 --max-time 180 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx" \
-              -o "$VOICE_DIR/en_US-ryan-medium.onnx"
-            curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json" \
-              -o "$VOICE_DIR/en_US-ryan-medium.onnx.json"
-          fi
-          echo "PIPER_MODEL=$VOICE_DIR/en_US-ryan-medium.onnx" >> "$GITHUB_ENV"
-          command -v piper
-          espeak-ng --version | head -1
-
-      - name: Resolve Blender runtime libraries
-        timeout-minutes: 8
-        run: |
-          set -euo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
-          # EEVEE needs a working OpenGL context even in --background mode. The
-          # hosted image ships libGLX but no EGL loader or Mesa software driver,
-          # and Blender dlopen()s libEGL so ldd cannot discover the gap.
-          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
-          timeout 420 sudo apt-get $APT install -y --no-install-recommends \
-            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-            libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri libxkbcommon0 \
-            libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 libice6 libxext6 libgomp1 \
-            libxrandr2 libxinerama1
-          if ldd /opt/blender/blender | grep -q "not found"; then
-            ldd /opt/blender/blender | grep "not found"
-            echo "::error::Blender has unresolved shared libraries"
-            exit 1
-          fi
-          blender --version | head -1
-          # Fail here, with a clear message, if EEVEE cannot start its GPU backend.
-          rm -f /tmp/gpucheck_0001.png
-          LIBGL_ALWAYS_SOFTWARE=1 blender -b --factory-startup -E BLENDER_EEVEE_NEXT \
-            -o /tmp/gpucheck_ -F PNG -f 1 | tail -5
-          test -s /tmp/gpucheck_0001.png
-          echo "EEVEE background render OK ($(stat -c%s /tmp/gpucheck_0001.png) byte probe frame)"
-
-      - name: Verify render toolchain
-        run: |
-          set -euo pipefail
-          command -v ffmpeg
-          command -v ffprobe
-          command -v blender
-          command -v espeak-ng
-          ffmpeg -version | head -1
-          blender --version | head -1
-
-      - name: Install Python dependencies
-        timeout-minutes: 5
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
 
       - name: Record run context
         if: always()
@@ -479,3 +363,4 @@ jobs:
             !output/delivery/*.mp4
           if-no-files-found: warn
           retention-days: 14
+
