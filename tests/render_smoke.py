@@ -28,6 +28,7 @@ SCENES = [  # (subject, action) — include the two previously failing productio
     ("pipe_bundle", "collapse_to_one"),
     ("mountain_pair", "compare_pan"),
     ("balance_scale", "compare_pan"),
+    ("block_pair", "collide"),
 ]
 
 
