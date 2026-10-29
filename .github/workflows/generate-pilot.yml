@@ -32,7 +32,9 @@ on:
 concurrency:
   # Only the newest run for a given workflow/ref should consume a runner.
   group: digital-edge-lab-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Cancel superseded PR checks, but never kill a main-branch pilot/certification run
+  # just because another commit or scheduled event arrives.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -80,7 +82,7 @@ jobs:
           python -m unittest discover -s tests -v
 
   verify:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     name: Full renderer certification (manual or scheduled only)
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -221,7 +223,7 @@ jobs:
         run: python tests/render_smoke.py
 
   pilot:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     permissions:
       contents: write
     name: Render and verify one complete pilot
