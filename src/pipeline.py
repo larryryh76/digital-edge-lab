@@ -634,6 +634,20 @@ def prepare_dirs():
     return OUT / "render", OUT / "cards", OUT / "delivery"
 
 
+def visual_repair_profile(failures):
+    """Map measured QA failures to a bounded, explicit retry strategy."""
+    text = " ".join(str(item).lower() for item in failures)
+    if any(word in text for word in ("rotation", "shrink", "growth", "travel",
+                                     "displacement", "part", "deform", "flatten",
+                                     "position", "downward")):
+        return "action_amplitude"
+    if any(word in text for word in ("frozen", "unchanged", "motion energy", "static")):
+        return "temporal_motion"
+    if any(word in text for word in ("camera-only", "background", "screen travel")):
+        return "subject_prominence"
+    return "action_amplitude"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Digital Edge Lab pilot pipeline")
     parser.add_argument("--plan", help="checked-in JSON episode plan (deterministic)")
@@ -760,27 +774,18 @@ def main(argv=None):
             original_move = scene["camera"].get("move", "push_in")
             original_framing = scene["camera"].get("framing", "medium")
             original_repair_profile = scene["action"].get("repair_profile")
-            failures_text = " ".join(str(x).lower() for x in report.get("failures", []))
+            repair_profile = visual_repair_profile(report.get("failures", []))
             framing_order = ["extreme_close_up", "close_up", "medium", "wide"]
-            if any(word in failures_text for word in ("rotation", "shrink", "growth", "travel", "displacement", "part", "deform", "flatten", "position")):
-                repair_profile = "action_amplitude"
-                scene["action"]["intensity"] = 1.0
-                scene["camera"]["move"] = "static"
-                if original_framing in framing_order:
-                    scene["camera"]["framing"] = framing_order[max(0, framing_order.index(original_framing) - 1)]
-            elif any(word in failures_text for word in ("frozen", "unchanged", "motion energy", "static")):
-                repair_profile = "temporal_motion"
-                scene["action"]["intensity"] = 1.0
+            scene["action"]["intensity"] = 1.0
+            if repair_profile == "temporal_motion":
                 scene["camera"]["move"] = "orbit"
                 scene["camera"]["framing"] = "close_up"
-            elif any(word in failures_text for word in ("camera-only", "background", "screen travel")):
-                repair_profile = "subject_prominence"
-                scene["action"]["intensity"] = 1.0
+            elif repair_profile == "subject_prominence":
                 scene["camera"]["move"] = "static"
                 scene["camera"]["framing"] = "extreme_close_up"
             else:
-                repair_profile = "action_amplitude"
-                scene["action"]["intensity"] = 1.0
+                # Transform/action contract failed: keep the camera stable so
+                # measured subject motion, not camera motion, must recover.
                 scene["camera"]["move"] = "static"
                 if original_framing in framing_order:
                     scene["camera"]["framing"] = framing_order[max(0, framing_order.index(original_framing) - 1)]
