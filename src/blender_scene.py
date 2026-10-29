@@ -867,19 +867,59 @@ def act_scan(ctx):
 
 
 def act_reveal(ctx):
+    # A reveal must remain visibly in motion through the final frames. Endpoint-only
+    # Bezier keys ease to a stop and were causing a frozen tail in encoded clips.
     occluders = [o for o in ctx.studio.objects
                  if o.name.startswith(("slab_right", "shelf_frame", "book_hero"))]
     hero = ctx.mover
     occluder = next((o for o in occluders if o is not hero), None)
+    hero_loc = hero.location.copy()
+    hero_rot = hero.rotation_euler.copy()
+    blocker_loc = occluder.location.copy() if occluder is not None else None
+    blocker_rot = occluder.rotation_euler.copy() if occluder is not None else None
+    etches = [o for o in ctx.studio.objects if o.name.startswith("slab_etch")]
+    etch_origins = [(o, o.location.copy(), o.scale.copy()) for o in etches]
+    duration = max(1, ctx.end - ctx.start)
+    checkpoints = (0.0, 0.12, 0.24, 0.36, 0.48, 0.60, 0.72, 0.84, 1.0)
+    animated = [hero]
     if occluder is not None:
-        start = occluder.location.copy()
-        key(occluder, "location", ctx.start, (start.x, start.y, start.z))
-        key(occluder, "location", ctx.end, (start.x + 1.6, start.y, start.z))
-        key(occluder, "rotation_euler", ctx.end, (0, 0, math.radians(-18)))
-    key(hero, "location", ctx.start, (hero.location.x, hero.location.y, hero.location.z))
-    key(hero, "location", ctx.end, (hero.location.x, hero.location.y - 0.75,
-                                    hero.location.z + 0.12))
-    key(hero, "rotation_euler", ctx.end, (math.radians(12), 0, math.radians(18)))
+        animated.append(occluder)
+    animated.extend(etches)
+    for progress in checkpoints:
+        frame = min(ctx.end, ctx.start + int(duration * progress))
+        wave = math.sin(progress * math.tau * 1.5)
+        # The hero slab subtly counter-rotates and shifts, making the reveal a
+        # two-object interaction instead of relying on camera movement alone.
+        key(hero, "location", frame, (
+            hero_loc.x - 0.24 * progress,
+            hero_loc.y - 0.12 * progress,
+            hero_loc.z + 0.10 * math.sin(progress * math.pi)))
+        key(hero, "rotation_euler", frame, (
+            hero_rot.x + math.radians(5 * wave),
+            hero_rot.y + math.radians(4 * progress),
+            hero_rot.z + math.radians(10 * math.sin(progress * math.pi))))
+        if occluder is not None:
+            key(occluder, "location", frame, (
+                blocker_loc.x + 1.65 * progress,
+                blocker_loc.y,
+                blocker_loc.z + 0.10 * math.sin(progress * math.tau)))
+            key(occluder, "rotation_euler", frame, (
+                blocker_rot.x,
+                blocker_rot.y + math.radians(5 * wave),
+                blocker_rot.z + math.radians(-22 * progress + 4 * wave)))
+        for obj, origin, scale in etch_origins:
+            key(obj, "location", frame, (
+                origin.x - 0.24 * progress,
+                origin.y - 0.12 * progress,
+                origin.z + 0.10 * math.sin(progress * math.pi)))
+            pulse = 1.0 + 0.12 * math.sin(progress * math.tau * 2.0)
+            key(obj, "scale", frame, (scale.x * pulse, scale.y, scale.z * pulse))
+    # Linear interpolation avoids long ease-out plateaus between checkpoints.
+    for obj in animated:
+        if obj.animation_data and obj.animation_data.action:
+            for curve in obj.animation_data.action.fcurves:
+                for point in curve.keyframe_points:
+                    point.interpolation = "LINEAR"
     ctx.mover = occluder or hero
 
 
