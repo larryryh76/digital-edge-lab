@@ -89,6 +89,14 @@ class RendererMotionContractTests(unittest.TestCase):
         self.assertIn('key(hero, "location", frame', body)
         self.assertIn('key(rim, "rotation_euler", frame', body)
 
+    def test_reveal_animation_has_multiple_motion_checkpoints_and_no_ease_out(self):
+        source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
+        body = source[source.index("def act_reveal(ctx):"):source.index("def act_transform(ctx):")]
+        self.assertIn("checkpoints =", body)
+        self.assertIn("0.84, 1.0", body)
+        self.assertIn('point.interpolation = "LINEAR"', body)
+        self.assertIn('startswith("slab_etch")', body)
+
     def test_balance_scale_animation_is_coupled_and_continuous(self):
         source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
         body = source[source.index("def act_compare_pan(ctx):"):source.index("ACTION_PROGRAMS =")]
