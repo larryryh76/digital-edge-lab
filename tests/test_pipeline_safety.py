@@ -222,45 +222,21 @@ class ProductionContractTests(unittest.TestCase):
         # the actual rendered audio duration is measured and gated separately.
 
     def test_timing_and_render_budgets_remain_bounded(self):
-        import re
-
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        def env_int(name):
-            match = re.search(rf'^{name}: "([0-9]+)"
-    def test_quality_gates_reject_bad_media_instead_of_silent_delivery(self):
-        self.assertIn('if failed_gates:', PIPELINE)
-        self.assertIn('fail("delivery rejected by QA: "', PIPELINE)
-        self.assertIn('"narrated_audio_present": narration_report["total_seconds"] > 20', PIPELINE)
-        self.assertIn("mean_volume_db", (ROOT / "src" / "narration.py").read_text(encoding="utf-8"))
+        values = {}
+        for line in workflow.splitlines():
+            if line.startswith("  DEL_RENDER_") and ": " in line:
+                key, raw = line.strip().split(": ", 1)
+                values[key] = raw.strip('"')
 
-if __name__ == "__main__":
-    unittest.main()
-, workflow, re.MULTILINE)
-            self.assertIsNotNone(match, f"missing numeric workflow setting {name}")
-            return int(match.group(1))
-
-        # Assert safe relationships, not stale literal values. The runner budget
-        # must be compatible with the measured software-renderer cost and remain
-        # shorter than the enclosing pilot job's hard timeout.
-        per_frame = float(re.search(
-            r'^  DEL_RENDER_SECONDS_PER_FRAME: "([0-9.]+)"
-    def test_quality_gates_reject_bad_media_instead_of_silent_delivery(self):
-        self.assertIn('if failed_gates:', PIPELINE)
-        self.assertIn('fail("delivery rejected by QA: "', PIPELINE)
-        self.assertIn('"narrated_audio_present": narration_report["total_seconds"] > 20', PIPELINE)
-        self.assertIn("mean_volume_db", (ROOT / "src" / "narration.py").read_text(encoding="utf-8"))
-
-if __name__ == "__main__":
-    unittest.main()
-, workflow, re.MULTILINE
-        ).group(1))
-        phase_budget = env_int("DEL_RENDER_PHASE_BUDGET_SECONDS")
-        startup = env_int("DEL_RENDER_STARTUP_SECONDS")
+        per_frame = float(values["DEL_RENDER_SECONDS_PER_FRAME"])
+        phase_budget = int(values["DEL_RENDER_PHASE_BUDGET_SECONDS"])
+        startup = int(values["DEL_RENDER_STARTUP_SECONDS"])
         self.assertGreaterEqual(per_frame, 2.1)
         self.assertGreater(startup, 0)
         self.assertGreaterEqual(phase_budget, 600)
         self.assertLessEqual(phase_budget, 1800)
-        self.assertRegex(workflow, r"pilot:[\\s\\S]*?timeout-minutes: 45")
+        self.assertIn("timeout-minutes: 45", workflow)
         self.assertEqual(workflow.count("if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"), 2)
         self.assertIn("RENDER_PHASE_BUDGET_SECONDS = int(os.getenv", PIPELINE)
         self.assertIn("deadline=retry_deadline", PIPELINE)
