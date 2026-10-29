@@ -1148,6 +1148,12 @@ for obj in list(scene.objects):
 tracked = {"hero": [hero], "mover": [ctx.mover]}
 for name, objs in parts.items():
     tracked[name] = objs
+    # Keep the grouped trace for context, but measure dissolving/merging parts
+    # individually too. Averaging every voxel into one group hid real removals:
+    # three cells could disappear while the group's average scale stayed large.
+    if name in {"voxel_cell", "_all_pipes"}:
+        for part_index, obj in enumerate(objs):
+            tracked[f"individual_{name.strip('_')}_{part_index}"] = [obj]
 for j, obj in enumerate(ctx.extras):
     tracked[f"extra_{j}"] = [obj]
 
