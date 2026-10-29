@@ -181,16 +181,10 @@ jobs:
           path: ${{ runner.temp }}/piper-voice
           key: piper-en-us-ryan-medium-v1
 
-      - name: Install local neural voice and fonts
+      - name: Install Piper neural voice model
         timeout-minutes: 8
         run: |
           set -euo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          APT="-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
-          timeout 240 sudo apt-get $APT update
-          timeout 360 sudo apt-get $APT install -y --no-install-recommends \
-            -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-            espeak-ng fonts-dejavu-core
           python -m pip install --disable-pip-version-check piper-tts
           VOICE_DIR="${{ runner.temp }}/piper-voice"
           mkdir -p "$VOICE_DIR"
@@ -206,7 +200,6 @@ jobs:
           test -s "$VOICE_DIR/en_US-ryan-medium.onnx.json"
           echo "PIPER_MODEL=$VOICE_DIR/en_US-ryan-medium.onnx" >> "$GITHUB_ENV"
           command -v piper
-          espeak-ng --version | head -1
 
       - name: Resolve Blender runtime libraries
         timeout-minutes: 8
