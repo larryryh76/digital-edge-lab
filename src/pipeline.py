@@ -690,15 +690,15 @@ def main(argv=None):
     except (RuntimeError, GeminiError) as exc:
         if args.plan or not args.fallback_plan:
             fail(f"plan generation failed: {exc}", diagnostics)
-        # The API is unavailable (quota, outage, rejected plan). Delivering the
-        # curated plan is honest only if the run says so: this is labelled
-        # degraded everywhere, and the local voice is used because the same
-        # outage would take the hosted voice with it.
+        # Text generation and hosted TTS are independent requests. Keep the
+        # fallback plan explicitly degraded, but still try hosted narration below;
+        # only fall back to local speech if the TTS request itself fails.
         degraded = {"stage": "plan_generation", "reason": str(exc)[:600],
                     "plan": Path(args.fallback_plan).name}
         diagnostics.append("plan_fallback", degraded)
-        print("[plan] Gemini unavailable; building the checked-in fallback plan with the "
-              "local voice. This delivery is DEGRADED, not a generated episode.", flush=True)
+        print("[plan] Gemini script generation unavailable; using the checked-in plan. "
+              "Hosted narration will still be attempted; this delivery is DEGRADED.",
+              flush=True)
         try:
             episode = load_plan(args.fallback_plan)
         except RuntimeError as plan_exc:
@@ -923,8 +923,10 @@ def main(argv=None):
             "DEGRADED DELIVERY — not a generated episode.\n\n"
             f"stage: {degraded.get('stage')}\n"
             f"reason: {degraded.get('reason', '')[:1500]}\n\n"
-            "The scenes come from the checked-in fallback plan and the narration uses the "
-            "local espeak voice, because the Gemini pipeline was unavailable. The media "
+            "The scenes come from the checked-in fallback plan because Gemini script "
+            "generation was unavailable. Narration engine: "
+            f"{narration_report.get('engine', 'unknown')}. A local voice is used only if "
+            "hosted TTS failed; the report identifies that engine explicitly. The media "
             "integrity, animation and timing gates below were still enforced.\n",
             encoding="utf-8")
 
