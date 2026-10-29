@@ -415,14 +415,17 @@ jobs:
           echo "mode=$requested" >> "$GITHUB_OUTPUT"
           echo "Resolved production mode: $requested"
 
-      - name: Produce pilot (Gemini script and narration)
+      - name: Produce pilot (Gemini with quality-gated outage fallback)
         if: steps.mode.outputs.mode == 'generated'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # Generated mode must never silently switch to the local voice/checked-in plan.
-          # If Gemini is unavailable, fail with diagnostics rather than label a fallback as a generated pilot.
-          python src/pipeline.py
+          # Try Gemini first. If the provider remains unavailable after bounded retries,
+          # the pipeline uses the curated, validated plan and local voice as an explicitly
+          # DEGRADED delivery. All render, motion, caption, diversity and delivery QA gates
+          # still apply; a fallback that fails QA remains a hard failure and is never uploaded.
+          # The report must never mislabel fallback content as AI-generated.
+          python src/pipeline.py --fallback-plan plans/quantization-on-device.json
 
       - name: Produce pilot (deterministic offline plan, local voice)
         if: steps.mode.outputs.mode == 'offline'
