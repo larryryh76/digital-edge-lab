@@ -1168,11 +1168,16 @@ title = spec.get("on_screen_text") or spec["subject"].get("label") or ""
 if title:
     studio.label("scene_title", title, (0, -0.9, 0.32), 0.17, mats["ivory"])
 
+# Use continuous, deterministic motion between authored keyframes. Bezier's
+# default ease-in/ease-out leaves long low-velocity intervals on short scenes;
+# the encoded-media QA correctly flags those as freezes even though the subject
+# eventually reaches its endpoint. Linear interpolation preserves every authored
+# action and makes movement visible throughout the beat rather than weakening QA.
 for action in bpy.data.actions:
     for fcurve in action.fcurves:
         for kp in fcurve.keyframe_points:
             if kp.interpolation != "CONSTANT":
-                kp.interpolation = "BEZIER"
+                kp.interpolation = "LINEAR"
 
 frames, samples = measure(camera, tracked)
 summary = summarize(samples.get("mover", []))
