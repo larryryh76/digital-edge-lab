@@ -91,6 +91,23 @@ class SceneCertificationContractTests(unittest.TestCase):
         self.assertEqual(pipeline.visual_repair_profile(["camera-only motion detected"]),
                          "subject_prominence")
 
+    def test_invalid_scene_or_delivery_qa_blocks_episode(self):
+        sys.path.insert(0, str(ROOT / "src"))
+        import pipeline
+        healthy = {"passed": True}
+        scene_failed = pipeline.decide_failures(
+            {"passed": False}, healthy, healthy, healthy, {"mean": 0.8})
+        self.assertIn("scene_qa", scene_failed)
+        delivery_failed = pipeline.decide_failures(
+            healthy, healthy, healthy, {"passed": False}, {"mean": 0.8})
+        self.assertIn("delivery_media", delivery_failed)
+        motion_failed = pipeline.decide_failures(
+            healthy, healthy, healthy, healthy, {"mean": 0.1})
+        self.assertIn("visual_motion", motion_failed)
+        all_pass = pipeline.decide_failures(
+            healthy, healthy, healthy, healthy, {"mean": 0.8})
+        self.assertEqual(all_pass, [])
+
     def test_render_smoke_matrix_is_derived_from_every_registered_pair(self):
         source = (ROOT / "tests" / "render_smoke.py").read_text(encoding="utf-8")
         self.assertIn('for subject, metadata in scene_spec.SUBJECT_KINDS.items()', source)
