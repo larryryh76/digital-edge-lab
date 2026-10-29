@@ -80,6 +80,25 @@ class MotionTests(unittest.TestCase):
         self.assertLess(media_qa.image_similarity(frame_a, frame_b), 0.9)
 
 
+class RendererMotionContractTests(unittest.TestCase):
+    def test_expansion_animation_has_intermediate_motion_not_only_endpoints(self):
+        source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
+        body = source.split("def act_expand(ctx):", 1)[1].split("\\ndef act_squeeze(ctx):", 1)[0]
+        self.assertIn("checkpoints =", body)
+        self.assertIn("0.78", body)
+        self.assertIn('key(hero, "location", frame', body)
+        self.assertIn('key(rim, "rotation_euler", frame', body)
+
+    def test_balance_scale_animation_is_coupled_and_continuous(self):
+        source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
+        body = source.split("def act_compare_pan(ctx):", 1)[1].split("\\nACTION_PROGRAMS =", 1)[0]
+        self.assertIn("scale_pan_left", body)
+        self.assertIn("scale_pan_right", body)
+        self.assertIn("scale_chain-1", body)
+        self.assertIn("0.70, 16.0", body)
+        self.assertIn("ctx.mover = beam or left", body)
+
+
 class RequirementTests(unittest.TestCase):
     def test_spin_requirement_rejects_a_static_object(self):
         passed, failures = media_qa.compare_motion(
