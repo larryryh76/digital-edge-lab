@@ -599,13 +599,27 @@ def act_spin(ctx):
 
 
 def act_compress(ctx):
+    # Compress the complete visible subject where it is a multi-part object.
+    # Shrinking one arbitrary mover in a grid looked almost static in the final
+    # 720x1280 encode even though transform telemetry technically changed.
     hero = ctx.mover
-    s = hero.scale.copy()
-    target = 0.42 if ctx.intensity > 0.6 else 0.58
-    key(hero, "scale", ctx.start, (s.x, s.y, s.z))
-    key(hero, "scale", ctx.mid, (s.x * 0.92, s.y * 0.92, s.z * 0.86))
-    key(hero, "scale", ctx.end, (s.x * target, s.y * target, s.z * 0.66))
-    key(hero, "location", ctx.end, (hero.location.x, hero.location.y, hero.location.z - 0.18))
+    duration = max(1, ctx.end - ctx.start)
+    group = [o for objs in ctx.parts.values() for o in objs
+             if o is not hero and o.type in {"MESH", "CURVE"}]
+    targets = [hero] + group
+    unique = list({o.name: o for o in targets}.values())
+    for j, obj in enumerate(unique):
+        s = obj.scale.copy()
+        loc = obj.location.copy()
+        delay = min(0.18, j * 0.018)
+        for progress, factor, dz in ((0.0, 1.0, 0.0), (0.24, 0.88, -0.04),
+                                     (0.48, 0.68, -0.12), (0.72, 0.48, -0.18),
+                                     (0.88, 0.58, -0.12), (1.0, 0.42, -0.22)):
+            p = min(1.0, progress + delay)
+            frame = ctx.start + int(duration * p)
+            key(obj, "scale", frame, (s.x * factor, s.y * factor, s.z * factor))
+            key(obj, "location", frame, (loc.x, loc.y, loc.z + dz))
+    ctx.mover = hero
 
 
 def act_expand(ctx):
@@ -783,21 +797,40 @@ def act_snap_to_grid(ctx):
 
 def act_dissolve(ctx):
     victims = ctx.parts.get("_all_pipes") or ctx.parts.get("voxel_cell") or []
-    victims = [v for v in victims if v is not ctx.mover]
+    victims = list(dict((v.name, v) for v in victims).values())
     if len(victims) < 2:
         raise RuntimeError(
             f"dissolve is not filmable for subject {ctx.spec['subject']['kind']}: "
             "no parallel parts to remove"
         )
-    for j, victim in enumerate(victims[:3]):
-        key(victim, "scale", ctx.start + int((ctx.end - ctx.start) * 0.2 * j), (1, 1, 1))
-        key(victim, "scale", ctx.start + int((ctx.end - ctx.start) * (0.5 + 0.15 * j)),
-            (0.02, 0.02, 0.02))
-        key(victim, "location", ctx.end,
-            (victim.location.x, victim.location.y - 0.8, victim.location.z))
+    duration = max(1, ctx.end - ctx.start)
+    # Explicitly animate every discrete element. The prior implementation left
+    # the selected hero out of the removal sequence and moved only three cells,
+    # which failed subject-displacement QA on voxel_sphere.
+    for j, victim in enumerate(victims):
+        start_loc = victim.location.copy()
+        start_scale = victim.scale.copy()
+        delay = 0.06 * (j % 5)
+        for progress, factor, dx, dz in (
+            (0.0, 1.0, 0.0, 0.0), (0.20, 1.12, -0.08, 0.05),
+            (0.42, 0.86, 0.12, -0.08), (0.58, 0.46, 0.24, 0.12),
+            (0.78, 0.08, 0.42, -0.18), (1.0, 0.015, 0.62, 0.08)):
+            p = min(1.0, progress + delay)
+            frame = ctx.start + int(duration * p)
+            key(victim, "scale", frame,
+                (start_scale.x * factor, start_scale.y * factor, start_scale.z * factor))
+            key(victim, "location", frame,
+                (start_loc.x + dx, start_loc.y, start_loc.z + dz))
     hero = ctx.mover
-    key(hero, "scale", ctx.start, (1, 1, 1))
-    key(hero, "scale", ctx.end, (1.35, 1.35, 1.35))
+    start = hero.location.copy()
+    base = hero.scale.copy()
+    for progress, factor in ((0.0, 1.0), (0.28, 1.10), (0.52, 1.28),
+                             (0.76, 1.12), (1.0, 1.34)):
+        frame = ctx.start + int(duration * progress)
+        key(hero, "scale", frame, (base.x * factor, base.y * factor, base.z * factor))
+        key(hero, "location", frame,
+            (start.x + 0.28 * math.sin(progress * math.tau), start.y,
+             start.z + 0.16 * math.sin(progress * math.tau * 1.5)))
 
 
 def act_collapse_to_one(ctx):
@@ -841,22 +874,41 @@ def act_assemble(ctx):
 
 
 def act_flow(ctx):
+    # Flow is a moving stream, not three tiny dots gliding once across a static
+    # set. Multiple packets travel along a curved path with visible size/height
+    # pulses, and a real connection part responds where the subject has one.
     hero = ctx.hero
     target_x = -hero.location.x if abs(hero.location.x) > 0.05 else 1.4
+    start_x = -2.45 if target_x > 0 else 2.45
     packets = []
-    for j in range(3):
-        packets.append(ctx.add(ctx.studio.sphere(f"flow_packet{j}", (-2.2, -0.55, 1.5), 0.13,
-                                          ctx.mats["accent"]), part=None))
+    duration = max(1, ctx.end - ctx.start)
+    for j in range(5):
+        packet = ctx.add(ctx.studio.sphere(
+            f"flow_packet{j}", (start_x, -0.58, 1.48), 0.19,
+            ctx.mats["accent"]), part=None)
+        packets.append(packet)
     for j, packet in enumerate(packets):
-        offset = j * 0.16
-        key(packet, "location", ctx.start, (-2.2 if target_x > 0 else 2.2, -0.55, 1.5))
-        key(packet, "location", ctx.end - int(offset * (ctx.end - ctx.start)),
-            (target_x, -0.35, 1.62 + 0.2 * (j - 1)))
+        lead = j * 0.105
+        for progress, arc, pulse in (
+            (0.00, -0.16, 0.72), (0.22, 0.20, 1.18), (0.45, -0.12, 0.92),
+            (0.68, 0.22, 1.25), (0.86, -0.08, 0.96), (1.00, 0.12, 1.12)):
+            p = min(1.0, max(0.0, progress - lead))
+            frame = ctx.start + int(duration * progress)
+            x = start_x + (target_x - start_x) * p
+            z = 1.48 + arc + 0.12 * math.sin((progress * 2.0 + j * 0.12) * math.pi)
+            key(packet, "location", frame, (x, -0.58, z))
+            key(packet, "scale", frame, (pulse, pulse, pulse))
+        key(packet, "location", ctx.start, (start_x - j * 0.20, -0.58, 1.48))
     ctx.mover = packets[0]
-    link = ctx.parts.get("block_link") or ctx.parts.get("node_link_a")
+    link = (ctx.parts.get("block_link") or ctx.parts.get("node_link_a") or
+            ctx.parts.get("node_link_b") or ctx.parts.get("chip_trace"))
     if link:
-        key(link[0], "scale", ctx.start, (1, 1, 1))
-        key(link[0], "scale", ctx.end, (1.3, 1.6, 1.3))
+        obj = link[0]
+        base = obj.scale.copy()
+        for progress, factor in ((0.0, 0.8), (0.25, 1.15), (0.5, 0.85),
+                                 (0.75, 1.25), (1.0, 0.95)):
+            frame = ctx.start + int(duration * progress)
+            key(obj, "scale", frame, (base.x * factor, base.y * factor, base.z * factor))
 
 
 def act_sweep(ctx):
@@ -1054,6 +1106,64 @@ ACTION_PROGRAMS = {
     "pulse": act_pulse,
     "compare_pan": act_compare_pan,
 }
+
+
+def apply_repair_profile(ctx):
+    """Add a bounded action-specific motion correction only on a QA retry."""
+    profile = ctx.spec["action"].get("repair_profile")
+    if not profile:
+        return
+    hero = ctx.mover
+    action = ctx.spec["action"]["kind"]
+    base = hero.location.copy()
+    scale = hero.scale.copy()
+    rotation = hero.rotation_euler.copy()
+    span = max(1, ctx.end - ctx.start)
+    def frame(p):
+        return ctx.start + int(span * p)
+
+    if profile == "action_amplitude":
+        # Repair the failed contract itself, not merely the camera framing.
+        if action in ("spin", "snap_to_grid"):
+            for p, degrees in ((0.0, 0), (0.25, 100), (0.5, 210), (0.75, 320), (1.0, 430)):
+                key(hero, "rotation_euler", frame(p),
+                    (rotation.x, rotation.y, rotation.z + math.radians(degrees)))
+        elif action in ("compress", "squeeze", "transform"):
+            for p, factor in ((0.0, 1.0), (0.30, 0.78), (0.58, 0.52), (0.80, 0.72), (1.0, 0.62)):
+                key(hero, "scale", frame(p), (scale.x * factor, scale.y * factor, scale.z * factor))
+        elif action in ("expand", "pulse"):
+            for p, factor in ((0.0, 1.0), (0.22, 1.22), (0.48, 1.62), (0.72, 1.34), (1.0, 1.48)):
+                key(hero, "scale", frame(p), (scale.x * factor, scale.y * factor, scale.z * factor))
+        elif action in ("fall", "descend"):
+            for p, dz in ((0.0, 0.0), (0.25, -0.24), (0.52, -0.72), (0.70, -0.40), (1.0, -0.62)):
+                key(hero, "location", frame(p), (base.x, base.y, base.z + dz))
+        elif action in ("dissolve", "collapse_to_one"):
+            candidates = [obj for objs in ctx.parts.values() for obj in objs if obj is not hero]
+            for j, obj in enumerate(candidates):
+                if j < 3:
+                    key(obj, "scale", frame(0.0), tuple(obj.scale))
+                    key(obj, "scale", frame(0.55 + 0.1 * j), (0.001, 0.001, 0.001))
+        else:
+            for p, dx, dz in ((0.0, -0.72, 0.0), (0.22, -0.28, 0.08),
+                              (0.42, 0.42, 0.0), (0.62, -0.12, -0.06),
+                              (0.82, 0.62, 0.08), (1.0, 0.24, 0.0)):
+                key(hero, "location", frame(p), (base.x + dx, base.y, base.z + dz))
+        # Interaction actions need an independently moving partner, not just a
+        # moving hero/camera. Move one real non-hero component if available.
+        if action in ("collide", "reveal", "compare_pan", "squeeze", "transform"):
+            partners = [obj for objs in ctx.parts.values() for obj in objs if obj is not hero]
+            if partners:
+                partner = partners[0]
+                start = partner.location.copy()
+                for p, dx in ((0.0, 0.0), (0.35, 0.0), (0.52, 0.42), (0.72, 0.18), (1.0, 0.30)):
+                    key(partner, "location", frame(p), (start.x + dx, start.y, start.z))
+    elif profile == "temporal_motion":
+        # The encoded video was frozen/static even if transform metadata passed.
+        for p, dx, angle in ((0.0, -0.28, 0), (0.25, 0.22, 18),
+                             (0.5, -0.18, -22), (0.75, 0.32, 26), (1.0, 0.0, 0)):
+            key(hero, "location", frame(p), (base.x + dx, base.y, base.z))
+            key(hero, "rotation_euler", frame(p),
+                (rotation.x, rotation.y, rotation.z + math.radians(angle)))
 
 
 # --- camera + lighting ------------------------------------------------------
@@ -1261,6 +1371,7 @@ hero, mover, parts = builder(studio, spec["subject"], mats)
 
 ctx = Ctx(studio, spec, hero, mover, parts, mats)
 ACTION_PROGRAMS[spec["action"]["kind"]](ctx)
+apply_repair_profile(ctx)
 
 # Idle life for the whole set: tiny amplitude only, so it can never be mistaken
 # for the scene's action, and never a substitute for subject animation.
