@@ -222,8 +222,10 @@ class ProductionContractTests(unittest.TestCase):
         # the actual rendered audio duration is measured and gated separately.
 
     def test_timing_and_render_budgets_remain_bounded(self):
-        self.assertIn('DEL_RENDER_PHASE_BUDGET_SECONDS: "900"', 
-                      WORKFLOW.read_text(encoding="utf-8"))
+        self.assertIn('DEL_RENDER_PHASE_BUDGET_SECONDS: "480"', WORKFLOW.read_text(encoding="utf-8"))
+        self.assertIn('DEL_RENDER_SECONDS_PER_FRAME: "0.75"', WORKFLOW.read_text(encoding="utf-8"))
+        self.assertIn('DEL_RENDER_STARTUP_SECONDS: "60"', WORKFLOW.read_text(encoding="utf-8"))
+        self.assertEqual(WORKFLOW.read_text(encoding="utf-8").count(\"if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'\"), 2)
         self.assertIn("RENDER_PHASE_BUDGET_SECONDS = int(os.getenv", PIPELINE)
         self.assertIn("deadline=retry_deadline", PIPELINE)
         self.assertIn("retry_deadline = time.monotonic() + 300", PIPELINE)
