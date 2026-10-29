@@ -157,6 +157,11 @@ class WorkflowContractTests(unittest.TestCase):
     def test_workflow_runs_the_real_pipeline_entry_point(self):
         self.assertIn("python src/pipeline.py", self.text)
 
+    def test_generated_workflow_has_explicit_quality_gated_outage_fallback(self):
+        self.assertIn("--fallback-plan plans/quantization-on-device.json", self.text)
+        self.assertIn("DEGRADED delivery", self.text)
+        self.assertIn("never uploaded", self.text)
+
     def test_workflow_does_not_depend_on_obsolete_helpers(self):
         self.assertNotIn("tests/blender_smoke.py", self.text)
 
