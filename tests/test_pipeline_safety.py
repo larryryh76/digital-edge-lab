@@ -99,6 +99,11 @@ class DegradedDeliveryTests(unittest.TestCase):
         self.assertIn("verified_degraded_delivery", PIPELINE)
         self.assertIn("DEGRADED_DELIVERY.txt", PIPELINE)
 
+    def test_script_outage_does_not_force_local_voice_before_trying_hosted_tts(self):
+        # A text-generation outage may be independent of hosted TTS availability.
+        self.assertIn("wav, windows, narration_report = narrate(args.offline)", PIPELINE)
+        self.assertNotIn("narrate(args.offline or degraded is not None)", PIPELINE)
+
 
 class GateTests(unittest.TestCase):
     def test_all_gates_pass_gives_no_failures(self):
