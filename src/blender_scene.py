@@ -609,11 +609,43 @@ def act_compress(ctx):
 
 
 def act_expand(ctx):
+    # Expansion must remain visibly alive until the final frame. A single start/end
+    # scale interpolation leaves a long, frozen-looking hold on longer narration beats.
     hero = ctx.mover
-    s = hero.scale.copy()
-    key(hero, "scale", ctx.start, (s.x * 0.72, s.y * 0.72, s.z * 0.72))
-    key(hero, "scale", ctx.end, (s.x * 1.75, s.y * 1.75, s.z * 1.75))
-    key(hero, "rotation_euler", ctx.end, (0, 0, math.radians(40)))
+    base = hero.scale.copy()
+    duration = max(1, ctx.end - ctx.start)
+    checkpoints = (
+        (0.00, 0.72, 0.0, 0.00),
+        (0.18, 1.02, 18.0, 0.10),
+        (0.38, 1.42, 42.0, -0.08),
+        (0.58, 1.20, 68.0, 0.12),
+        (0.78, 1.68, 104.0, -0.10),
+        (1.00, 1.48, 138.0, 0.00),
+    )
+    start_loc = hero.location.copy()
+    for progress, factor, degrees, z_offset in checkpoints:
+        frame = min(ctx.end, ctx.start + int(duration * progress))
+        key(hero, "scale", frame, (base.x * factor, base.y * factor, base.z * factor))
+        key(hero, "rotation_euler", frame,
+            (math.radians(8 * math.sin(progress * math.tau)),
+             math.radians(degrees * 0.35), math.radians(degrees)))
+        key(hero, "location", frame,
+            (start_loc.x + 0.16 * math.sin(progress * math.tau * 1.5),
+             start_loc.y, start_loc.z + z_offset))
+    # The rim follows the core's growth and rotates independently enough to read
+    # as a real glass object rather than a static shell around a scaling sphere.
+    for rim in ctx.parts.get("sphere_rim", []):
+        rim_base = rim.scale.copy()
+        rim_loc = rim.location.copy()
+        for progress, factor, degrees, z_offset in checkpoints:
+            frame = min(ctx.end, ctx.start + int(duration * progress))
+            key(rim, "scale", frame,
+                (rim_base.x * factor, rim_base.y * factor, rim_base.z * factor))
+            key(rim, "rotation_euler", frame,
+                (math.radians(90), math.radians(degrees * 0.35), math.radians(degrees)))
+            key(rim, "location", frame,
+                (rim_loc.x + 0.16 * math.sin(progress * math.tau * 1.5),
+                 rim_loc.y, rim_loc.z + z_offset))
 
 
 def act_squeeze(ctx):
@@ -887,24 +919,56 @@ def act_compare_pan(ctx):
     voxels = ctx.parts.get("mountain_voxel") or []
     right_obj = voxels[0] if voxels else None
     if left is None or right_obj is None:
-        # The balance scale compares two pans instead of two terrains.
+        # A balance scale is a coupled mechanism: beam, both pans and chains must
+        # react together. The prior version slid pans sideways and only tipped the
+        # beam slightly, so encoded pixel motion stayed below the delivery gate.
         left = ctx.parts.get("scale_pan_left", [None])[0]
         right_obj = ctx.parts.get("scale_pan_right", [None])[0]
         beam = ctx.parts.get("scale_beam", [None])[0]
-        if beam is not None:
-            key(beam, "rotation_euler", ctx.start, (0, 0, 0))
-            key(beam, "rotation_euler", ctx.end, (0, math.radians(14), 0))
+        duration = max(1, ctx.end - ctx.start)
+        for progress, tilt in ((0.0, 0.0), (0.22, 12.0), (0.46, -9.0),
+                               (0.70, 16.0), (0.86, -5.0), (1.0, 11.0)):
+            frame = min(ctx.end, ctx.start + int(duration * progress))
+            if beam is not None:
+                key(beam, "rotation_euler", frame,
+                    (0, math.radians(tilt), math.radians(2.5 * math.sin(progress * math.tau))))
+            for pan, sign in ((left, -1), (right_obj, 1)):
+                if pan is None:
+                    continue
+                base = (-1.35 if sign < 0 else 1.35)
+                z = 1.72 - sign * math.sin(progress * math.tau * 0.72) * 0.30
+                key(pan, "location", frame,
+                    (base + 0.08 * math.sin(progress * math.tau), pan.location.y, z))
+                key(pan, "rotation_euler", frame,
+                    (0, math.radians(tilt * sign * 0.35), math.radians(5 * sign * math.sin(progress * math.tau))))
+        # Keep the hanging chains connected to their pans as they rise/fall.
+        for name, sign in (("scale_chain-1", -1), ("scale_chain1", 1)):
+            chain = next((obj for obj in ctx.studio.objects if obj.name == name), None)
+            if chain is not None:
+                base_x = -1.35 if sign < 0 else 1.35
+                for progress, tilt in ((0.0, 0.0), (0.22, 12.0), (0.46, -9.0),
+                                       (0.70, 16.0), (0.86, -5.0), (1.0, 11.0)):
+                    frame = min(ctx.end, ctx.start + int(duration * progress))
+                    z = 1.95 - sign * math.sin(progress * math.tau * 0.72) * 0.15
+                    key(chain, "location", frame,
+                        (base_x + 0.08 * math.sin(progress * math.tau), chain.location.y, z))
+        ctx.mover = beam or left or ctx.mover
+        return
     # Move the whole voxel mountain, not just its first block. This makes the
     # comparison visibly coherent and satisfies the multi-part motion gate.
     moving_right = voxels if voxels else ([right_obj] if right_obj else [])
     for obj, sign in ([(left, -1)] if left else []) + [(obj, 1) for obj in moving_right]:
         start = obj.location.copy()
-        key(obj, "location", ctx.start, (start.x, start.y, start.z))
-        key(obj, "location", int(ctx.start + (ctx.end-ctx.start) * 0.35),
-            (start.x + 0.22 * sign, start.y, start.z + 0.16))
-        key(obj, "location", ctx.end, (start.x + 0.48 * sign, start.y, start.z + 0.08))
-        key(obj, "rotation_euler", ctx.end,
-            (math.radians(5 * sign), math.radians(7 * sign), math.radians(22 * sign)))
+        duration = max(1, ctx.end - ctx.start)
+        for progress, offset in ((0.0, 0.0), (0.25, 0.22), (0.5, -0.10),
+                                 (0.75, 0.35), (1.0, 0.48)):
+            frame = min(ctx.end, ctx.start + int(duration * progress))
+            key(obj, "location", frame,
+                (start.x + offset * sign, start.y, start.z + 0.16 * math.sin(progress * math.tau)))
+            key(obj, "rotation_euler", frame,
+                (math.radians(5 * sign * math.sin(progress * math.tau)),
+                 math.radians(7 * sign * math.sin(progress * math.tau)),
+                 math.radians(22 * sign * progress)))
     ctx.mover = right_obj or left or ctx.mover
 
 
