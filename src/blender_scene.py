@@ -1056,6 +1056,64 @@ ACTION_PROGRAMS = {
 }
 
 
+def apply_repair_profile(ctx):
+    """Add a bounded action-specific motion correction only on a QA retry."""
+    profile = ctx.spec["action"].get("repair_profile")
+    if not profile:
+        return
+    hero = ctx.mover
+    action = ctx.spec["action"]["kind"]
+    base = hero.location.copy()
+    scale = hero.scale.copy()
+    rotation = hero.rotation_euler.copy()
+    span = max(1, ctx.end - ctx.start)
+    def frame(p):
+        return ctx.start + int(span * p)
+
+    if profile == "action_amplitude":
+        # Repair the failed contract itself, not merely the camera framing.
+        if action in ("spin", "snap_to_grid"):
+            for p, degrees in ((0.0, 0), (0.25, 100), (0.5, 210), (0.75, 320), (1.0, 430)):
+                key(hero, "rotation_euler", frame(p),
+                    (rotation.x, rotation.y, rotation.z + math.radians(degrees)))
+        elif action in ("compress", "squeeze", "transform"):
+            for p, factor in ((0.0, 1.0), (0.30, 0.78), (0.58, 0.52), (0.80, 0.72), (1.0, 0.62)):
+                key(hero, "scale", frame(p), (scale.x * factor, scale.y * factor, scale.z * factor))
+        elif action in ("expand", "pulse"):
+            for p, factor in ((0.0, 1.0), (0.22, 1.22), (0.48, 1.62), (0.72, 1.34), (1.0, 1.48)):
+                key(hero, "scale", frame(p), (scale.x * factor, scale.y * factor, scale.z * factor))
+        elif action in ("fall", "descend"):
+            for p, dz in ((0.0, 0.0), (0.25, -0.24), (0.52, -0.72), (0.70, -0.40), (1.0, -0.62)):
+                key(hero, "location", frame(p), (base.x, base.y, base.z + dz))
+        elif action in ("dissolve", "collapse_to_one"):
+            candidates = [obj for objs in ctx.parts.values() for obj in objs if obj is not hero]
+            for j, obj in enumerate(candidates):
+                if j < 3:
+                    key(obj, "scale", frame(0.0), tuple(obj.scale))
+                    key(obj, "scale", frame(0.55 + 0.1 * j), (0.001, 0.001, 0.001))
+        else:
+            for p, dx, dz in ((0.0, -0.72, 0.0), (0.22, -0.28, 0.08),
+                              (0.42, 0.42, 0.0), (0.62, -0.12, -0.06),
+                              (0.82, 0.62, 0.08), (1.0, 0.24, 0.0)):
+                key(hero, "location", frame(p), (base.x + dx, base.y, base.z + dz))
+        # Interaction actions need an independently moving partner, not just a
+        # moving hero/camera. Move one real non-hero component if available.
+        if action in ("collide", "reveal", "compare_pan", "squeeze", "transform"):
+            partners = [obj for objs in ctx.parts.values() for obj in objs if obj is not hero]
+            if partners:
+                partner = partners[0]
+                start = partner.location.copy()
+                for p, dx in ((0.0, 0.0), (0.35, 0.0), (0.52, 0.42), (0.72, 0.18), (1.0, 0.30)):
+                    key(partner, "location", frame(p), (start.x + dx, start.y, start.z))
+    elif profile == "temporal_motion":
+        # The encoded video was frozen/static even if transform metadata passed.
+        for p, dx, angle in ((0.0, -0.28, 0), (0.25, 0.22, 18),
+                             (0.5, -0.18, -22), (0.75, 0.32, 26), (1.0, 0.0, 0)):
+            key(hero, "location", frame(p), (base.x + dx, base.y, base.z))
+            key(hero, "rotation_euler", frame(p),
+                (rotation.x, rotation.y, rotation.z + math.radians(angle)))
+
+
 # --- camera + lighting ------------------------------------------------------
 FRAMING = {
     "extreme_close_up": {"distance": 3.1, "height": 0.35, "lens": 62},
@@ -1261,6 +1319,7 @@ hero, mover, parts = builder(studio, spec["subject"], mats)
 
 ctx = Ctx(studio, spec, hero, mover, parts, mats)
 ACTION_PROGRAMS[spec["action"]["kind"]](ctx)
+apply_repair_profile(ctx)
 
 # Idle life for the whole set: tiny amplitude only, so it can never be mistaken
 # for the scene's action, and never a substitute for subject animation.
