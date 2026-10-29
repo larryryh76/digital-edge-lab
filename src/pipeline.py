@@ -308,7 +308,7 @@ def generate_episode(client, memory, diagnostics, requested_topic=None, series_i
         parts = client.generate(TEXT_MODEL, [{"text": text}],
                                 {"temperature": 0.75 if attempts == 1 else 0.4,
                                  "responseMimeType": "application/json"},
-                                deadline_seconds=200, attempts_per_model=3, label="text")
+                                deadline_seconds=360, attempts_per_model=4, label="text")
         raw = "\n".join(p.get("text", "") for p in parts if p.get("text")).strip()
         raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw, flags=re.I).strip()
         try:
