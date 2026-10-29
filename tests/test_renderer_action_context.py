@@ -16,6 +16,10 @@ class ActionContextRegressionTests(unittest.TestCase):
         self.assertIn("def torus(self, name, loc, major, minor, mat", SOURCE)
         self.assertIn("ctx.studio.torus(", SOURCE)
 
+    def test_nonconstant_animation_curves_remain_continuously_moving(self):
+        self.assertIn('kp.interpolation = "LINEAR"', SOURCE)
+        self.assertNotIn('kp.interpolation = "BEZIER"\n\nframes, samples = measure', SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()
