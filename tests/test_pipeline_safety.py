@@ -154,7 +154,7 @@ class WorkflowContractTests(unittest.TestCase):
     def test_main_push_uses_full_certification_without_duplicate_fast_runner(self):
         self.assertIn("if: github.event_name == 'pull_request'\n    name: Fast Python tests", self.text)
         self.assertIn("name: Full renderer certification", self.text)
-        self.assertIn("name: Render and verify one complete pilot", self.text)
+        self.assertIn("name: Full certification and verified pilot", self.text)
 
     def test_failure_artifact_is_uploaded_regardless_of_success_report(self):
         self.assertRegex(self.text, r"if:\s*\$\{\{\s*failure\(\)[^}]*\}\}")
@@ -241,8 +241,8 @@ class ProductionContractTests(unittest.TestCase):
         self.assertGreater(startup, 0)
         self.assertGreaterEqual(phase_budget, 600)
         self.assertLessEqual(phase_budget, 1800)
-        self.assertIn("timeout-minutes: 45", workflow)
-        self.assertEqual(workflow.count("if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"), 2)
+        self.assertIn("timeout-minutes: 60", workflow)
+        self.assertEqual(workflow.count("if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"), 1)
         self.assertIn("RENDER_PHASE_BUDGET_SECONDS = int(os.getenv", PIPELINE)
         self.assertIn("deadline=retry_deadline", PIPELINE)
         self.assertIn("retry_deadline = time.monotonic() + 300", PIPELINE)
