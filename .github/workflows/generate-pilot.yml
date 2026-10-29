@@ -83,7 +83,7 @@ jobs:
           python -m unittest discover -s tests -v
 
   verify:
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule' || github.event_name == 'pull_request'
     name: Full certification and verified pilot (single toolchain bootstrap)
     permissions:
       contents: write
@@ -294,7 +294,7 @@ jobs:
           echo "Resolved production mode: $requested"
 
       - name: Produce pilot (Gemini with quality-gated outage fallback)
-        if: steps.mode.outputs.mode == 'generated'
+        if: github.event_name != 'pull_request' && steps.mode.outputs.mode == 'generated'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -306,7 +306,7 @@ jobs:
           python src/pipeline.py --fallback-plan plans/quantization-on-device.json
 
       - name: Produce pilot (deterministic offline plan, local voice)
-        if: steps.mode.outputs.mode == 'offline'
+        if: github.event_name != 'pull_request' && steps.mode.outputs.mode == 'offline'
         run: |
           python src/pipeline.py --offline --plan plans/quantization-on-device.json
 
