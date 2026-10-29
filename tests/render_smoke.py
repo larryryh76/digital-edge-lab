@@ -21,11 +21,13 @@ import media_qa  # noqa: E402
 import scene_spec  # noqa: E402
 
 SECONDS = 2.75
-SCENES = [  # (subject, action) — one per action family the engine relies on
+SCENES = [  # (subject, action) — include the two previously failing production treatments
     ("glass_sphere", "compress"),
+    ("glass_sphere", "expand"),
     ("dial", "spin"),
     ("pipe_bundle", "collapse_to_one"),
     ("mountain_pair", "compare_pan"),
+    ("balance_scale", "compare_pan"),
 ]
 
 
