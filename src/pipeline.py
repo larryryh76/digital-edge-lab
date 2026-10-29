@@ -713,7 +713,11 @@ def main(argv=None):
                                         tts_model=TTS_MODEL, offline=offline_voice)
 
     try:
-        wav, windows, narration_report = narrate(args.offline or degraded is not None)
+        # A script-plan outage does not imply a TTS outage. Always try the hosted
+        # publication-quality narrator first in generated mode, even when the curated
+        # plan is active. Only use local Piper/espeak after hosted TTS actually fails;
+        # that path remains explicitly degraded and must never be misreported as equivalent.
+        wav, windows, narration_report = narrate(args.offline)
     except narration_mod.NarrationError as exc:
         if args.offline or (degraded is None and not args.fallback_plan):
             fail(f"narration failed: {exc}", diagnostics)
