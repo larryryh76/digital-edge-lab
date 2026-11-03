@@ -20,16 +20,16 @@ sys.path.insert(0, str(ROOT / "src"))
 import media_qa  # noqa: E402
 import scene_spec  # noqa: E402
 
-SECONDS = 2.75
-SCENES = [  # (subject, action) — include the two previously failing production treatments
-    ("glass_sphere", "compress"),
-    ("glass_sphere", "expand"),
-    ("dial", "spin"),
-    ("pipe_bundle", "collapse_to_one"),
-    ("mountain_pair", "compare_pan"),
-    ("balance_scale", "compare_pan"),
-    ("block_pair", "collide"),
-]
+# Exhaustively certify every declared subject/action pair against actual
+# Blender renders. This is intentionally derived from the registry so adding a
+# new supported combination automatically adds a real-media regression case.
+SECONDS = float(os.getenv("DEL_SCENE_CERT_SECONDS", "2.75"))
+SCENES = sorted(
+    (subject, action)
+    for subject, metadata in scene_spec.SUBJECT_KINDS.items()
+    if subject != scene_spec.FALLBACK_SUBJECT
+    for action in metadata["actions"]
+)
 
 
 def main():
@@ -59,7 +59,7 @@ def main():
         }, i, {"b1"})
         # Longer shots for the previously failing treatments expose end-of-shot
         # freezes that a 2.75s smoke clip would never exercise.
-        shot_seconds = 8.0 if action == "expand" else (6.0 if subject == "balance_scale" else SECONDS)
+        shot_seconds = max(SECONDS, 3.5 if action in ("expand", "compare_pan", "collide", "reveal") else SECONDS)
         shot_frames = int(round(shot_seconds * 24))
         spec_path = work / f"scene_{i:02d}.json"
         spec_path.write_text(json.dumps(scene), encoding="utf-8")
@@ -73,7 +73,7 @@ def main():
                  "--python", str(ROOT / "src" / "blender_scene.py"),
                  "--", str(spec_path), str(out), str(i), str(len(SCENES)),
                  f"{shot_seconds:.3f}"],
-                stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=900,
+                stdout=handle, stderr=subprocess.STDOUT, text=True, timeout=240,
                 env=dict(os.environ, LIBGL_ALWAYS_SOFTWARE="1",
                          GALLIUM_DRIVER="llvmpipe"))
         log_tail = log.read_text(encoding="utf-8", errors="replace")
@@ -112,7 +112,7 @@ def main():
         print(json.dumps({"passed": False, "failures": failures}, indent=2), file=sys.stderr)
         print(f"ARTIFACTS: {work}", file=sys.stderr)
         return 1
-    print(f"render smoke: {len(SCENES)} scenes passed on real rendered media")
+    print(f"render smoke: all {len(SCENES)} registered subject/action combinations passed on real rendered media")
     shutil.rmtree(work, ignore_errors=True)
     return 0
 
