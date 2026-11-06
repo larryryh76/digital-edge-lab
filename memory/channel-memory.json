@@ -195,6 +195,11 @@
       "title": "How Big AI Can Fit on Your Phone",
       "topic": "Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
       "created_at_utc": "2026-11-03T17:53:17.114434+00:00"
+    },
+    {
+      "title": "Why AI GPUs Run Out of Memory",
+      "topic": "PagedAttention and Memory Management in LLM Serving",
+      "created_at_utc": "2026-11-06T17:44:15.312536+00:00"
     }
   ],
   "running_context": [
@@ -212,7 +217,8 @@
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
-    "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware"
+    "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
+    "Episode: Why AI GPUs Run Out of Memory — PagedAttention and Memory Management in LLM Serving"
   ],
   "migrated_at": "2026-10-28T14:10:14.679341+00:00",
   "updated_at": "2026-10-28T14:10:14.679317+00:00",
