@@ -89,6 +89,28 @@ def region_motion(path, box):
     return round(sum(values) / len(values), 4)
 
 
+def scale_region_box(box, width, height, reference_width=720, reference_height=1280):
+    """Scale a QA region from the reference portrait canvas to actual encoded pixels."""
+    if width < 2 or height < 2:
+        raise ValueError("encoded frame dimensions must be at least 2x2")
+    sx = width / float(reference_width)
+    sy = height / float(reference_height)
+    x = int(round(box["x"] * sx))
+    y = int(round(box["y"] * sy))
+    w = max(2, int(round(box["w"] * sx)))
+    h = max(2, int(round(box["h"] * sy)))
+    x = min(max(0, x), width - 2)
+    y = min(max(0, y), height - 2)
+    w = min(w, width - x)
+    h = min(h, height - y)
+    # Keep crop geometry even for broad FFmpeg pixel-format compatibility.
+    x -= x % 2
+    y -= y % 2
+    w -= w % 2
+    h -= h % 2
+    return {"x": x, "y": y, "w": max(2, w), "h": max(2, h)}
+
+
 def black_segments(path, min_duration=0.2, threshold=0.90):
     result = _run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path),
                    "-vf", f"blackdetect=d={min_duration}:pic_th={threshold}:pix_th=0.06",
@@ -297,9 +319,18 @@ def evaluate_scene(scene, window, segment_path, trace, spec_module):
         if black:
             failures.append(f"black frames detected from {black[0][0]}s to {black[0][1]}s")
 
+        # Scale QA regions to the encoded clip. Smoke renders are 288x512;
+        # production renders may be 1080x1920. Fixed 720p crops can otherwise
+        # fall outside preview frames and silently return zero measurements.
+        stream = video_stream(probe(segment_path)) or {}
+        width = int(stream.get("width") or 720)
+        height = int(stream.get("height") or 1280)
+        hero_box = scale_region_box(HERO_BOX, width, height)
+        background_box = scale_region_box(BACKGROUND_BOX, width, height)
+
         # Subject-driven motion must dominate the background region.
-        hero_energy = region_motion(segment_path, HERO_BOX)
-        background_energy = region_motion(segment_path, BACKGROUND_BOX)
+        hero_energy = region_motion(segment_path, hero_box)
+        background_energy = region_motion(segment_path, background_box)
         dominates = hero_energy >= max(0.10, background_energy * 0.75)
         if not dominates and hero.get("screen_pixels", 0.0) < 24.0:
             failures.append(
