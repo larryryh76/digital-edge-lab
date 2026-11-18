@@ -69,13 +69,13 @@ def install_python_dependencies():
     run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
          "-r", str(REPO / "requirements.txt")])
     run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-         "kokoro-onnx==0.6.1", "soundfile>=0.13.0"])
+         "kokoro-onnx[gpu]==0.6.1", "soundfile>=0.13.0"])
     voice_dir = ROOT / "kokoro-voice"
-    model = voice_dir / "kokoro-v1.0.int8.onnx"
+    model = voice_dir / "kokoro-v1.0.fp16.onnx"
     voices = voice_dir / "voices-v1.0.bin"
     model_url = (
         "https://github.com/thewh1teagle/kokoro-onnx/releases/download/"
-        "model-files-v1.1/kokoro-v1.0.int8.onnx"
+        "model-files-v1.1/kokoro-v1.0.fp16.onnx"
     )
     voices_url = (
         "https://github.com/thewh1teagle/kokoro-onnx/releases/download/"
@@ -86,8 +86,8 @@ def install_python_dependencies():
         download(model_url, model)
     if not voices.is_file():
         download(voices_url, voices)
-    if sha256_file(model) != "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c":
-        raise RuntimeError("Kokoro INT8 model checksum mismatch")
+    if sha256_file(model) != "f3a290d384fbb27966d462905c71a46cef9e5fd00516b40df32a0b4afe77ac96":
+        raise RuntimeError("Kokoro FP16 model checksum mismatch")
     if sha256_file(voices) != "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d":
         raise RuntimeError("Kokoro voice pack checksum mismatch")
     return model, voices
@@ -173,6 +173,10 @@ def main():
         raise RuntimeError("This worker must run inside a Kaggle Notebook environment")
     print("GPU inventory:", flush=True)
     run(["nvidia-smi", "-L"])
+    import onnxruntime as ort
+    providers = ort.get_available_providers()
+    if "CUDAExecutionProvider" not in providers:
+        raise RuntimeError(f"Kokoro GPU TTS requires CUDAExecutionProvider, found: {providers}")
     checkout_exact_source()
     install_system_dependencies()
     blender_bin = install_blender()
@@ -185,6 +189,7 @@ def main():
         "KOKORO_MODEL": str(kokoro_model),
         "KOKORO_VOICES": str(kokoro_voices),
         "KOKORO_VOICE": "am_michael",
+        "ONNX_PROVIDER": "CUDAExecutionProvider",
         "DEL_RENDER_PROFILE": "production",
         "DEL_RENDER_WORKERS": "1",
         "DEL_RENDER_SECONDS_PER_FRAME": "5.0",
@@ -208,6 +213,7 @@ def main():
         "voice_model": "Kokoro-82M",
         "voice": "am_michael",
         "voice_model_license": "Apache-2.0",
+        "voice_model_precision": "fp16",
         "inference_package": "kokoro-onnx",
         "inference_package_license": "MIT",
     })
@@ -254,6 +260,7 @@ def main():
         "narration_engine": report.get("narration", {}).get("engine"),
         "narration_voice": report.get("narration", {}).get("voice"),
         "narration_license": report.get("narration", {}).get("voice_model_license"),
+        "narration_precision": report.get("narration", {}).get("voice_model_precision"),
         "failed_gates": report.get("failed_gates", []),
         "gpu": subprocess.check_output(["nvidia-smi", "-L"], text=True).strip(),
         "blender": subprocess.check_output([str(blender_bin), "--version"], text=True).splitlines()[0],
