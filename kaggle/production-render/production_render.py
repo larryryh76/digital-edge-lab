@@ -84,6 +84,25 @@ def install_python_dependencies():
     return voice_dir / "en_US-ryan-medium.onnx"
 
 
+def prepare_hdri():
+    """Use a CC0 Poly Haven studio HDRI when the public API is reachable."""
+    sys.path.insert(0, str(REPO / "src"))
+    try:
+        from polyhaven_assets import download_hdri
+
+        path, manifest_path, manifest = download_hdri(
+            ROOT / "polyhaven-assets", slug="studio_small_03", resolution="1k"
+        )
+        print(f"Poly Haven HDRI ready: {manifest['source_url']} ({manifest['resolution']})",
+              flush=True)
+        return path, manifest_path, manifest
+    except Exception as exc:
+        # This asset is an enhancement, not a hard dependency. Keep the procedural
+        # studio lighting if Poly Haven is temporarily unavailable.
+        print(f"Poly Haven HDRI unavailable; using built-in studio world: {exc}", flush=True)
+        return None, None, None
+
+
 def checkout_exact_source():
     if SOURCE_SHA == "__SOURCE_SHA__" or len(SOURCE_SHA) != 40:
         raise RuntimeError("GitHub workflow did not pin the source commit SHA")
@@ -146,6 +165,7 @@ def main():
     install_system_dependencies()
     blender_bin = install_blender()
     piper_model = install_python_dependencies()
+    hdri_path, hdri_manifest_path, hdri_manifest = prepare_hdri()
 
     env = os.environ.copy()
     env.update({
@@ -160,6 +180,9 @@ def main():
         "OPENBLAS_NUM_THREADS": "1",
         "MKL_NUM_THREADS": "1",
     })
+    if hdri_path:
+        env["DEL_POLYHAVEN_HDRI"] = str(hdri_path)
+        env["DEL_POLYHAVEN_STRENGTH"] = "0.28"
     print(f"Rendering exact source commit {SOURCE_SHA} with native 1080p GPU profile", flush=True)
     run([
         sys.executable, "src/pipeline.py", "--offline",
@@ -167,6 +190,22 @@ def main():
     ], cwd=REPO, env=env, timeout=7800)
 
     report, video_path = verify_delivery()
+    if hdri_manifest:
+        report["external_assets"] = [hdri_manifest]
+        (DELIVERY / "ASSET_ATTRIBUTION.txt").write_text(
+            "HDRI: Studio Small 03 by Greg Zaal via Poly Haven (CC0). "
+            "Powered by Poly Haven.\n"
+            + hdri_manifest["source_url"] + "\n",
+            encoding="utf-8",
+        )
+        (DELIVERY / "video-description.txt").write_text(
+            "3D environment HDRI: Studio Small 03 by Greg Zaal via Poly Haven (CC0). "
+            "Powered by Poly Haven.\n" + hdri_manifest["source_url"] + "\n",
+            encoding="utf-8",
+        )
+        (DELIVERY / "run-report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
     output_zip = ROOT / "digital-edge-lab-delivery.zip"
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in DELIVERY.rglob("*"):
