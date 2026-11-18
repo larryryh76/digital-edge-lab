@@ -80,6 +80,59 @@ class MotionTests(unittest.TestCase):
         self.assertLess(media_qa.image_similarity(frame_a, frame_b), 0.9)
 
 
+class SceneCertificationContractTests(unittest.TestCase):
+    def test_retry_profile_targets_the_reported_failure_type(self):
+        sys.path.insert(0, str(ROOT / "src"))
+        import pipeline
+        self.assertEqual(pipeline.visual_repair_profile(["rotation 4deg < required 120deg"]),
+                         "action_amplitude")
+        self.assertEqual(pipeline.visual_repair_profile(["frozen intervals detected"]),
+                         "temporal_motion")
+        self.assertEqual(pipeline.visual_repair_profile(["camera-only motion detected"]),
+                         "subject_prominence")
+
+    def test_invalid_scene_or_delivery_qa_blocks_episode(self):
+        sys.path.insert(0, str(ROOT / "src"))
+        import pipeline
+        healthy = {"passed": True}
+        scene_failed = pipeline.decide_failures(
+            {"passed": False}, healthy, healthy, healthy, {"mean": 0.8})
+        self.assertIn("scene_qa", scene_failed)
+        delivery_failed = pipeline.decide_failures(
+            healthy, healthy, healthy, {"passed": False}, {"mean": 0.8})
+        self.assertIn("delivery_media", delivery_failed)
+        motion_failed = pipeline.decide_failures(
+            healthy, healthy, healthy, healthy, {"mean": 0.1})
+        self.assertIn("visual_motion", motion_failed)
+        all_pass = pipeline.decide_failures(
+            healthy, healthy, healthy, healthy, {"mean": 0.8})
+        self.assertEqual(all_pass, [])
+
+    def test_renderer_certification_shards_cover_every_pair_exactly_once(self):
+        import render_smoke
+
+        scenes = render_smoke.ALL_SCENES
+        shards = [render_smoke.select_shard(scenes, index, 8) for index in range(8)]
+        flattened = [scene for shard in shards for scene in shard]
+        self.assertEqual(sorted(flattened), sorted(scenes))
+        self.assertEqual(len(flattened), len(set(flattened)))
+        self.assertTrue(all(shard for shard in shards))
+
+    def test_renderer_certification_rejects_invalid_shard_coordinates(self):
+        import render_smoke
+
+        with self.assertRaises(ValueError):
+            render_smoke.select_shard(render_smoke.ALL_SCENES, 0, 0)
+        with self.assertRaises(ValueError):
+            render_smoke.select_shard(render_smoke.ALL_SCENES, 8, 8)
+
+    def test_render_smoke_matrix_is_derived_from_every_registered_pair(self):
+        source = (ROOT / "tests" / "render_smoke.py").read_text(encoding="utf-8")
+        self.assertIn('for subject, metadata in scene_spec.SUBJECT_KINDS.items()', source)
+        self.assertIn('for action in metadata["actions"]', source)
+        self.assertIn('evaluate_scene(scene, window, out, trace, scene_spec)', source)
+
+
 class RendererMotionContractTests(unittest.TestCase):
     def test_expansion_animation_has_intermediate_motion_not_only_endpoints(self):
         source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
