@@ -48,7 +48,7 @@ A safe integration should:
 6. Record accelerator type, Blender version, render settings, timings, and artifact checksums.
 7. Require Kaggle API credentials as repository secrets; never commit token files.
 
-No Kaggle account or API token has been configured or tested for this repository yet.
+The optional Kaggle worker and a manual-only GitHub Actions workflow are now scaffolded in this branch. They pin the exact GitHub commit, submit a private T4 GPU kernel, require an explicit GPU-quota confirmation, download the result, and re-check the MP4/report. They are **not live-tested** because no Kaggle credentials have been configured for this repository. To enable the experiment, add the repository Actions secrets `KAGGLE_USERNAME` and `KAGGLE_KEY` from the Kaggle API token JSON, then run **Digital Edge Lab — Optional Kaggle GPU production render** manually and confirm GPU usage.
 
 ### 3. Poly Haven is the strongest free asset source
 
