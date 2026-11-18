@@ -87,7 +87,7 @@ Wan/Hunyuan/LTX weights are not equivalent to a hosted free API. Their memory, s
 - Blender rendering engines: https://www.blender.org/features/rendering/
 - Kokoro model license and male voice list: https://huggingface.co/onnx-community/Kokoro-82M-ONNX
 - Kokoro ONNX runtime and package license: https://github.com/thewh1teagle/kokoro-onnx
-- Piper Ryan model license (CC BY-NC-SA 4.0): https://huggingface.co/Trelis/piper-en-us-ryan-medium
+- Piper Ryan model license (CC BY-NC-SA 4.0): https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ryan/medium/MODEL_CARD
 - Gemini API pricing/free-tier notes: https://ai.google.dev/gemini-api/docs/pricing
 
 This document is a researched integration plan, not a claim that these external services have already been connected or live-tested.
