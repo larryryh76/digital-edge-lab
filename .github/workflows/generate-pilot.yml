@@ -82,8 +82,89 @@ jobs:
           python -m compileall -q src tests
           python -m unittest discover -s tests -v
 
+  renderer-certification:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    name: Renderer certification shard ${{ matrix.shard }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DEL_SCENE_CERT_SHARD_INDEX: ${{ matrix.shard }}
+      DEL_SCENE_CERT_SHARD_COUNT: "8"
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install FFmpeg and Blender runtime libraries
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri \
+            libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 \
+            libsm6 libice6 libxext6 libgomp1 libxrandr2 libxinerama1
+          ffmpeg -version | head -1
+
+      - name: Restore cached Blender
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/blender
+          key: blender-4.2.11-linux-x64
+
+      - name: Install pinned Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if curl -sS --fail --connect-timeout 20 --max-time 420 \
+                -o /tmp/blender.tar.xz "$BLENDER_URL"; then
+              break
+            fi
+            echo "blender download attempt $attempt failed; retrying"
+            sleep 5
+          done
+          sudo mkdir -p /opt/blender
+          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
+          rm -f /tmp/blender.tar.xz
+
+      - name: Verify Blender and EEVEE startup
+        run: |
+          set -euo pipefail
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+          blender --version | head -1
+          rm -f /tmp/cert-probe_0001.png
+          blender -b --factory-startup -E BLENDER_EEVEE_NEXT \
+            -o /tmp/cert-probe_ -F PNG -f 1 | tail -5
+          test -s /tmp/cert-probe_0001.png
+
+      - name: Certify this shard using real Blender renders and encoded-media QA
+        run: python tests/render_smoke.py
+
+      - name: Preserve failed shard diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renderer-certification-shard-${{ matrix.shard }}-failure
+          path: /tmp/del-smoke-*
+          if-no-files-found: warn
+          retention-days: 14
+
   verify:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs: renderer-certification
     name: Full certification and verified pilot (single toolchain bootstrap)
     permissions:
       contents: write
@@ -248,9 +329,6 @@ jobs:
           set -euo pipefail
           python -m compileall -q src tests
           python -m unittest discover -s tests -v
-
-      - name: Renderer smoke test on real Blender output
-        run: python tests/render_smoke.py
 
       - name: Record run context
         if: always()
