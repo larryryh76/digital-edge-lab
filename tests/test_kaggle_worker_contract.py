@@ -29,6 +29,15 @@ class KaggleWorkerContractTests(unittest.TestCase):
         self.assertIn("failed_gates", source)
         self.assertIn("(1080, 1920)", source)
 
+    def test_worker_uses_commercially_licensed_kokoro_voice(self):
+        source = WORKER.read_text(encoding="utf-8")
+        self.assertIn('"KOKORO_MODEL": str(kokoro_model)', source)
+        self.assertIn('"KOKORO_VOICES": str(kokoro_voices)', source)
+        self.assertIn('"KOKORO_VOICE": "am_michael"', source)
+        self.assertIn('narration.get("engine") != "kokoro-neural"', source)
+        self.assertNotIn("PIPER_MODEL", source)
+        self.assertNotIn("piper-tts", source)
+
     def test_worker_uses_cc0_poly_haven_hdris_with_attribution(self):
         source = WORKER.read_text(encoding="utf-8")
         self.assertIn('slug="studio_small_03"', source)
