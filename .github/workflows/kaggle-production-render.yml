@@ -71,17 +71,17 @@ jobs:
         run: |
           set -euo pipefail
           KERNEL_ID="$KAGGLE_USERNAME/$KERNEL_SLUG"
-          kaggle kernels push -p "$RUNNER_TEMP/del-kaggle-kernel" --accelerator NvidiaTeslaT4 --timeout 7800
+          kaggle kernels push -p "$RUNNER_TEMP/del-kaggle-kernel" --accelerator NvidiaTeslaT4 --timeout 10800
 
       - name: Wait for the Kaggle GPU render to finish
-        timeout-minutes: 145
+        timeout-minutes: 185
         run: |
           set -euo pipefail
           KERNEL_ID="$KAGGLE_USERNAME/$KERNEL_SLUG"
           completed=0
-          for attempt in $(seq 1 140); do
+          for attempt in $(seq 1 180); do
             status="$(kaggle kernels status "$KERNEL_ID" 2>&1 || true)"
-            echo "Kaggle status check $attempt/140: $status"
+            echo "Kaggle status check $attempt/180: $status"
             lower="$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]')"
             if printf '%s' "$lower" | grep -Eq '(^|[^a-z])(complete|success)([^a-z]|$)'; then
               completed=1
@@ -95,7 +95,7 @@ jobs:
             sleep 60
           done
           if [ "$completed" -ne 1 ]; then
-            echo "::error::Kaggle render did not complete within the 140-minute polling window."
+            echo "::error::Kaggle render did not complete within the 180-minute polling window."
             kaggle kernels logs "$KERNEL_ID" || true
             exit 1
           fi
