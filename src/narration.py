@@ -5,10 +5,9 @@ narrative beat is synthesised separately, measured with ffprobe, padded to its
 own scene duration, and concatenated. The scene timeline therefore *is* the
 audio timeline, so narration, captions and animation share one clock.
 
-`ESPEAK_ONLY=1` (or running with --offline) uses a local deterministic
-espeak-ng voice instead of the hosted TTS model. That path exists so the visual
-engine and timing logic can be verified end-to-end without API access; it is
-labelled as a fallback in the run report and is not a publication-quality voice.
+`--offline` uses the locally cached Kokoro neural voice when its model and voice
+pack are available. eSpeak is retained only as a deterministic diagnostic fallback;
+it is explicitly marked as non-publication-quality in the run report.
 """
 
 from __future__ import annotations
