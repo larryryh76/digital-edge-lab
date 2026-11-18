@@ -212,6 +212,37 @@ class Studio:
                 bg.inputs[1].default_value = 1.0
         except (AttributeError, TypeError, IndexError):
             self.world.color = (0.004, 0.007, 0.016)
+        hdri_path = os.getenv("DEL_POLYHAVEN_HDRI")
+        if hdri_path and PROFILE["engine"] == "CYCLES":
+            path = Path(hdri_path)
+            if not path.is_file():
+                raise RuntimeError(f"Configured Poly Haven HDRI is missing: {path}")
+            try:
+                self.world.use_nodes = True
+                nodes = self.world.node_tree.nodes
+                links = self.world.node_tree.links
+                nodes.clear()
+                output = nodes.new("ShaderNodeOutputWorld")
+                light_path = nodes.new("ShaderNodeLightPath")
+                mix = nodes.new("ShaderNodeMixShader")
+                camera_background = nodes.new("ShaderNodeBackground")
+                camera_background.inputs["Color"].default_value = (0.004, 0.007, 0.016, 1.0)
+                camera_background.inputs["Strength"].default_value = 1.0
+                environment = nodes.new("ShaderNodeTexEnvironment")
+                environment.image = bpy.data.images.load(str(path), check_existing=True)
+                environment_background = nodes.new("ShaderNodeBackground")
+                environment_background.inputs["Strength"].default_value = float(
+                    os.getenv("DEL_POLYHAVEN_STRENGTH", "0.28"))
+                links.new(environment.outputs["Color"], environment_background.inputs["Color"])
+                # Camera rays retain the channel's dark studio backdrop. All other
+                # rays see the HDRI, adding realistic ambient illumination/reflections.
+                links.new(light_path.outputs["Is Camera Ray"], mix.inputs["Fac"])
+                links.new(environment_background.outputs["Background"], mix.inputs[1])
+                links.new(camera_background.outputs["Background"], mix.inputs[2])
+                links.new(mix.outputs["Shader"], output.inputs["Surface"])
+                print(f"[renderer] Poly Haven HDRI enabled: {path.name}", flush=True)
+            except Exception as exc:
+                raise RuntimeError(f"Could not configure Poly Haven HDRI {path}: {exc}") from exc
 
     # primitives -----------------------------------------------------------
     def _finish(self, obj, name, mat, bevel=0.0):
