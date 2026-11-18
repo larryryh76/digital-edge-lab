@@ -105,6 +105,42 @@ class DegradedDeliveryTests(unittest.TestCase):
         self.assertNotIn("narrate(args.offline or degraded is not None)", PIPELINE)
 
 
+class NarrationVoiceSelectionTests(unittest.TestCase):
+    def test_kokoro_is_selected_when_licensed_model_files_are_available(self):
+        import os
+        import tempfile
+        import types
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            model = Path(folder) / "kokoro.int8.onnx"
+            voices = Path(folder) / "voices.bin"
+            model.write_bytes(b"model")
+            voices.write_bytes(b"voices")
+            with patch.dict(os.environ, {
+                "KOKORO_MODEL": str(model),
+                "KOKORO_VOICES": str(voices),
+            }), patch.dict(sys.modules, {"kokoro_onnx": types.ModuleType("kokoro_onnx")}):
+                self.assertEqual(narration.find_local_voice(), "kokoro")
+
+    def test_noncommercial_piper_is_never_selected_as_a_fallback(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            model = Path(folder) / "ryan-noncommercial.onnx"
+            model.write_bytes(b"legacy")
+            with patch.dict(os.environ, {
+                "PIPER_MODEL": str(model),
+                "KOKORO_MODEL": "",
+                "KOKORO_VOICES": "",
+            }), patch("narration.shutil.which",
+                     side_effect=lambda name: "/usr/bin/espeak-ng" if name == "espeak-ng"
+                     else "/usr/bin/piper" if name == "piper" else None):
+                self.assertEqual(narration.find_local_voice(), "/usr/bin/espeak-ng")
+
+
 class NarrationRhythmTests(unittest.TestCase):
     def setUp(self):
         import tempfile
