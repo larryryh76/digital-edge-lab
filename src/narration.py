@@ -22,6 +22,9 @@ from pathlib import Path
 
 FPS = 24
 SCENE_TAIL_SECONDS = 0.18
+# Preserve pitch while gently correcting only local lines that are measurably rushed.
+TARGET_LOCAL_WPM = 158
+LOCAL_WPM_FAST_THRESHOLD = 168
 MIN_BEAT_SECONDS = 0.45
 # A narrator physically cannot deliver a line slower than this. Any hosted TTS
 # response outside the band means the model spoke something other than the line
@@ -172,6 +175,39 @@ def local_tts(text, out_path, binary):
     return out_path
 
 
+def normalize_local_pace(path, text, *, target_wpm=TARGET_LOCAL_WPM):
+    """Gently slow overly brisk local narration without changing its pitch.
+
+    Returns measured before/after WPM. Hosted TTS is never time-stretched here.
+    """
+    words = max(1, len(text.split()))
+    before_seconds = probe_duration(path)
+    before_wpm = 60.0 * words / max(before_seconds, 0.01)
+    if before_wpm <= LOCAL_WPM_FAST_THRESHOLD:
+        return {"before_wpm": round(before_wpm, 1), "after_wpm": round(before_wpm, 1),
+                "stretched": False}
+    factor = max(0.78, min(0.96, target_wpm / before_wpm))
+    temp_path = Path(str(path) + ".paced.wav")
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(path), "-filter:a",
+         f"atempo={factor:.4f}", "-ar", "48000", "-ac", "1", str(temp_path)],
+        check=False, capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode or not temp_path.exists():
+        temp_path.unlink(missing_ok=True)
+        raise NarrationError(f"local narration pace correction failed: {result.stderr[-300:]}")
+    temp_path.replace(path)
+    after_seconds = probe_duration(path)
+    after_wpm = 60.0 * words / max(after_seconds, 0.01)
+    return {"before_wpm": round(before_wpm, 1), "after_wpm": round(after_wpm, 1),
+            "stretched": True, "atempo": round(factor, 4)}
+
+
+def pause_after_role(role):
+    """A short silence that gives hooks, reveals and payoffs room to land."""
+    return {"hook": 0.38, "reveal": 0.48, "payoff": 0.42, "ending": 0.42}.get(role, 0.20)
+
+
 def pad_to(wav_in, wav_out, seconds):
     result = subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-i", str(wav_in), "-af",
@@ -201,8 +237,10 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
     cursor = 0.0
     for i, beat in enumerate(episode["beats"]):
         raw = work_dir / f"beat_{i:02d}.wav"
+        pace_report = None
         if use_local:
             local_tts(beat["narration"], raw, local)
+            pace_report = normalize_local_pace(raw, beat["narration"])
             engine = "piper-neural" if local == "piper" else "espeak-ng-fallback"
         else:
             gemini_tts(client, beat["narration"], raw, tts_model)
@@ -222,7 +260,8 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
         level = mean_volume_db(raw)
         if level is None or level < -45:
             raise NarrationError(f"beat {i + 1} narration is silent (mean {level} dB)")
-        duration = max(1, round((spoken + SCENE_TAIL_SECONDS) * FPS)) / FPS
+        role_pause = pause_after_role(beat.get("role", ""))
+        duration = max(1, round((spoken + SCENE_TAIL_SECONDS + role_pause) * FPS)) / FPS
         padded = work_dir / f"beat_{i:02d}_padded.wav"
         pad_to(raw, padded, duration)
         padded_files.append(padded)
@@ -238,7 +277,8 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
             "narration": beat["narration"],
         })
         report_beats.append({"index": i, "engine": engine, "spoken_seconds": round(spoken, 3),
-                             "scene_seconds": round(duration, 3), "mean_db": level})
+                             "scene_seconds": round(duration, 3), "role_pause_seconds": role_pause,
+                             "pace": pace_report, "mean_db": level})
         cursor += duration
 
     concat_list = work_dir / "narration_concat.txt"
