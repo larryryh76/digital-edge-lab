@@ -35,6 +35,9 @@ class KaggleWorkerContractTests(unittest.TestCase):
         self.assertIn('"KOKORO_VOICES": str(kokoro_voices)', source)
         self.assertIn('"KOKORO_VOICE": "am_michael"', source)
         self.assertIn('narration.get("engine") != "kokoro-neural"', source)
+        self.assertIn('"voice_model_license": "Apache-2.0"', source)
+        self.assertIn('"inference_package_license": "MIT"', source)
+        self.assertIn('ASSET_ATTRIBUTION.txt', source)
         self.assertNotIn("PIPER_MODEL", source)
         self.assertNotIn("piper-tts", source)
 
