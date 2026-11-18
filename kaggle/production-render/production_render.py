@@ -173,14 +173,14 @@ def main():
         raise RuntimeError("This worker must run inside a Kaggle Notebook environment")
     print("GPU inventory:", flush=True)
     run(["nvidia-smi", "-L"])
-    import onnxruntime as ort
-    providers = ort.get_available_providers()
-    if "CUDAExecutionProvider" not in providers:
-        raise RuntimeError(f"Kokoro GPU TTS requires CUDAExecutionProvider, found: {providers}")
     checkout_exact_source()
     install_system_dependencies()
     blender_bin = install_blender()
     kokoro_model, kokoro_voices = install_python_dependencies()
+    import onnxruntime as ort
+    providers = ort.get_available_providers()
+    if "CUDAExecutionProvider" not in providers:
+        raise RuntimeError(f"Kokoro GPU TTS requires CUDAExecutionProvider, found: {providers}")
     hdri_path, hdri_manifest_path, hdri_manifest = prepare_hdri()
 
     env = os.environ.copy()
