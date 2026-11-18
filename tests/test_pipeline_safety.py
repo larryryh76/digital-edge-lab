@@ -160,7 +160,7 @@ class WorkflowContractTests(unittest.TestCase):
         verify = self.text.split("  verify:", 1)[1]
         verify_condition = verify.split("\n", 2)[1]
         self.assertNotIn("pull_request", verify_condition)
-        self.assertIn("if: github.event_name == 'pull_request'\\n    name: Fast Python tests", self.text)
+        self.assertIn("if: github.event_name == 'pull_request'\n    name: Fast Python tests", self.text)
         self.assertIn("python tests/render_smoke.py", self.text)
 
     def test_failure_artifact_is_uploaded_regardless_of_success_report(self):
