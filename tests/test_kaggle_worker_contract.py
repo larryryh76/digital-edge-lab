@@ -11,6 +11,9 @@ WORKFLOW = ROOT / ".github" / "workflows" / "kaggle-production-render.yml"
 
 
 class KaggleWorkerContractTests(unittest.TestCase):
+    def test_worker_python_source_compiles(self):
+        compile(WORKER.read_text(encoding="utf-8"), str(WORKER), "exec")
+
     def test_worker_pins_the_exact_source_commit(self):
         source = WORKER.read_text(encoding="utf-8")
         self.assertIn('SOURCE_SHA = "__SOURCE_SHA__"', source)
