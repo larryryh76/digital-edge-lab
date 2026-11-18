@@ -123,6 +123,53 @@ class NarrationVoiceSelectionTests(unittest.TestCase):
             }), patch.dict(sys.modules, {"kokoro_onnx": types.ModuleType("kokoro_onnx")}):
                 self.assertEqual(narration.find_local_voice(), "kokoro")
 
+    def test_kokoro_local_tts_uses_the_selected_male_voice(self):
+        import os
+        import tempfile
+        import types
+        from unittest.mock import patch
+
+        calls = []
+
+        class FakeKokoro:
+            def __init__(self, model, voices):
+                calls.append({"model": model, "voices": voices})
+
+            def create(self, text, *, voice, speed, lang):
+                calls.append({"text": text, "voice": voice, "speed": speed, "lang": lang})
+                return [0.0] * 24000, 24000
+
+        fake_kokoro = types.ModuleType("kokoro_onnx")
+        fake_kokoro.Kokoro = FakeKokoro
+        fake_soundfile = types.ModuleType("soundfile")
+        fake_soundfile.write = lambda path, audio, sample_rate, subtype: Path(path).write_bytes(
+            b"\\x00" * 2048
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            model = Path(folder) / "kokoro.onnx"
+            voices = Path(folder) / "voices.bin"
+            output = Path(folder) / "voice.wav"
+            model.write_bytes(b"model")
+            voices.write_bytes(b"voices")
+            narration._KOKORO_ENGINE = None
+            narration._KOKORO_ENGINE_KEY = None
+            try:
+                with patch.dict(os.environ, {
+                    "KOKORO_MODEL": str(model),
+                    "KOKORO_VOICES": str(voices),
+                    "KOKORO_VOICE": "am_michael",
+                }), patch.dict(sys.modules, {
+                    "kokoro_onnx": fake_kokoro,
+                    "soundfile": fake_soundfile,
+                }):
+                    narration.local_tts("A short documentary line.", output, "kokoro")
+                self.assertEqual(calls[-1]["voice"], "am_michael")
+                self.assertEqual(calls[-1]["lang"], "en-us")
+                self.assertTrue(output.is_file())
+            finally:
+                narration._KOKORO_ENGINE = None
+                narration._KOKORO_ENGINE_KEY = None
+
     def test_noncommercial_piper_is_never_selected_as_a_fallback(self):
         import os
         import tempfile
