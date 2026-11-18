@@ -154,16 +154,18 @@ jobs:
           test -s /tmp/cert-probe_0001.png
 
       - name: Certify this shard using real Blender renders and encoded-media QA
+        env:
+          DEL_CERTIFICATION_ARTIFACT_DIR: ${{ runner.temp }}/renderer-certification-shard-${{ matrix.shard }}
         run: python tests/render_smoke.py
 
-      - name: Preserve failed shard diagnostics
-        if: failure()
+      - name: Upload real-render certification evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: renderer-certification-shard-${{ matrix.shard }}-failure
-          path: /tmp/del-smoke-*
-          if-no-files-found: warn
-          retention-days: 14
+          name: renderer-certification-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/renderer-certification-shard-${{ matrix.shard }}
+          if-no-files-found: ignore
+          retention-days: 7
 
   verify:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
