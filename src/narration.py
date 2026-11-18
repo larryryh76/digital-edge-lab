@@ -199,6 +199,11 @@ def normalize_local_pace(path, text, *, target_wpm=TARGET_LOCAL_WPM):
     temp_path.replace(path)
     after_seconds = probe_duration(path)
     after_wpm = 60.0 * words / max(after_seconds, 0.01)
+    if after_wpm > LOCAL_WPM_FAST_THRESHOLD:
+        raise NarrationError(
+            f"local voice remains too fast after pitch-preserving correction "
+            f"({after_wpm:.1f} WPM); rejecting this narration rather than shipping rushed speech"
+        )
     return {"before_wpm": round(before_wpm, 1), "after_wpm": round(after_wpm, 1),
             "stretched": True, "atempo": round(factor, 4)}
 
