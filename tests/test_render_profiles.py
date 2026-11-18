@@ -1,6 +1,11 @@
 """Render profile contracts: preview remains cheap; production is native quality."""
 
+import sys
 import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 
 from render_profiles import get_render_profile, profile_names
 
