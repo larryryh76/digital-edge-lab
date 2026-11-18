@@ -24,12 +24,28 @@ import scene_spec  # noqa: E402
 # Blender renders. This is intentionally derived from the registry so adding a
 # new supported combination automatically adds a real-media regression case.
 SECONDS = float(os.getenv("DEL_SCENE_CERT_SECONDS", "2.75"))
-SCENES = sorted(
+ALL_SCENES = sorted(
     (subject, action)
     for subject, metadata in scene_spec.SUBJECT_KINDS.items()
     if subject != scene_spec.FALLBACK_SUBJECT
     for action in metadata["actions"]
 )
+
+
+def select_shard(scenes, shard_index=0, shard_count=1):
+    """Select a deterministic, non-overlapping slice of the full certification matrix."""
+    shard_count = int(shard_count)
+    shard_index = int(shard_index)
+    if shard_count < 1:
+        raise ValueError("shard_count must be at least 1")
+    if not 0 <= shard_index < shard_count:
+        raise ValueError(f"shard_index must be between 0 and {shard_count - 1}")
+    return [scene for index, scene in enumerate(scenes) if index % shard_count == shard_index]
+
+
+SHARD_INDEX = int(os.getenv("DEL_SCENE_CERT_SHARD_INDEX", "0"))
+SHARD_COUNT = int(os.getenv("DEL_SCENE_CERT_SHARD_COUNT", "1"))
+SCENES = select_shard(ALL_SCENES, SHARD_INDEX, SHARD_COUNT)
 
 
 def main():
@@ -112,7 +128,7 @@ def main():
         print(json.dumps({"passed": False, "failures": failures}, indent=2), file=sys.stderr)
         print(f"ARTIFACTS: {work}", file=sys.stderr)
         return 1
-    print(f"render smoke: all {len(SCENES)} registered subject/action combinations passed on real rendered media")
+    print(f"render smoke: shard {SHARD_INDEX + 1}/{SHARD_COUNT} passed ({len(SCENES)} combinations; {len(ALL_SCENES)} total registered)")
     shutil.rmtree(work, ignore_errors=True)
     return 0
 
