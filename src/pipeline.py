@@ -33,10 +33,14 @@ import media_qa  # noqa: E402
 import narration as narration_mod  # noqa: E402
 import scene_spec  # noqa: E402
 import render_parallel  # noqa: E402
+from render_profiles import get_render_profile  # noqa: E402
 from gemini_client import GeminiClient, GeminiError  # noqa: E402
 
 OUT = ROOT / "output"
-W, H, FPS = 720, 1280, 24
+RENDER_PROFILE = get_render_profile()
+W = RENDER_PROFILE["output_width"]
+H = RENDER_PROFILE["output_height"]
+FPS = RENDER_PROFILE["output_fps"]
 TEXT_MODEL = os.getenv("GEMINI_TEXT_MODEL", "gemini-3.8-flash")
 TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-3.8-flash-tts")
 
