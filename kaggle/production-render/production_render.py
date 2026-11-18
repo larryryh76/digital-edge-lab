@@ -12,7 +12,6 @@ import os
 import shutil
 import subprocess
 import sys
-import tarfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -130,6 +129,14 @@ def verify_delivery():
     return report, video_path
 
 
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def main():
     if not Path("/kaggle").exists():
         raise RuntimeError("This worker must run inside a Kaggle Notebook environment")
@@ -176,7 +183,7 @@ def main():
         "failed_gates": report.get("failed_gates", []),
         "gpu": subprocess.check_output(["nvidia-smi", "-L"], text=True).strip(),
         "blender": subprocess.check_output([str(blender_bin), "--version"], text=True).splitlines()[0],
-        "video_sha256": hashlib.sha256(video_path.read_bytes()).hexdigest(),
+        "video_sha256": sha256_file(video_path),
     }
     (ROOT / "production-render-metadata.json").write_text(
         json.dumps(metadata, indent=2), encoding="utf-8"
