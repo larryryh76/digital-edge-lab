@@ -312,6 +312,12 @@ class WorkflowContractTests(unittest.TestCase):
     def test_workflow_runs_the_real_pipeline_entry_point(self):
         self.assertIn("python src/pipeline.py", self.text)
 
+    def test_workflow_smoke_tests_and_preserves_the_kokoro_male_voice_sample(self):
+        self.assertIn("Smoke-test licensed Kokoro male voice", self.text)
+        self.assertIn("KOKORO_VOICE=am_michael", self.text)
+        self.assertIn("output/diagnostics/kokoro-voice-smoke.wav", self.text)
+        self.assertIn("Upload Kokoro voice audition sample", self.text)
+
     def test_generated_workflow_has_explicit_quality_gated_outage_fallback(self):
         self.assertIn("--fallback-plan plans/quantization-on-device.json", self.text)
         self.assertIn("DEGRADED delivery", self.text)
