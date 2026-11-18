@@ -109,7 +109,7 @@ class MountainPairTransformContractTests(unittest.TestCase):
     def test_transform_animates_both_real_mountain_forms(self):
         source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
         start = source.index("def act_transform(ctx):")
-        end = source.index("\\ndef act_pulse(ctx):", start)
+        end = source.index("\ndef act_pulse(ctx):", start)
         action = source[start:end]
         mountain_path = action.split("    hero = ctx.mover", 1)[0]
         self.assertIn('ctx.spec["subject"]["kind"] == "mountain_pair"', mountain_path)
