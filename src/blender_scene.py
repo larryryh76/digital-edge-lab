@@ -1101,7 +1101,7 @@ def act_transform(ctx):
             ):
                 frame = ctx.start + int(duration * progress)
                 location = smooth_location + Vector((shift, 0.0, 0.08 * progress))
-                rotation = smooth_rotation + Vector((0.0, 0.0, math.radians(-8.0 * progress)))
+                rotation = (smooth_rotation.x, smooth_rotation.y,\n                            smooth_rotation.z + math.radians(-8.0 * progress))
                 key(smooth, "location", frame, tuple(location))
                 key(smooth, "scale", frame, tuple(smooth_scale * scale))
                 key(smooth, "rotation_euler", frame, tuple(rotation))
@@ -1121,7 +1121,7 @@ def act_transform(ctx):
                 ):
                     frame = ctx.start + int(duration * progress)
                     location = start_location.lerp(target_location, travel)
-                    rotation = start_rotation + Vector((0.0, 0.0, math.radians(32.0 * progress)))
+                    rotation = (start_rotation.x, start_rotation.y,\n                                start_rotation.z + math.radians(32.0 * progress))
                     key(obj, "location", frame, tuple(location))
                     key(obj, "scale", frame, tuple(start_scale * shrink))
                     key(obj, "rotation_euler", frame, tuple(rotation))
