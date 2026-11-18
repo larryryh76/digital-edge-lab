@@ -120,6 +120,11 @@ class MountainPairTransformContractTests(unittest.TestCase):
         self.assertIn('key(obj, "location"', mountain_path)
         self.assertIn('key(obj, "scale"', mountain_path)
         self.assertNotIn("transform_target", mountain_path)
+        focus_start = source.index("focus_parts = tracked.get")
+        focus_end = source.index("focus_center = world_center", focus_start)
+        focus = source[focus_start:focus_end]
+        self.assertIn('parts.get("mountain_smooth")', focus)
+        self.assertIn('parts.get("mountain_voxel")', focus)
 
 
 class NarrationVoiceSelectionTests(unittest.TestCase):
