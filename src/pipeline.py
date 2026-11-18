@@ -102,16 +102,24 @@ def build_caption_pngs(cards, index, out_dir):
     for j, card in enumerate(cards):
         image = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         painter = ImageDraw.Draw(image)
-        font = get_font(30, True)
+        scale = min(W / 720.0, H / 1280.0)
+        font = get_font(max(1, round(30 * scale)), True)
         lines = card["lines"]
-        line_height = 44
-        panel_h = 38 + line_height * len(lines)
-        top = H - 150 - panel_h
-        painter.rounded_rectangle((40, top, W - 40, top + panel_h), radius=26,
-                                  fill=(8, 14, 28, 216), outline=(60, 104, 150, 230), width=2)
+        line_height = round(44 * scale)
+        horizontal_margin = round(40 * scale)
+        panel_padding = round(38 * scale)
+        text_top_padding = round(22 * scale)
+        bottom_margin = round(150 * scale)
+        panel_radius = round(26 * scale)
+        stroke_width = max(1, round(2 * scale))
+        panel_h = panel_padding + line_height * len(lines)
+        top = H - bottom_margin - panel_h
+        painter.rounded_rectangle((horizontal_margin, top, W - horizontal_margin, top + panel_h),
+                                  radius=panel_radius, fill=(8, 14, 28, 216),
+                                  outline=(60, 104, 150, 230), width=stroke_width)
         for line_no, line in enumerate(lines):
             width = painter.textbbox((0, 0), line, font=font)[2]
-            painter.text(((W - width) / 2, top + 22 + line_no * line_height), line,
+            painter.text(((W - width) / 2, top + text_top_padding + line_no * line_height), line,
                          font=font, fill=(246, 250, 255, 255))
         path = out_dir / f"caption_{index:02d}_{j:02d}.png"
         image.save(path)
@@ -406,7 +414,7 @@ RENDER_STARTUP_SECONDS = int(os.getenv(
     "DEL_RENDER_STARTUP_SECONDS", str(RENDER_PROFILE["startup_seconds"])))
 RENDER_PHASE_BUDGET_SECONDS = int(os.getenv(
     "DEL_RENDER_PHASE_BUDGET_SECONDS", str(RENDER_PROFILE["phase_budget_seconds"])))
-RENDER_MAX_WORKERS = min(2, max(1, int(os.getenv("DEL_RENDER_WORKERS", "2"))))
+RENDER_MAX_WORKERS = min(2, max(1, int(os.getenv("DEL_RENDER_WORKERS", str(RENDER_PROFILE["render_workers"])))))
 
 
 def render_timeout(frames, override=None):
