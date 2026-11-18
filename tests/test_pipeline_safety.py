@@ -105,6 +105,23 @@ class DegradedDeliveryTests(unittest.TestCase):
         self.assertNotIn("narrate(args.offline or degraded is not None)", PIPELINE)
 
 
+class MountainPairTransformContractTests(unittest.TestCase):
+    def test_transform_animates_both_real_mountain_forms(self):
+        source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")
+        start = source.index("def act_transform(ctx):")
+        end = source.index("\\ndef act_pulse(ctx):", start)
+        action = source[start:end]
+        mountain_path = action.split("    hero = ctx.mover", 1)[0]
+        self.assertIn('ctx.spec["subject"]["kind"] == "mountain_pair"', mountain_path)
+        self.assertIn('ctx.parts.get("mountain_smooth")', mountain_path)
+        self.assertIn('ctx.parts.get("mountain_voxel")', mountain_path)
+        self.assertIn('key(smooth, "location"', mountain_path)
+        self.assertIn('for obj in voxels:', mountain_path)
+        self.assertIn('key(obj, "location"', mountain_path)
+        self.assertIn('key(obj, "scale"', mountain_path)
+        self.assertNotIn("transform_target", mountain_path)
+
+
 class NarrationVoiceSelectionTests(unittest.TestCase):
     def test_kokoro_is_selected_when_licensed_model_files_are_available(self):
         import os
