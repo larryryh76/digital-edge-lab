@@ -12,6 +12,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -32,16 +33,28 @@ def run(argv, *, cwd=None, env=None, timeout=None):
 def download(url: str, destination: Path):
     destination.parent.mkdir(parents=True, exist_ok=True)
     request = urllib.request.Request(url, headers={"User-Agent": "DigitalEdgeLab/1.0"})
-    with urllib.request.urlopen(request, timeout=180) as response, destination.open("wb") as out:
-        shutil.copyfileobj(response, out)
-    if destination.stat().st_size < 1024:
-        raise RuntimeError(f"Downloaded file is unexpectedly small: {destination}")
+    last_error = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=600) as response, destination.open("wb") as out:
+                shutil.copyfileobj(response, out)
+            if destination.stat().st_size < 1024:
+                raise RuntimeError(f"Downloaded file is unexpectedly small: {destination}")
+            return
+        except Exception as exc:
+            last_error = exc
+            destination.unlink(missing_ok=True)
+            if attempt < 2:
+                wait = 5 * (attempt + 1)
+                print(f"Download attempt {attempt + 1} failed; retrying in {wait}s: {exc}", flush=True)
+                time.sleep(wait)
+    raise RuntimeError(f"Could not download {url} after 3 attempts: {last_error}") from last_error
 
 
 def install_system_dependencies():
-    run(["apt-get", "update"])
+    run(["apt-get", "update", "-o", "Acquire::Retries=5"])
     run([
-        "apt-get", "install", "-y", "--no-install-recommends",
+        "apt-get", "install", "-y", "--no-install-recommends", "-o", "Acquire::Retries=5",
         "ffmpeg", "espeak-ng", "libegl1", "libegl-mesa0", "libgl1",
         "libglx-mesa0", "libgl1-mesa-dri", "libxkbcommon0", "libxi6",
         "libxxf86vm1", "libxfixes3", "libxrender1", "libsm6", "libice6",
@@ -103,7 +116,7 @@ def prepare_hdri():
         from polyhaven_assets import download_hdri
 
         path, manifest_path, manifest = download_hdri(
-            ROOT / "polyhaven-assets", slug="studio_small_03", resolution="1k"
+            ROOT / "polyhaven-assets", slug="studio_small_03", resolution="2k"
         )
         print(f"Poly Haven HDRI ready: {manifest['source_url']} ({manifest['resolution']})",
               flush=True)
