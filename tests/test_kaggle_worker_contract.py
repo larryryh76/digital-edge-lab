@@ -26,6 +26,13 @@ class KaggleWorkerContractTests(unittest.TestCase):
         self.assertIn("failed_gates", source)
         self.assertIn("(1080, 1920)", source)
 
+    def test_worker_uses_cc0_poly_haven_hdris_with_attribution(self):
+        source = WORKER.read_text(encoding="utf-8")
+        self.assertIn('slug="studio_small_03"', source)
+        self.assertIn('"DEL_POLYHAVEN_HDRI"', source)
+        self.assertIn("Powered by Poly Haven", source)
+        self.assertIn("video-description.txt", source)
+
     def test_kaggle_kernel_is_private_and_gpu_enabled(self):
         metadata = json.loads(METADATA.read_text(encoding="utf-8"))
         self.assertEqual(metadata["is_private"], "true")
