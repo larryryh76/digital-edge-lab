@@ -158,10 +158,18 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_pull_requests_keep_expensive_blender_certification_off_pr_runners(self):
         verify = self.text.split("  verify:", 1)[1]
-        verify_condition = verify.split("\n", 2)[1]
+        verify_condition = next(line for line in verify.splitlines()
+                                if line.strip().startswith("if:"))
+        cert = self.text.split("  renderer-certification:", 1)[1].split("\n  verify:", 1)[0]
+        cert_condition = next(line for line in cert.splitlines()
+                              if line.strip().startswith("if:"))
         self.assertNotIn("pull_request", verify_condition)
+        self.assertNotIn("pull_request", cert_condition)
+        self.assertIn("needs: renderer-certification", verify)
         self.assertIn("if: github.event_name == 'pull_request'\n    name: Fast Python tests", self.text)
         self.assertIn("python tests/render_smoke.py", self.text)
+        self.assertIn("matrix:", cert)
+        self.assertIn('DEL_SCENE_CERT_SHARD_COUNT: "8"', cert)
 
     def test_failure_artifact_is_uploaded_regardless_of_success_report(self):
         self.assertRegex(self.text, r"if:\s*\$\{\{\s*failure\(\)[^}]*\}\}")
@@ -249,7 +257,7 @@ class ProductionContractTests(unittest.TestCase):
         self.assertGreaterEqual(phase_budget, 600)
         self.assertLessEqual(phase_budget, 1800)
         self.assertIn("timeout-minutes: 60", workflow)
-        self.assertEqual(workflow.count("if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"), 1)
+        self.assertEqual(workflow.count("if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'"), 2)
         self.assertIn("RENDER_PHASE_BUDGET_SECONDS = int(os.getenv", PIPELINE)
         self.assertIn("deadline=retry_deadline", PIPELINE)
         self.assertIn("retry_deadline = time.monotonic() + 300", PIPELINE)
