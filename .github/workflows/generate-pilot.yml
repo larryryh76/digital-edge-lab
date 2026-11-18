@@ -255,32 +255,34 @@ jobs:
             espeak-ng fonts-dejavu-core
           espeak-ng --version | head -1
 
-      - name: Restore cached Piper voice model
-        id: piper-cache
+      - name: Restore cached Kokoro model files
+        id: kokoro-cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/piper-voice
-          key: piper-en-us-ryan-medium-v1
+          path: ${{ runner.temp }}/kokoro-voice
+          key: kokoro-v1.0-int8-am-michael-v1
 
-      - name: Install Piper neural voice model
+      - name: Install licensed Kokoro neural voice
         timeout-minutes: 8
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check piper-tts
-          VOICE_DIR="${{ runner.temp }}/piper-voice"
+          python -m pip install --disable-pip-version-check "kokoro-onnx==0.6.1" "soundfile>=0.13.0"
+          VOICE_DIR="${{ runner.temp }}/kokoro-voice"
           mkdir -p "$VOICE_DIR"
-          if [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx" ] || [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx.json" ]; then
-            curl -fL --retry 2 --connect-timeout 15 --max-time 180 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx" \
-              -o "$VOICE_DIR/en_US-ryan-medium.onnx"
-            curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json" \
-              -o "$VOICE_DIR/en_US-ryan-medium.onnx.json"
+          if [ ! -s "$VOICE_DIR/kokoro-v1.0.int8.onnx" ] || [ ! -s "$VOICE_DIR/voices-v1.0.bin" ]; then
+            curl -fL --retry 3 --connect-timeout 15 --max-time 240 \
+              "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.int8.onnx" \
+              -o "$VOICE_DIR/kokoro-v1.0.int8.onnx"
+            curl -fL --retry 3 --connect-timeout 15 --max-time 120 \
+              "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin" \
+              -o "$VOICE_DIR/voices-v1.0.bin"
           fi
-          test -s "$VOICE_DIR/en_US-ryan-medium.onnx"
-          test -s "$VOICE_DIR/en_US-ryan-medium.onnx.json"
-          echo "PIPER_MODEL=$VOICE_DIR/en_US-ryan-medium.onnx" >> "$GITHUB_ENV"
-          command -v piper
+          echo "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c  $VOICE_DIR/kokoro-v1.0.int8.onnx" | sha256sum -c -
+          echo "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d  $VOICE_DIR/voices-v1.0.bin" | sha256sum -c -
+          echo "KOKORO_MODEL=$VOICE_DIR/kokoro-v1.0.int8.onnx" >> "$GITHUB_ENV"
+          echo "KOKORO_VOICES=$VOICE_DIR/voices-v1.0.bin" >> "$GITHUB_ENV"
+          echo "KOKORO_VOICE=am_michael" >> "$GITHUB_ENV"
+          python -c "from kokoro_onnx import Kokoro; print('Kokoro ONNX runtime ready')"
 
       - name: Resolve Blender runtime libraries
         timeout-minutes: 8
