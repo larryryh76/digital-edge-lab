@@ -1,0 +1,142 @@
+name: Digital Edge Lab — Optional Kaggle GPU production render
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_gpu_usage:
+        description: "I understand this uses my limited free Kaggle GPU quota."
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digital-edge-lab-kaggle-production
+  cancel-in-progress: false
+
+jobs:
+  gpu-production-render:
+    if: inputs.confirm_gpu_usage
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      KERNEL_SLUG: digital-edge-lab-production-render
+    steps:
+      - name: Check out the exact source commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Kaggle CLI
+        run: python -m pip install --disable-pip-version-check kaggle
+
+      - name: Validate credentials and prepare private GPU kernel
+        run: |
+          set -euo pipefail
+          if [ -z "${KAGGLE_USERNAME:-}" ] || [ -z "${KAGGLE_KEY:-}" ]; then
+            echo "::error::Add KAGGLE_USERNAME and KAGGLE_KEY in repository Settings → Secrets and variables → Actions. Create the token from Kaggle Account → API."
+            exit 1
+          fi
+          mkdir -p "$HOME/.kaggle" "$RUNNER_TEMP/del-kaggle-kernel"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path.home().joinpath(".kaggle", "kaggle.json").write_text(json.dumps({
+              "username": os.environ["KAGGLE_USERNAME"],
+              "key": os.environ["KAGGLE_KEY"],
+          }), encoding="utf-8")
+          PY
+          chmod 600 "$HOME/.kaggle/kaggle.json"
+          cp kaggle/production-render/kernel-metadata.template.json "$RUNNER_TEMP/del-kaggle-kernel/kernel-metadata.json"
+          sed "s/__SOURCE_SHA__/$GITHUB_SHA/g" kaggle/production-render/production_render.py > "$RUNNER_TEMP/del-kaggle-kernel/production_render.py"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          path = Path(os.environ["RUNNER_TEMP"]) / "del-kaggle-kernel" / "kernel-metadata.json"
+          data = json.loads(path.read_text(encoding="utf-8"))
+          data["id"] = f'{os.environ["KAGGLE_USERNAME"]}/digital-edge-lab-production-render'
+          path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+          PY
+          python -m json.tool "$RUNNER_TEMP/del-kaggle-kernel/kernel-metadata.json" >/dev/null
+          grep -q "$GITHUB_SHA" "$RUNNER_TEMP/del-kaggle-kernel/production_render.py"
+
+      - name: Submit the private GPU render to Kaggle
+        run: |
+          set -euo pipefail
+          KERNEL_ID="$KAGGLE_USERNAME/$KERNEL_SLUG"
+          kaggle kernels push -p "$RUNNER_TEMP/del-kaggle-kernel" --accelerator NvidiaTeslaT4 --timeout 7800
+
+      - name: Wait for the Kaggle GPU render to finish
+        timeout-minutes: 145
+        run: |
+          set -euo pipefail
+          KERNEL_ID="$KAGGLE_USERNAME/$KERNEL_SLUG"
+          completed=0
+          for attempt in $(seq 1 140); do
+            status="$(kaggle kernels status "$KERNEL_ID" 2>&1 || true)"
+            echo "Kaggle status check $attempt/140: $status"
+            lower="$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]')"
+            if printf '%s' "$lower" | grep -Eq 'complete|success'; then
+              completed=1
+              break
+            fi
+            if printf '%s' "$lower" | grep -Eq 'error|failed|cancelled|canceled'; then
+              echo "::error::Kaggle GPU render failed: $status"
+              kaggle kernels logs "$KERNEL_ID" || true
+              exit 1
+            fi
+            sleep 60
+          done
+          if [ "$completed" -ne 1 ]; then
+            echo "::error::Kaggle render did not complete within the 140-minute polling window."
+            kaggle kernels logs "$KERNEL_ID" || true
+            exit 1
+          fi
+
+      - name: Download and verify the 1080p production delivery
+        run: |
+          set -euo pipefail
+          KERNEL_ID="$KAGGLE_USERNAME/$KERNEL_SLUG"
+          mkdir -p "$RUNNER_TEMP/kaggle-output" output/delivery
+          kaggle kernels output "$KERNEL_ID" -p "$RUNNER_TEMP/kaggle-output" --force
+          ZIP="$(find "$RUNNER_TEMP/kaggle-output" -type f -name 'digital-edge-lab-delivery.zip' -print -quit)"
+          test -n "$ZIP"
+          unzip -q "$ZIP" -d output/delivery
+          cp "$RUNNER_TEMP/kaggle-output/production-render-metadata.json" output/delivery/
+          cp "$RUNNER_TEMP/kaggle-output/digital-edge-lab-pilot.mp4" output/delivery/
+          cp "$RUNNER_TEMP/kaggle-output/run-report.json" output/delivery/
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("output/delivery/run-report.json").read_text())
+          assert report.get("status") in {"verified_delivery", "verified_degraded_delivery"}, report.get("status")
+          assert not report.get("failed_gates"), report.get("failed_gates")
+          media = report.get("delivery_media", {})
+          assert (media.get("width"), media.get("height")) == (1080, 1920), media
+          assert str(media.get("fps")) in {"24/1", "24"}, media
+          assert Path("output/delivery/digital-edge-lab-pilot.mp4").is_file()
+          print("Kaggle production report and media metadata verified.")
+          PY
+          ffprobe -v error -select_streams v:0 -show_entries stream=width,height,avg_frame_rate -of json output/delivery/digital-edge-lab-pilot.mp4
+
+      - name: Upload verified GPU production delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-edge-lab-gpu-production-delivery
+          path: output/delivery/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preserve Kaggle diagnostics on failure
+        if: failure()
+        run: |
+          if [ -f "$HOME/.kaggle/kaggle.json" ]; then
+            kaggle kernels logs "$KAGGLE_USERNAME/$KERNEL_SLUG" || true
+          fi
