@@ -1080,6 +1080,53 @@ def act_reveal(ctx):
 
 
 def act_transform(ctx):
+    # A mountain pair already contains both visual forms. Transform the whole
+    # voxel mountain into the smooth mountain instead of introducing an
+    # unrelated cube and shrinking only one voxel (which looked almost static).
+    if ctx.spec["subject"]["kind"] == "mountain_pair":
+        smooth = (ctx.parts.get("mountain_smooth") or [None])[0]
+        voxels = ctx.parts.get("mountain_voxel") or []
+        if smooth is not None and voxels:
+            smooth_location = smooth.location.copy()
+            smooth_scale = smooth.scale.copy()
+            smooth_rotation = smooth.rotation_euler.copy()
+            smooth_target = smooth_location + Vector((0.38, 0.0, 0.08))
+            duration = max(1, ctx.end - ctx.start)
+            for progress, shift, scale in (
+                (0.0, 0.0, 1.0),
+                (0.25, 0.08, 1.06),
+                (0.50, 0.18, 1.14),
+                (0.75, 0.29, 1.20),
+                (1.0, 0.38, 1.24),
+            ):
+                frame = ctx.start + int(duration * progress)
+                location = smooth_location + Vector((shift, 0.0, 0.08 * progress))
+                rotation = smooth_rotation + Vector((0.0, 0.0, math.radians(-8.0 * progress)))
+                key(smooth, "location", frame, tuple(location))
+                key(smooth, "scale", frame, tuple(smooth_scale * scale))
+                key(smooth, "rotation_euler", frame, tuple(rotation))
+
+            voxel_center = sum((obj.location for obj in voxels), Vector((0.0, 0.0, 0.0))) / len(voxels)
+            for obj in voxels:
+                start_location = obj.location.copy()
+                start_scale = obj.scale.copy()
+                start_rotation = obj.rotation_euler.copy()
+                target_location = smooth_target + (start_location - voxel_center) * 0.18
+                for progress, travel, shrink in (
+                    (0.0, 0.0, 1.0),
+                    (0.25, 0.28, 0.82),
+                    (0.50, 0.58, 0.55),
+                    (0.75, 0.82, 0.28),
+                    (1.0, 1.0, 0.12),
+                ):
+                    frame = ctx.start + int(duration * progress)
+                    location = start_location.lerp(target_location, travel)
+                    rotation = start_rotation + Vector((0.0, 0.0, math.radians(32.0 * progress)))
+                    key(obj, "location", frame, tuple(location))
+                    key(obj, "scale", frame, tuple(start_scale * shrink))
+                    key(obj, "rotation_euler", frame, tuple(rotation))
+            return
+
     hero = ctx.mover
     second = ctx.add(ctx.studio.box("transform_target", (hero.location.x + 1.35, hero.location.y,
                                                   hero.location.z),
