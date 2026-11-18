@@ -1527,6 +1527,9 @@ for j, obj in enumerate(ctx.extras):
 
 scene.frame_set(frame_start)
 focus_parts = tracked.get("mover") or [hero]
+if spec["subject"]["kind"] == "mountain_pair" and spec["action"]["kind"] == "transform":
+    # Frame both mountain forms together so the morph stays composed as they converge.
+    focus_parts = (parts.get("mountain_smooth") or []) + (parts.get("mountain_voxel") or [])
 focus_center = world_center(focus_parts)
 camera = setup_camera(spec, focus_center, hero)
 setup_lighting(spec["lighting"]["mood"])
