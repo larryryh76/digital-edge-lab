@@ -80,6 +80,30 @@ class MotionTests(unittest.TestCase):
         self.assertLess(media_qa.image_similarity(frame_a, frame_b), 0.9)
 
 
+class ScaledMotionRegionTests(unittest.TestCase):
+    def test_hero_and_background_regions_scale_to_preview_resolution(self):
+        hero = media_qa.scale_region_box(media_qa.HERO_BOX, 288, 512)
+        background = media_qa.scale_region_box(media_qa.BACKGROUND_BOX, 288, 512)
+        self.assertEqual(hero, {"x": 72, "y": 120, "w": 144, "h": 208})
+        self.assertEqual(background, {"x": 0, "y": 0, "w": 80, "h": 80})
+
+    def test_hero_region_scales_to_native_1080p_portrait(self):
+        hero = media_qa.scale_region_box(media_qa.HERO_BOX, 1080, 1920)
+        self.assertEqual(hero, {"x": 270, "y": 450, "w": 540, "h": 780})
+
+    def test_scaled_preview_crop_measures_real_motion(self):
+        clip = make_clip(self.tmp / "preview-motion.mp4",
+                         "testsrc=size=288x512:rate=24:duration=2")
+        box = media_qa.scale_region_box(media_qa.HERO_BOX, 288, 512)
+        self.assertGreater(media_qa.region_motion(clip, box), 0.1)
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
 class SceneCertificationContractTests(unittest.TestCase):
     def test_retry_profile_targets_the_reported_failure_type(self):
         sys.path.insert(0, str(ROOT / "src"))
