@@ -286,6 +286,38 @@ jobs:
           echo "KOKORO_VOICE=am_michael" >> "$GITHUB_ENV"
           python -c "from kokoro_onnx import Kokoro; print('Kokoro ONNX runtime ready')"
 
+      - name: Smoke-test licensed Kokoro male voice
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "src")
+          import narration
+
+          text = (
+              "When the signal vanished, the team noticed a second pulse beneath the ice. "
+              "It was moving toward the station."
+          )
+          output = Path("output/diagnostics/kokoro-voice-smoke.wav")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          narration.local_tts(text, output, "kokoro")
+          pace = narration.normalize_local_pace(output, text)
+          seconds = narration.probe_duration(output)
+          words_per_minute = 60.0 * len(text.split()) / max(seconds, 0.01)
+          if not 100 <= words_per_minute <= 168:
+              raise SystemExit(f"Kokoro voice pace is outside the accepted range: {words_per_minute:.1f} WPM")
+          print({
+              "voice": "am_michael",
+              "duration_seconds": round(seconds, 2),
+              "words_per_minute": round(words_per_minute, 1),
+              "pace_correction": pace,
+              "audio_file": str(output),
+          })
+          PY
+
       - name: Resolve Blender runtime libraries
         timeout-minutes: 8
         run: |
@@ -409,6 +441,15 @@ jobs:
             git -c rebase.autoStash=true rebase origin/main
             git push origin HEAD:main
           fi
+
+      - name: Upload Kokoro voice audition sample
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kokoro-am-michael-voice-smoke
+          path: output/diagnostics/kokoro-voice-smoke.wav
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload verified delivery
         if: success()
