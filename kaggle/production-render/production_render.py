@@ -204,22 +204,40 @@ def main():
     ], cwd=REPO, env=env, timeout=7800)
 
     report, video_path = verify_delivery()
+    report.setdefault("narration", {}).update({
+        "voice_model": "Kokoro-82M",
+        "voice": "am_michael",
+        "voice_model_license": "Apache-2.0",
+        "inference_package": "kokoro-onnx",
+        "inference_package_license": "MIT",
+    })
+    attribution_lines = [
+        "Narration: Kokoro-82M, voice am_michael (Apache-2.0 model; MIT kokoro-onnx runtime)."
+    ]
+    description_lines = [
+        "Narration generated with Kokoro-82M, voice am_michael (Apache-2.0 model)."
+    ]
     if hdri_manifest:
         report["external_assets"] = [hdri_manifest]
-        (DELIVERY / "ASSET_ATTRIBUTION.txt").write_text(
-            "HDRI: Studio Small 03 by Greg Zaal via Poly Haven (CC0). "
-            "Powered by Poly Haven.\n"
-            + hdri_manifest["source_url"] + "\n",
-            encoding="utf-8",
-        )
-        (DELIVERY / "video-description.txt").write_text(
-            "3D environment HDRI: Studio Small 03 by Greg Zaal via Poly Haven (CC0). "
-            "Powered by Poly Haven.\n" + hdri_manifest["source_url"] + "\n",
-            encoding="utf-8",
-        )
-        (DELIVERY / "run-report.json").write_text(
-            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
-        )
+        attribution_lines.extend([
+            "HDRI: Studio Small 03 by Greg Zaal via Poly Haven (CC0).",
+            "Powered by Poly Haven.",
+            hdri_manifest["source_url"],
+        ])
+        description_lines.extend([
+            "3D environment HDRI: Studio Small 03 by Greg Zaal via Poly Haven (CC0).",
+            "Powered by Poly Haven.",
+            hdri_manifest["source_url"],
+        ])
+    (DELIVERY / "ASSET_ATTRIBUTION.txt").write_text(
+        "\n".join(attribution_lines) + "\n", encoding="utf-8"
+    )
+    (DELIVERY / "video-description.txt").write_text(
+        "\n".join(description_lines) + "\n", encoding="utf-8"
+    )
+    (DELIVERY / "run-report.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     output_zip = ROOT / "digital-edge-lab-delivery.zip"
     with zipfile.ZipFile(output_zip, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in DELIVERY.rglob("*"):
