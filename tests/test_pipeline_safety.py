@@ -105,6 +105,48 @@ class DegradedDeliveryTests(unittest.TestCase):
         self.assertNotIn("narrate(args.offline or degraded is not None)", PIPELINE)
 
 
+class NarrationRhythmTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _tone(self, name, seconds):
+        import subprocess
+        path = self.tmp / name
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+             f"sine=frequency=440:duration={seconds}", "-ac", "1", "-ar", "48000", str(path)],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return path
+
+    def test_fast_local_voice_is_stretched_without_changing_pitch(self):
+        audio = self._tone("fast.wav", 1.0)  # 3 words in 1s = 180 WPM
+        report = narration.normalize_local_pace(audio, "one two three")
+        self.assertTrue(report["stretched"])
+        self.assertEqual(report["before_wpm"], 180.0)
+        self.assertLess(report["after_wpm"], report["before_wpm"])
+        self.assertEqual(narration.TARGET_LOCAL_WPM, 158)
+        self.assertEqual(narration.LOCAL_WPM_FAST_THRESHOLD, 168)
+
+    def test_slow_local_voice_is_not_stretched(self):
+        audio = self._tone("slow.wav", 2.0)  # 3 words in 2s = 90 WPM
+        report = narration.normalize_local_pace(audio, "one two three")
+        self.assertFalse(report["stretched"])
+        self.assertEqual(report["before_wpm"], report["after_wpm"])
+
+    def test_reveals_hooks_and_payoffs_receive_deliberate_pauses(self):
+        base = narration.pause_after_role("setup")
+        self.assertGreater(narration.pause_after_role("hook"), base)
+        self.assertGreater(narration.pause_after_role("reveal"), base)
+        self.assertGreater(narration.pause_after_role("payoff"), base)
+
+
 class GateTests(unittest.TestCase):
     def test_all_gates_pass_gives_no_failures(self):
         result = pipeline.decide_failures(
