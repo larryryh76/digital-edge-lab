@@ -24,6 +24,8 @@ on:
       - "src/**"
       - "tests/**"
       - "plans/**"
+      - "kaggle/**"
+      - "READY_MADE_VIDEO_QUALITY_STACK.md"
       - ".github/workflows/generate-pilot.yml"
       - "requirements.txt"
   schedule:
