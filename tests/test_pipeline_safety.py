@@ -131,7 +131,7 @@ class CertificationArtifactContractTests(unittest.TestCase):
         self.assertIn("Upload real-render certification evidence", workflow)
         self.assertIn("DEL_CERTIFICATION_ARTIFACT_DIR:", workflow)
         self.assertIn("if: always()", workflow)
-        self.assertIn("renderer-certification-shard-\${{ matrix.shard }}", workflow)
+        self.assertIn("renderer-certification-shard-${{ matrix.shard }}", workflow)
 
 
 class MountainPairTransformContractTests(unittest.TestCase):
