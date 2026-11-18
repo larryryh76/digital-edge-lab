@@ -140,6 +140,11 @@ class NarrationRhythmTests(unittest.TestCase):
         self.assertFalse(report["stretched"])
         self.assertEqual(report["before_wpm"], report["after_wpm"])
 
+    def test_extremely_rushed_local_voice_is_rejected_after_bounded_correction(self):
+        audio = self._tone("extreme.wav", 0.5)  # 3 words in 0.5s = 360 WPM
+        with self.assertRaises(narration.NarrationError):
+            narration.normalize_local_pace(audio, "one two three")
+
     def test_reveals_hooks_and_payoffs_receive_deliberate_pauses(self):
         base = narration.pause_after_role("setup")
         self.assertGreater(narration.pause_after_role("hook"), base)
