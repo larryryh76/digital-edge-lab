@@ -252,6 +252,8 @@ def main():
         "fps": 24,
         "status": report.get("status"),
         "narration_engine": report.get("narration", {}).get("engine"),
+        "narration_voice": report.get("narration", {}).get("voice"),
+        "narration_license": report.get("narration", {}).get("voice_model_license"),
         "failed_gates": report.get("failed_gates", []),
         "gpu": subprocess.check_output(["nvidia-smi", "-L"], text=True).strip(),
         "blender": subprocess.check_output([str(blender_bin), "--version"], text=True).splitlines()[0],
