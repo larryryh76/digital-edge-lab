@@ -83,6 +83,7 @@ Wan/Hunyuan/LTX weights are not equivalent to a hosted free API. Their memory, s
 - Adobe Mixamo FAQ: https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html
 - SheepIt project points and render-farm rules: https://api.sheepit-renderfarm.com/faq
 - SheepIt service and supported Blender engines: https://www.sheepit-renderfarm.com/
+- Google Veo/Gemini video generation and pricing: https://ai.google.dev/gemini-api/docs/video and https://ai.google.dev/gemini-api/docs/pricing
 - Blender rendering engines: https://www.blender.org/features/rendering/
 - Gemini API pricing/free-tier notes: https://ai.google.dev/gemini-api/docs/pricing
 
