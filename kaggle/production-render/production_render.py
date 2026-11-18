@@ -19,14 +19,6 @@ from pathlib import Path
 SOURCE_SHA = "__SOURCE_SHA__"
 REPOSITORY = "https://github.com/larryryh76/digital-edge-lab.git"
 BLENDER_URL = "https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz"
-PIPER_MODEL_URL = (
-    "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
-    "en/en_US/ryan/medium/en_US-ryan-medium.onnx"
-)
-PIPER_CONFIG_URL = (
-    "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
-    "en/en_US/ryan/medium/en_US-ryan-medium.onnx.json"
-)
 ROOT = Path("/kaggle/working")
 REPO = ROOT / "digital-edge-lab"
 DELIVERY = REPO / "output" / "delivery"
@@ -77,11 +69,28 @@ def install_python_dependencies():
     run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
          "-r", str(REPO / "requirements.txt")])
     run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-         "piper-tts"])
-    voice_dir = ROOT / "piper-voice"
-    download(PIPER_MODEL_URL, voice_dir / "en_US-ryan-medium.onnx")
-    download(PIPER_CONFIG_URL, voice_dir / "en_US-ryan-medium.onnx.json")
-    return voice_dir / "en_US-ryan-medium.onnx"
+         "kokoro-onnx==0.6.1", "soundfile>=0.13.0"])
+    voice_dir = ROOT / "kokoro-voice"
+    model = voice_dir / "kokoro-v1.0.int8.onnx"
+    voices = voice_dir / "voices-v1.0.bin"
+    model_url = (
+        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/"
+        "model-files-v1.1/kokoro-v1.0.int8.onnx"
+    )
+    voices_url = (
+        "https://github.com/thewh1teagle/kokoro-onnx/releases/download/"
+        "model-files-v1.1/voices-v1.0.bin"
+    )
+    voice_dir.mkdir(parents=True, exist_ok=True)
+    if not model.is_file():
+        download(model_url, model)
+    if not voices.is_file():
+        download(voices_url, voices)
+    if sha256_file(model) != "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c":
+        raise RuntimeError("Kokoro INT8 model checksum mismatch")
+    if sha256_file(voices) != "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d":
+        raise RuntimeError("Kokoro voice pack checksum mismatch")
+    return model, voices
 
 
 def prepare_hdri():
@@ -128,6 +137,9 @@ def verify_delivery():
         raise RuntimeError(f"Delivery status is not verified: {report.get('status')}")
     if report.get("failed_gates"):
         raise RuntimeError(f"Delivery report contains failed gates: {report['failed_gates']}")
+    narration = report.get("narration", {})
+    if narration.get("engine") != "kokoro-neural" or not narration.get("publication_quality_voice"):
+        raise RuntimeError(f"Expected licensed Kokoro narration, got {narration}")
     media = report.get("delivery_media", {})
     if (media.get("width"), media.get("height")) != (1080, 1920):
         raise RuntimeError(f"Expected native 1080x1920 output, got {media}")
@@ -164,13 +176,15 @@ def main():
     checkout_exact_source()
     install_system_dependencies()
     blender_bin = install_blender()
-    piper_model = install_python_dependencies()
+    kokoro_model, kokoro_voices = install_python_dependencies()
     hdri_path, hdri_manifest_path, hdri_manifest = prepare_hdri()
 
     env = os.environ.copy()
     env.update({
         "PATH": str(blender_bin.parent) + os.pathsep + env.get("PATH", ""),
-        "PIPER_MODEL": str(piper_model),
+        "KOKORO_MODEL": str(kokoro_model),
+        "KOKORO_VOICES": str(kokoro_voices),
+        "KOKORO_VOICE": "am_michael",
         "DEL_RENDER_PROFILE": "production",
         "DEL_RENDER_WORKERS": "1",
         "DEL_RENDER_SECONDS_PER_FRAME": "5.0",
@@ -219,6 +233,7 @@ def main():
         "resolution": "1080x1920",
         "fps": 24,
         "status": report.get("status"),
+        "narration_engine": report.get("narration", {}).get("engine"),
         "failed_gates": report.get("failed_gates", []),
         "gpu": subprocess.check_output(["nvidia-smi", "-L"], text=True).strip(),
         "blender": subprocess.check_output([str(blender_bin), "--version"], text=True).splitlines()[0],
