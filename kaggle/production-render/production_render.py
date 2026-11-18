@@ -71,7 +71,7 @@ def install_python_dependencies():
     run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
          "--no-deps", "kokoro-onnx==0.6.1"])
     run([sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
-         "onnxruntime-gpu==1.22.0", "espeakng-loader>=0.2.4",
+         "onnxruntime-gpu==1.20.1", "espeakng-loader>=0.2.4",
          "phonemizer>=3.4.0", "numpy>=2.0.2", "soundfile>=0.13.0"])
     voice_dir = ROOT / "kokoro-voice"
     model = voice_dir / "kokoro-v1.0.fp16.onnx"
