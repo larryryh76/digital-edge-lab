@@ -52,7 +52,7 @@ The optional Kaggle worker and a manual-only GitHub Actions workflow are now sca
 
 ### 3. Poly Haven is the strongest free asset source
 
-Poly Haven's CC0 Studio Small 03 HDRI is now integrated into the optional Cycles GPU worker for ambient illumination and reflections. The loader uses the keyless v2 files API, a unique User-Agent, checksum verification, and an asset manifest. The API attribution requirement is kept separate from the CC0 asset license; a credit and source URL are included in the delivery's attribution and video-description files. PBR textures and scene-specific models remain future additions.
+Poly Haven's CC0 Studio Small 03 HDRI is now integrated into the optional Cycles GPU worker for ambient illumination and reflections. The loader uses the keyless public files API, a unique User-Agent, checksum verification, and an asset manifest. The API attribution requirement is kept separate from the CC0 asset license; a credit and source URL are included in the delivery's attribution and video-description files. PBR textures and scene-specific models remain future additions.
 
 ### 4. SheepIt is free, but not a guaranteed free compute shortcut
 
