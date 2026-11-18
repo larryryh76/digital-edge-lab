@@ -105,6 +105,136 @@ class DegradedDeliveryTests(unittest.TestCase):
         self.assertNotIn("narrate(args.offline or degraded is not None)", PIPELINE)
 
 
+class NarrationVoiceSelectionTests(unittest.TestCase):
+    def test_kokoro_is_selected_when_licensed_model_files_are_available(self):
+        import os
+        import tempfile
+        import types
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            model = Path(folder) / "kokoro.int8.onnx"
+            voices = Path(folder) / "voices.bin"
+            model.write_bytes(b"model")
+            voices.write_bytes(b"voices")
+            with patch.dict(os.environ, {
+                "KOKORO_MODEL": str(model),
+                "KOKORO_VOICES": str(voices),
+            }), patch.dict(sys.modules, {"kokoro_onnx": types.ModuleType("kokoro_onnx")}):
+                self.assertEqual(narration.find_local_voice(), "kokoro")
+
+    def test_kokoro_local_tts_uses_the_selected_male_voice(self):
+        import os
+        import tempfile
+        import types
+        from unittest.mock import patch
+
+        calls = []
+
+        class FakeKokoro:
+            def __init__(self, model, voices):
+                calls.append({"model": model, "voices": voices})
+
+            def create(self, text, *, voice, speed, lang):
+                calls.append({"text": text, "voice": voice, "speed": speed, "lang": lang})
+                return [0.0] * 24000, 24000
+
+        fake_kokoro = types.ModuleType("kokoro_onnx")
+        fake_kokoro.Kokoro = FakeKokoro
+        fake_soundfile = types.ModuleType("soundfile")
+        fake_soundfile.write = lambda path, audio, sample_rate, subtype: Path(path).write_bytes(
+            b"\\x00" * 2048
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            model = Path(folder) / "kokoro.onnx"
+            voices = Path(folder) / "voices.bin"
+            output = Path(folder) / "voice.wav"
+            model.write_bytes(b"model")
+            voices.write_bytes(b"voices")
+            narration._KOKORO_ENGINE = None
+            narration._KOKORO_ENGINE_KEY = None
+            try:
+                with patch.dict(os.environ, {
+                    "KOKORO_MODEL": str(model),
+                    "KOKORO_VOICES": str(voices),
+                    "KOKORO_VOICE": "am_michael",
+                }), patch.dict(sys.modules, {
+                    "kokoro_onnx": fake_kokoro,
+                    "soundfile": fake_soundfile,
+                }):
+                    narration.local_tts("A short documentary line.", output, "kokoro")
+                self.assertEqual(calls[-1]["voice"], "am_michael")
+                self.assertEqual(calls[-1]["lang"], "en-us")
+                self.assertTrue(output.is_file())
+            finally:
+                narration._KOKORO_ENGINE = None
+                narration._KOKORO_ENGINE_KEY = None
+
+    def test_noncommercial_piper_is_never_selected_as_a_fallback(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        with tempfile.TemporaryDirectory() as folder:
+            model = Path(folder) / "ryan-noncommercial.onnx"
+            model.write_bytes(b"legacy")
+            with patch.dict(os.environ, {
+                "PIPER_MODEL": str(model),
+                "KOKORO_MODEL": "",
+                "KOKORO_VOICES": "",
+            }), patch("narration.shutil.which",
+                     side_effect=lambda name: "/usr/bin/espeak-ng" if name == "espeak-ng"
+                     else "/usr/bin/piper" if name == "piper" else None):
+                self.assertEqual(narration.find_local_voice(), "/usr/bin/espeak-ng")
+
+
+class NarrationRhythmTests(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _tone(self, name, seconds):
+        import subprocess
+        path = self.tmp / name
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
+             f"sine=frequency=440:duration={seconds}", "-ac", "1", "-ar", "48000", str(path)],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return path
+
+    def test_fast_local_voice_is_stretched_without_changing_pitch(self):
+        audio = self._tone("fast.wav", 1.0)  # 3 words in 1s = 180 WPM
+        report = narration.normalize_local_pace(audio, "one two three")
+        self.assertTrue(report["stretched"])
+        self.assertEqual(report["before_wpm"], 180.0)
+        self.assertLess(report["after_wpm"], report["before_wpm"])
+        self.assertEqual(narration.TARGET_LOCAL_WPM, 158)
+        self.assertEqual(narration.LOCAL_WPM_FAST_THRESHOLD, 168)
+
+    def test_slow_local_voice_is_not_stretched(self):
+        audio = self._tone("slow.wav", 2.0)  # 3 words in 2s = 90 WPM
+        report = narration.normalize_local_pace(audio, "one two three")
+        self.assertFalse(report["stretched"])
+        self.assertEqual(report["before_wpm"], report["after_wpm"])
+
+    def test_extremely_rushed_local_voice_is_rejected_after_bounded_correction(self):
+        audio = self._tone("extreme.wav", 0.5)  # 3 words in 0.5s = 360 WPM
+        with self.assertRaises(narration.NarrationError):
+            narration.normalize_local_pace(audio, "one two three")
+
+    def test_reveals_hooks_and_payoffs_receive_deliberate_pauses(self):
+        base = narration.pause_after_role("setup")
+        self.assertGreater(narration.pause_after_role("hook"), base)
+        self.assertGreater(narration.pause_after_role("reveal"), base)
+        self.assertGreater(narration.pause_after_role("payoff"), base)
+
+
 class GateTests(unittest.TestCase):
     def test_all_gates_pass_gives_no_failures(self):
         result = pipeline.decide_failures(
@@ -181,6 +311,12 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_workflow_runs_the_real_pipeline_entry_point(self):
         self.assertIn("python src/pipeline.py", self.text)
+
+    def test_workflow_smoke_tests_and_preserves_the_kokoro_male_voice_sample(self):
+        self.assertIn("Smoke-test licensed Kokoro male voice", self.text)
+        self.assertIn("KOKORO_VOICE=am_michael", self.text)
+        self.assertIn("output/diagnostics/kokoro-voice-smoke.wav", self.text)
+        self.assertIn("Upload Kokoro voice audition sample", self.text)
 
     def test_generated_workflow_has_explicit_quality_gated_outage_fallback(self):
         self.assertIn("--fallback-plan plans/quantization-on-device.json", self.text)

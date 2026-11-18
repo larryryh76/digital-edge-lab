@@ -24,6 +24,9 @@ on:
       - "src/**"
       - "tests/**"
       - "plans/**"
+      - "kaggle/**"
+      - ".github/workflows/kaggle-production-render.yml"
+      - "READY_MADE_VIDEO_QUALITY_STACK.md"
       - ".github/workflows/generate-pilot.yml"
       - "requirements.txt"
   schedule:
@@ -255,32 +258,66 @@ jobs:
             espeak-ng fonts-dejavu-core
           espeak-ng --version | head -1
 
-      - name: Restore cached Piper voice model
-        id: piper-cache
+      - name: Restore cached Kokoro model files
+        id: kokoro-cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/piper-voice
-          key: piper-en-us-ryan-medium-v1
+          path: ${{ runner.temp }}/kokoro-voice
+          key: kokoro-v1.0-int8-am-michael-v1
 
-      - name: Install Piper neural voice model
+      - name: Install licensed Kokoro neural voice
         timeout-minutes: 8
         run: |
           set -euo pipefail
-          python -m pip install --disable-pip-version-check piper-tts
-          VOICE_DIR="${{ runner.temp }}/piper-voice"
+          python -m pip install --disable-pip-version-check "kokoro-onnx==0.6.1" "soundfile>=0.13.0"
+          VOICE_DIR="${{ runner.temp }}/kokoro-voice"
           mkdir -p "$VOICE_DIR"
-          if [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx" ] || [ ! -s "$VOICE_DIR/en_US-ryan-medium.onnx.json" ]; then
-            curl -fL --retry 2 --connect-timeout 15 --max-time 180 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx" \
-              -o "$VOICE_DIR/en_US-ryan-medium.onnx"
-            curl -fL --retry 2 --connect-timeout 15 --max-time 60 \
-              "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json" \
-              -o "$VOICE_DIR/en_US-ryan-medium.onnx.json"
+          if [ ! -s "$VOICE_DIR/kokoro-v1.0.int8.onnx" ] || [ ! -s "$VOICE_DIR/voices-v1.0.bin" ]; then
+            curl -fL --retry 3 --connect-timeout 15 --max-time 240 \
+              "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/kokoro-v1.0.int8.onnx" \
+              -o "$VOICE_DIR/kokoro-v1.0.int8.onnx"
+            curl -fL --retry 3 --connect-timeout 15 --max-time 120 \
+              "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1/voices-v1.0.bin" \
+              -o "$VOICE_DIR/voices-v1.0.bin"
           fi
-          test -s "$VOICE_DIR/en_US-ryan-medium.onnx"
-          test -s "$VOICE_DIR/en_US-ryan-medium.onnx.json"
-          echo "PIPER_MODEL=$VOICE_DIR/en_US-ryan-medium.onnx" >> "$GITHUB_ENV"
-          command -v piper
+          echo "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c  $VOICE_DIR/kokoro-v1.0.int8.onnx" | sha256sum -c -
+          echo "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d  $VOICE_DIR/voices-v1.0.bin" | sha256sum -c -
+          echo "KOKORO_MODEL=$VOICE_DIR/kokoro-v1.0.int8.onnx" >> "$GITHUB_ENV"
+          echo "KOKORO_VOICES=$VOICE_DIR/voices-v1.0.bin" >> "$GITHUB_ENV"
+          echo "KOKORO_VOICE=am_michael" >> "$GITHUB_ENV"
+          python -c "from kokoro_onnx import Kokoro; print('Kokoro ONNX runtime ready')"
+
+      - name: Smoke-test licensed Kokoro male voice
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, "src")
+          import narration
+
+          text = (
+              "When the signal vanished, the team noticed a second pulse beneath the ice. "
+              "It was moving toward the station."
+          )
+          output = Path("output/diagnostics/kokoro-voice-smoke.wav")
+          output.parent.mkdir(parents=True, exist_ok=True)
+          narration.local_tts(text, output, "kokoro")
+          pace = narration.normalize_local_pace(output, text)
+          seconds = narration.probe_duration(output)
+          words_per_minute = 60.0 * len(text.split()) / max(seconds, 0.01)
+          if not 100 <= words_per_minute <= 168:
+              raise SystemExit(f"Kokoro voice pace is outside the accepted range: {words_per_minute:.1f} WPM")
+          print({
+              "voice": "am_michael",
+              "duration_seconds": round(seconds, 2),
+              "words_per_minute": round(words_per_minute, 1),
+              "pace_correction": pace,
+              "audio_file": str(output),
+          })
+          PY
 
       - name: Resolve Blender runtime libraries
         timeout-minutes: 8
@@ -405,6 +442,15 @@ jobs:
             git -c rebase.autoStash=true rebase origin/main
             git push origin HEAD:main
           fi
+
+      - name: Upload Kokoro voice audition sample
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kokoro-am-michael-voice-smoke
+          path: output/diagnostics/kokoro-voice-smoke.wav
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload verified delivery
         if: success()

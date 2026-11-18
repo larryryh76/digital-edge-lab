@@ -27,9 +27,13 @@ from mathutils import Vector
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scene_spec  # noqa: E402  (Blender entry point; import after sys.path setup)
+from render_profiles import get_render_profile  # noqa: E402
 
-RENDER_W, RENDER_H, RENDER_FPS = 288, 512, 12
-SAMPLES = 1  # CPU-only CI preview; upscale final delivery after render
+PROFILE = get_render_profile()
+RENDER_W = PROFILE["render_width"]
+RENDER_H = PROFILE["render_height"]
+RENDER_FPS = PROFILE["render_fps"]
+SAMPLES = PROFILE["samples"]
 
 # --- palette ---------------------------------------------------------------
 PALETTE = {
@@ -68,23 +72,65 @@ frame_start = 1
 frame_end = max(24, int(round(shot_seconds * RENDER_FPS)))
 
 
-def configure_scene():
-    try:
-        scene.render.engine = "BLENDER_EEVEE_NEXT"
-    except (TypeError, AttributeError):
-        scene.render.engine = "BLENDER_EEVEE"
-    # CI has no GPU: keep the per-frame cost bounded but still cinematic.
-    for attr, value in (
-        ("taa_render_samples", SAMPLES),
-        ("use_gtao", False),
-        ("use_ssr", False),          # screen-space reflections are very costly on llvmpipe
-        ("use_raytracing", False),   # EEVEE Next equivalent
-        ("use_bloom", True),
-    ):
+def configure_cycles_gpu():
+    """Enable a real non-CPU Cycles device or fail production rendering clearly."""
+    addon = bpy.context.preferences.addons.get("cycles")
+    if addon is None:
+        raise RuntimeError("Cycles add-on is unavailable; production profile requires GPU rendering")
+    preferences = addon.preferences
+    requested = os.getenv("DEL_CYCLES_DEVICE", "AUTO").strip().upper()
+    candidates = [requested] if requested != "AUTO" else ["OPTIX", "CUDA", "HIP", "METAL", "ONEAPI"]
+    failures = []
+    for backend in candidates:
         try:
-            setattr(scene.eevee, attr, value)
+            preferences.compute_device_type = backend
+            preferences.get_devices()
+            devices = list(preferences.devices)
+            gpu_devices = [device for device in devices
+                           if getattr(device, "type", "CPU") != "CPU"]
+            if not gpu_devices:
+                failures.append(f"{backend}: no compatible GPU")
+                continue
+            for device in devices:
+                device.use = device in gpu_devices
+            scene.cycles.device = "GPU"
+            return [{"name": device.name, "type": device.type} for device in gpu_devices]
+        except Exception as exc:
+            failures.append(f"{backend}: {type(exc).__name__}: {exc}")
+    raise RuntimeError(
+        "Production render profile requires a supported CUDA/OptiX/HIP/Metal/oneAPI GPU; "
+        + "; ".join(failures)
+    )
+
+
+def configure_scene():
+    render_devices = []
+    if PROFILE["engine"] == "CYCLES":
+        scene.render.engine = "CYCLES"
+        render_devices = configure_cycles_gpu() if PROFILE["require_gpu"] else []
+        scene.cycles.samples = SAMPLES
+        scene.cycles.use_denoising = bool(PROFILE["denoise"])
+        try:
+            scene.cycles.use_adaptive_sampling = True
         except (AttributeError, TypeError):
             pass
+    else:
+        try:
+            scene.render.engine = "BLENDER_EEVEE_NEXT"
+        except (TypeError, AttributeError):
+            scene.render.engine = "BLENDER_EEVEE"
+        # The preview profile is deliberately cheap for PR and CI feedback.
+        for attr, value in (
+            ("taa_render_samples", SAMPLES),
+            ("use_gtao", False),
+            ("use_ssr", False),
+            ("use_raytracing", bool(PROFILE["raytracing"])),
+            ("use_bloom", True),
+        ):
+            try:
+                setattr(scene.eevee, attr, value)
+            except (AttributeError, TypeError):
+                pass
     try:
         scene.render.use_persistent_data = True
     except (AttributeError, TypeError):
@@ -110,7 +156,12 @@ def configure_scene():
     scene.render.ffmpeg.gopsize = 12
     scene.render.film_transparent = False
     scene.render.filepath = str(Path(output_path).resolve().with_suffix(""))
-
+    print(
+        f"[renderer] profile={os.getenv('DEL_RENDER_PROFILE', 'preview')} "
+        f"engine={scene.render.engine} render={RENDER_W}x{RENDER_H}@{RENDER_FPS} "
+        f"samples={SAMPLES} gpu={render_devices}",
+        flush=True,
+    )
 
 # --- material + primitive helpers -------------------------------------------
 def material(name, color, metallic=0.1, roughness=0.4, emission=0.0,
@@ -161,6 +212,37 @@ class Studio:
                 bg.inputs[1].default_value = 1.0
         except (AttributeError, TypeError, IndexError):
             self.world.color = (0.004, 0.007, 0.016)
+        hdri_path = os.getenv("DEL_POLYHAVEN_HDRI")
+        if hdri_path and PROFILE["engine"] == "CYCLES":
+            path = Path(hdri_path)
+            if not path.is_file():
+                raise RuntimeError(f"Configured Poly Haven HDRI is missing: {path}")
+            try:
+                self.world.use_nodes = True
+                nodes = self.world.node_tree.nodes
+                links = self.world.node_tree.links
+                nodes.clear()
+                output = nodes.new("ShaderNodeOutputWorld")
+                light_path = nodes.new("ShaderNodeLightPath")
+                mix = nodes.new("ShaderNodeMixShader")
+                camera_background = nodes.new("ShaderNodeBackground")
+                camera_background.inputs["Color"].default_value = (0.004, 0.007, 0.016, 1.0)
+                camera_background.inputs["Strength"].default_value = 1.0
+                environment = nodes.new("ShaderNodeTexEnvironment")
+                environment.image = bpy.data.images.load(str(path), check_existing=True)
+                environment_background = nodes.new("ShaderNodeBackground")
+                environment_background.inputs["Strength"].default_value = float(
+                    os.getenv("DEL_POLYHAVEN_STRENGTH", "0.28"))
+                links.new(environment.outputs["Color"], environment_background.inputs["Color"])
+                # Camera rays retain the channel's dark studio backdrop. All other
+                # rays see the HDRI, adding realistic ambient illumination/reflections.
+                links.new(light_path.outputs["Is Camera Ray"], mix.inputs["Fac"])
+                links.new(environment_background.outputs["Background"], mix.inputs[1])
+                links.new(camera_background.outputs["Background"], mix.inputs[2])
+                links.new(mix.outputs["Shader"], output.inputs["Surface"])
+                print(f"[renderer] Poly Haven HDRI enabled: {path.name}", flush=True)
+            except Exception as exc:
+                raise RuntimeError(f"Could not configure Poly Haven HDRI {path}: {exc}") from exc
 
     # primitives -----------------------------------------------------------
     def _finish(self, obj, name, mat, bevel=0.0):

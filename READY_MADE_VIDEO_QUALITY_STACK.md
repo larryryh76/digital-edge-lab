@@ -18,7 +18,7 @@ Do not add a paid provider or start a metered API without explicit owner approva
 | Character rigs and human motion | Adobe Mixamo | Free with Adobe ID; Adobe says characters and animations can be used in personal, commercial and non-profit projects. | Use only when a story genuinely needs a human/character. Not a replacement for technical-object animation. |
 | Distributed Blender render farm | SheepIt | Free, supports Blender engines, but project priority uses points earned by sharing compute. The owner can be soft-paused when their point balance is too negative. | Keep as a manual fallback/experiment, not the primary unattended pipeline. |
 | AI-generated video clips | Wan 2.2 / HunyuanVideo / LTX-2 family via self-hosting or hosted services | Open weights exist, but high-quality generation needs substantial GPU memory. Hosted services use credits or paid plans; licenses differ. | Do not run these on GitHub's CPU runner. Revisit only through a verified free allowance or owner-approved budget. |
-| Narration | Existing Gemini TTS + local Piper fallback | Gemini 3.8 Flash TTS currently lists a free tier, but free-tier data may be used to improve Google's products; limits are not a production SLA. Piper is local and predictable but less expressive. | Keep Gemini as preferred voice when available; keep Piper as labelled fallback. Compare actual WAVs before declaring voice quality solved. |
+| Narration | Gemini TTS + Kokoro-82M ONNX | Kokoro model weights are Apache 2.0, inference package is MIT, and the voice pack includes American male voices such as Adam and Michael. The CPU INT8 ONNX model is about 114 MB; the optional GPU worker uses the higher-fidelity FP16 model (about 164 MB) with CUDA. The existing Piper Ryan voice is CC BY-NC-SA 4.0 and is not suitable as the monetized channel's default fallback. | Replace Piper Ryan with Kokoro Michael as the local publication-quality fallback; retain eSpeak only as a clearly degraded diagnostic path. Compare real WAVs before declaring voice quality solved. |
 
 ## Important findings
 
@@ -33,7 +33,7 @@ The checked-in Blender renderer currently sets:
 
 That is a real ceiling on detail and motion smoothness. The final encode cannot restore detail or temporal information that was never rendered. This should remain the cheap CI/preview profile, not the final-quality production profile.
 
-**Production target:** render at native 720 × 1280 or higher and 24 fps minimum; use a GPU-capable worker for higher EEVEE sample counts or Cycles where the shot benefits. Do not increase quality settings on the existing 2-core CPU runner without a measured render-time budget.
+**Production target now implemented in the optional profile:** native 1080 × 1920 at 24 fps, Cycles GPU, 32 samples and denoising. This is deliberately separate from the cheap preview profile and remains unverified until a real Kaggle GPU render completes and is visually inspected.
 
 ### 2. Kaggle is the most promising no-cost automation experiment
 
@@ -48,11 +48,11 @@ A safe integration should:
 6. Record accelerator type, Blender version, render settings, timings, and artifact checksums.
 7. Require Kaggle API credentials as repository secrets; never commit token files.
 
-No Kaggle account or API token has been configured or tested for this repository yet.
+The optional Kaggle worker and a manual-only GitHub Actions workflow are now scaffolded in this branch. They pin the exact GitHub commit, submit a private T4 GPU kernel, require an explicit GPU-quota confirmation, download the result, and re-check the MP4/report. The worker also uses the Apache-licensed Kokoro male voice (Michael) with the FP16 model and CUDA for offline narration, and fetches Poly Haven's CC0 Studio Small 03 2K HDRI, verifies its checksum, uses it for Cycles environment lighting while preserving the dark camera background, and writes attribution into the delivery package. The worker is **not live-tested** because no Kaggle credentials have been configured for this repository. To enable the experiment, add the repository Actions secrets `KAGGLE_USERNAME` and `KAGGLE_KEY` from the Kaggle API token JSON, then run **Digital Edge Lab — Optional Kaggle GPU production render** manually and confirm GPU usage.
 
 ### 3. Poly Haven is the strongest free asset source
 
-Use its CC0 HDRIs for believable reflections and ambient lighting, PBR textures for surfaces, and selected models for scene dressing. Cache only assets actually used in a scene. Keep an asset manifest containing slug, download URL, license, source URL, checksum and selected resolution. The public API's attribution requirement is separate from the CC0 asset license.
+Poly Haven's CC0 Studio Small 03 2K HDRI is now integrated into the optional Cycles GPU worker for ambient illumination and reflections. The loader uses the keyless public files API, a unique User-Agent, checksum verification, and an asset manifest. The API attribution requirement is kept separate from the CC0 asset license; a credit and source URL are included in the delivery's attribution and video-description files. PBR textures and scene-specific models remain future additions.
 
 ### 4. SheepIt is free, but not a guaranteed free compute shortcut
 
@@ -83,7 +83,11 @@ Wan/Hunyuan/LTX weights are not equivalent to a hosted free API. Their memory, s
 - Adobe Mixamo FAQ: https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html
 - SheepIt project points and render-farm rules: https://api.sheepit-renderfarm.com/faq
 - SheepIt service and supported Blender engines: https://www.sheepit-renderfarm.com/
+- Google Veo/Gemini video generation and pricing: https://ai.google.dev/gemini-api/docs/video and https://ai.google.dev/gemini-api/docs/pricing
 - Blender rendering engines: https://www.blender.org/features/rendering/
+- Kokoro model license and male voice list: https://huggingface.co/onnx-community/Kokoro-82M-ONNX
+- Kokoro ONNX runtime and package license: https://github.com/thewh1teagle/kokoro-onnx
+- Piper Ryan model license (CC BY-NC-SA 4.0): https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ryan/medium/MODEL_CARD
 - Gemini API pricing/free-tier notes: https://ai.google.dev/gemini-api/docs/pricing
 
 This document is a researched integration plan, not a claim that these external services have already been connected or live-tested.

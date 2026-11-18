@@ -5,16 +5,16 @@ narrative beat is synthesised separately, measured with ffprobe, padded to its
 own scene duration, and concatenated. The scene timeline therefore *is* the
 audio timeline, so narration, captions and animation share one clock.
 
-`ESPEAK_ONLY=1` (or running with --offline) uses a local deterministic
-espeak-ng voice instead of the hosted TTS model. That path exists so the visual
-engine and timing logic can be verified end-to-end without API access; it is
-labelled as a fallback in the run report and is not a publication-quality voice.
+`--offline` uses the locally cached Kokoro neural voice when its model and voice
+pack are available. eSpeak is retained only as a deterministic diagnostic fallback;
+it is explicitly marked as non-publication-quality in the run report.
 """
 
 from __future__ import annotations
 
 import base64
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -22,6 +22,9 @@ from pathlib import Path
 
 FPS = 24
 SCENE_TAIL_SECONDS = 0.18
+# Preserve pitch while gently correcting only local lines that are measurably rushed.
+TARGET_LOCAL_WPM = 158
+LOCAL_WPM_FAST_THRESHOLD = 168
 MIN_BEAT_SECONDS = 0.45
 # A narrator physically cannot deliver a line slower than this. Any hosted TTS
 # response outside the band means the model spoke something other than the line
@@ -129,13 +132,20 @@ def gemini_tts(client, text, out_path, model, *, log=None):
     )
 
 
+_KOKORO_ENGINE = None
+_KOKORO_ENGINE_KEY = None
+
+
 def find_local_voice():
-    # Prefer a cached neural voice. eSpeak remains a deterministic emergency
-    # fallback for CI diagnostics, not the preferred narration engine.
-    model = Path(__import__("os").environ.get("PIPER_MODEL", ""))
-    piper = shutil.which("piper")
-    if piper and model.is_file() and Path(str(model) + ".json").is_file():
-        return "piper"
+    """Prefer the commercially licensed Kokoro neural voice; eSpeak is diagnostic-only."""
+    model = Path(os.environ.get("KOKORO_MODEL", ""))
+    voices = Path(os.environ.get("KOKORO_VOICES", ""))
+    if model.is_file() and voices.is_file():
+        try:
+            import kokoro_onnx  # noqa: F401
+            return "kokoro"
+        except ImportError:
+            pass
     for binary in ("espeak-ng", "espeak"):
         path = shutil.which(binary)
         if path:
@@ -144,32 +154,81 @@ def find_local_voice():
 
 
 def local_tts(text, out_path, binary):
-    if binary == "piper":
-        import os
-        model = os.environ.get("PIPER_MODEL")
-        if not model or not Path(model).is_file():
-            raise NarrationError("Piper selected but PIPER_MODEL is missing")
-        # Ryan-medium is a locally cached neural voice, not formant speech.
-        # Slightly slower delivery and more sentence-final breathing room reduce
-        # the rushed, clipped sound without artificially lowering pitch. Piper's
-        # noise controls stay close to model defaults to avoid adding hiss.
-        result = subprocess.run(
-            [shutil.which("piper"), "--model", model, "--output_file", str(out_path),
-             "--sentence_silence", "0.32", "--length_scale", "1.04",
-             "--noise_scale", "0.667", "--noise_w", "0.8"],
-            input=text, check=False, capture_output=True, text=True, timeout=45,
-        )
-    else:
-        # Last-resort diagnostic voice only. eSpeak is formant synthesis, so
-        # rate/pitch tuning can make it less harsh but cannot make it sound human.
-        result = subprocess.run(
-            [binary, "-v", "en-us", "-s", "148", "-p", "43", "-g", "5",
-             "-a", "165", "-w", str(out_path), text],
-            check=False, capture_output=True, text=True, timeout=45,
-        )
+    if binary == "kokoro":
+        model = Path(os.environ.get("KOKORO_MODEL", ""))
+        voices = Path(os.environ.get("KOKORO_VOICES", ""))
+        if not model.is_file() or not voices.is_file():
+            raise NarrationError("Kokoro selected but KOKORO_MODEL or KOKORO_VOICES is missing")
+        try:
+            global _KOKORO_ENGINE, _KOKORO_ENGINE_KEY
+            key = (str(model.resolve()), str(voices.resolve()))
+            if _KOKORO_ENGINE is None or _KOKORO_ENGINE_KEY != key:
+                from kokoro_onnx import Kokoro
+
+                _KOKORO_ENGINE = Kokoro(str(model), str(voices))
+                _KOKORO_ENGINE_KEY = key
+            audio, sample_rate = _KOKORO_ENGINE.create(
+                text,
+                voice=os.environ.get("KOKORO_VOICE", "am_michael"),
+                speed=float(os.environ.get("KOKORO_SPEED", "1.0")),
+                lang="en-us",
+            )
+            import soundfile as sf
+
+            sf.write(str(out_path), audio, sample_rate, subtype="PCM_16")
+        except Exception as exc:
+            raise NarrationError(f"Kokoro neural voice failed: {type(exc).__name__}: {exc}") from exc
+        if not Path(out_path).is_file() or Path(out_path).stat().st_size < 1024:
+            raise NarrationError("Kokoro produced an empty or invalid audio file")
+        return out_path
+
+    # eSpeak is a deterministic diagnostic fallback, not a publication voice.
+    result = subprocess.run(
+        [binary, "-v", "en-us", "-s", "148", "-p", "43", "-g", "5",
+         "-a", "165", "-w", str(out_path), text],
+        check=False, capture_output=True, text=True, timeout=45,
+    )
     if result.returncode or not Path(out_path).exists():
         raise NarrationError(f"local voice failed: {result.stderr[-300:]}")
     return out_path
+
+
+def normalize_local_pace(path, text, *, target_wpm=TARGET_LOCAL_WPM):
+    """Gently slow overly brisk local narration without changing its pitch.
+
+    Returns measured before/after WPM. Hosted TTS is never time-stretched here.
+    """
+    words = max(1, len(text.split()))
+    before_seconds = probe_duration(path)
+    before_wpm = 60.0 * words / max(before_seconds, 0.01)
+    if before_wpm <= LOCAL_WPM_FAST_THRESHOLD:
+        return {"before_wpm": round(before_wpm, 1), "after_wpm": round(before_wpm, 1),
+                "stretched": False}
+    factor = max(0.78, min(0.96, target_wpm / before_wpm))
+    temp_path = Path(str(path) + ".paced.wav")
+    result = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(path), "-filter:a",
+         f"atempo={factor:.4f}", "-ar", "48000", "-ac", "1", str(temp_path)],
+        check=False, capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode or not temp_path.exists():
+        temp_path.unlink(missing_ok=True)
+        raise NarrationError(f"local narration pace correction failed: {result.stderr[-300:]}")
+    temp_path.replace(path)
+    after_seconds = probe_duration(path)
+    after_wpm = 60.0 * words / max(after_seconds, 0.01)
+    if after_wpm > LOCAL_WPM_FAST_THRESHOLD:
+        raise NarrationError(
+            f"local voice remains too fast after pitch-preserving correction "
+            f"({after_wpm:.1f} WPM); rejecting this narration rather than shipping rushed speech"
+        )
+    return {"before_wpm": round(before_wpm, 1), "after_wpm": round(after_wpm, 1),
+            "stretched": True, "atempo": round(factor, 4)}
+
+
+def pause_after_role(role):
+    """A short silence that gives hooks, reveals and payoffs room to land."""
+    return {"hook": 0.38, "reveal": 0.48, "payoff": 0.42, "ending": 0.42}.get(role, 0.20)
 
 
 def pad_to(wav_in, wav_out, seconds):
@@ -201,9 +260,11 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
     cursor = 0.0
     for i, beat in enumerate(episode["beats"]):
         raw = work_dir / f"beat_{i:02d}.wav"
+        pace_report = None
         if use_local:
             local_tts(beat["narration"], raw, local)
-            engine = "piper-neural" if local == "piper" else "espeak-ng-fallback"
+            pace_report = normalize_local_pace(raw, beat["narration"])
+            engine = "kokoro-neural" if local == "kokoro" else "espeak-ng-fallback"
         else:
             gemini_tts(client, beat["narration"], raw, tts_model)
             engine = client.actual_models.get("tts") or tts_model
@@ -222,7 +283,8 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
         level = mean_volume_db(raw)
         if level is None or level < -45:
             raise NarrationError(f"beat {i + 1} narration is silent (mean {level} dB)")
-        duration = max(1, round((spoken + SCENE_TAIL_SECONDS) * FPS)) / FPS
+        role_pause = pause_after_role(beat.get("role", ""))
+        duration = max(1, round((spoken + SCENE_TAIL_SECONDS + role_pause) * FPS)) / FPS
         padded = work_dir / f"beat_{i:02d}_padded.wav"
         pad_to(raw, padded, duration)
         padded_files.append(padded)
@@ -238,7 +300,8 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
             "narration": beat["narration"],
         })
         report_beats.append({"index": i, "engine": engine, "spoken_seconds": round(spoken, 3),
-                             "scene_seconds": round(duration, 3), "mean_db": level})
+                             "scene_seconds": round(duration, 3), "role_pause_seconds": role_pause,
+                             "pace": pace_report, "mean_db": level})
         cursor += duration
 
     concat_list = work_dir / "narration_concat.txt"
@@ -260,8 +323,8 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
             f"narration timeline drift: expected {cursor:.2f}s, measured {total:.2f}s"
         )
     report = {
-        "engine": ("piper-neural" if local == "piper" else "espeak-ng-fallback") if use_local else "gemini-tts",
-        "publication_quality_voice": (not use_local) or local == "piper",
+        "engine": ("kokoro-neural" if local == "kokoro" else "espeak-ng-fallback") if use_local else "gemini-tts",
+        "publication_quality_voice": (not use_local) or local == "kokoro",
         "model": tts_model,
         "total_seconds": round(total, 3),
         "beats": report_beats,
