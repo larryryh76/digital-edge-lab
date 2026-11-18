@@ -108,6 +108,24 @@ class SceneCertificationContractTests(unittest.TestCase):
             healthy, healthy, healthy, healthy, {"mean": 0.8})
         self.assertEqual(all_pass, [])
 
+    def test_renderer_certification_shards_cover_every_pair_exactly_once(self):
+        import render_smoke
+
+        scenes = render_smoke.ALL_SCENES
+        shards = [render_smoke.select_shard(scenes, index, 8) for index in range(8)]
+        flattened = [scene for shard in shards for scene in shard]
+        self.assertEqual(sorted(flattened), sorted(scenes))
+        self.assertEqual(len(flattened), len(set(flattened)))
+        self.assertTrue(all(shard for shard in shards))
+
+    def test_renderer_certification_rejects_invalid_shard_coordinates(self):
+        import render_smoke
+
+        with self.assertRaises(ValueError):
+            render_smoke.select_shard(render_smoke.ALL_SCENES, 0, 0)
+        with self.assertRaises(ValueError):
+            render_smoke.select_shard(render_smoke.ALL_SCENES, 8, 8)
+
     def test_render_smoke_matrix_is_derived_from_every_registered_pair(self):
         source = (ROOT / "tests" / "render_smoke.py").read_text(encoding="utf-8")
         self.assertIn('for subject, metadata in scene_spec.SUBJECT_KINDS.items()', source)
