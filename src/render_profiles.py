@@ -23,6 +23,10 @@ _PROFILES = {
         "denoise": False,
         "require_gpu": False,
         "raytracing": False,
+        "seconds_per_frame_budget": 5.0,
+        "startup_seconds": 120,
+        "phase_budget_seconds": 2700,
+        "render_workers": 2,
     },
     "production": {
         "render_width": 1080,
@@ -36,6 +40,10 @@ _PROFILES = {
         "denoise": True,
         "require_gpu": True,
         "raytracing": False,
+        "seconds_per_frame_budget": 5.0,
+        "startup_seconds": 180,
+        "phase_budget_seconds": 7200,
+        "render_workers": 1,
     },
 }
 
