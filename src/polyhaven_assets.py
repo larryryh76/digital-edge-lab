@@ -8,7 +8,7 @@ from pathlib import Path
 
 import requests
 
-API_BASE = "https://api.polyhaven.com/v2/files"
+API_BASE = "https://api.polyhaven.com/files"
 ASSET_BASE = "https://polyhaven.com/a"
 USER_AGENT = "DigitalEdgeLab/1.0 (https://github.com/larryryh76/digital-edge-lab)"
 
