@@ -33,7 +33,7 @@ The checked-in Blender renderer currently sets:
 
 That is a real ceiling on detail and motion smoothness. The final encode cannot restore detail or temporal information that was never rendered. This should remain the cheap CI/preview profile, not the final-quality production profile.
 
-**Production target:** render at native 720 × 1280 or higher and 24 fps minimum; use a GPU-capable worker for higher EEVEE sample counts or Cycles where the shot benefits. Do not increase quality settings on the existing 2-core CPU runner without a measured render-time budget.
+**Production target now implemented in the optional profile:** native 1080 × 1920 at 24 fps, Cycles GPU, 32 samples and denoising. This is deliberately separate from the cheap preview profile and remains unverified until a real Kaggle GPU render completes and is visually inspected.
 
 ### 2. Kaggle is the most promising no-cost automation experiment
 
@@ -48,11 +48,11 @@ A safe integration should:
 6. Record accelerator type, Blender version, render settings, timings, and artifact checksums.
 7. Require Kaggle API credentials as repository secrets; never commit token files.
 
-The optional Kaggle worker and a manual-only GitHub Actions workflow are now scaffolded in this branch. They pin the exact GitHub commit, submit a private T4 GPU kernel, require an explicit GPU-quota confirmation, download the result, and re-check the MP4/report. They are **not live-tested** because no Kaggle credentials have been configured for this repository. To enable the experiment, add the repository Actions secrets `KAGGLE_USERNAME` and `KAGGLE_KEY` from the Kaggle API token JSON, then run **Digital Edge Lab — Optional Kaggle GPU production render** manually and confirm GPU usage.
+The optional Kaggle worker and a manual-only GitHub Actions workflow are now scaffolded in this branch. They pin the exact GitHub commit, submit a private T4 GPU kernel, require an explicit GPU-quota confirmation, download the result, and re-check the MP4/report. The worker also fetches Poly Haven's CC0 Studio Small 03 HDRI, verifies its checksum, uses it for Cycles environment lighting while preserving the dark camera background, and writes attribution into the delivery package. The worker is **not live-tested** because no Kaggle credentials have been configured for this repository. To enable the experiment, add the repository Actions secrets `KAGGLE_USERNAME` and `KAGGLE_KEY` from the Kaggle API token JSON, then run **Digital Edge Lab — Optional Kaggle GPU production render** manually and confirm GPU usage.
 
 ### 3. Poly Haven is the strongest free asset source
 
-Use its CC0 HDRIs for believable reflections and ambient lighting, PBR textures for surfaces, and selected models for scene dressing. Cache only assets actually used in a scene. Keep an asset manifest containing slug, download URL, license, source URL, checksum and selected resolution. The public API's attribution requirement is separate from the CC0 asset license.
+Poly Haven's CC0 Studio Small 03 HDRI is now integrated into the optional Cycles GPU worker for ambient illumination and reflections. The loader uses the keyless v2 files API, a unique User-Agent, checksum verification, and an asset manifest. The API attribution requirement is kept separate from the CC0 asset license; a credit and source URL are included in the delivery's attribution and video-description files. PBR textures and scene-specific models remain future additions.
 
 ### 4. SheepIt is free, but not a guaranteed free compute shortcut
 
