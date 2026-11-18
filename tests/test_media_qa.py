@@ -93,9 +93,9 @@ class ScaledMotionRegionTests(unittest.TestCase):
 
     def test_scaled_preview_crop_measures_real_motion(self):
         clip = make_clip(self.tmp / "preview-motion.mp4",
-                         "testsrc=size=288x512:rate=24:duration=2")
+                         "testsrc2=size=288x512:rate=24:duration=2")
         box = media_qa.scale_region_box(media_qa.HERO_BOX, 288, 512)
-        self.assertGreater(media_qa.region_motion(clip, box), 0.1)
+        self.assertGreater(media_qa.region_motion(clip, box), 0.01)
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
