@@ -105,6 +105,35 @@ class DegradedDeliveryTests(unittest.TestCase):
         self.assertNotIn("narrate(args.offline or degraded is not None)", PIPELINE)
 
 
+class CertificationArtifactContractTests(unittest.TestCase):
+    def test_successful_shard_evidence_is_preserved_for_inspection(self):
+        import importlib.util
+        import os
+        import tempfile
+        from unittest.mock import patch
+
+        script = ROOT / "tests" / "render_smoke.py"
+        spec = importlib.util.spec_from_file_location("render_smoke_for_test", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as folder:
+            work = Path(folder) / "work"
+            work.mkdir()
+            (work / "scene_00.visual.json").write_text("{}", encoding="utf-8")
+            target = Path(folder) / "artifacts" / "shard-0"
+            with patch.dict(os.environ, {"DEL_CERTIFICATION_ARTIFACT_DIR": str(target)}):
+                preserved = module.preserve_certification_artifacts(work)
+            self.assertEqual(preserved, target)
+            self.assertTrue((target / "scene_00.visual.json").is_file())
+
+    def test_workflow_uploads_certification_evidence_on_success_and_failure(self):
+        workflow = (ROOT / ".github" / "workflows" / "generate-pilot.yml").read_text(encoding="utf-8")
+        self.assertIn("Upload real-render certification evidence", workflow)
+        self.assertIn("DEL_CERTIFICATION_ARTIFACT_DIR:", workflow)
+        self.assertIn("if: always()", workflow)
+        self.assertIn("renderer-certification-shard-${{ matrix.shard }}", workflow)
+
+
 class MountainPairTransformContractTests(unittest.TestCase):
     def test_transform_animates_both_real_mountain_forms(self):
         source = (ROOT / "src" / "blender_scene.py").read_text(encoding="utf-8")

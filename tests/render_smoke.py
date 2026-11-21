@@ -48,6 +48,18 @@ SHARD_COUNT = int(os.getenv("DEL_SCENE_CERT_SHARD_COUNT", "1"))
 SCENES = select_shard(ALL_SCENES, SHARD_INDEX, SHARD_COUNT)
 
 
+def preserve_certification_artifacts(work: Path) -> Path:
+    destination = os.environ.get("DEL_CERTIFICATION_ARTIFACT_DIR")
+    if not destination:
+        return work
+    target = Path(destination)
+    if target.exists():
+        shutil.rmtree(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(work, target)
+    return target
+
+
 def main():
     blender = shutil.which("blender")
     if not blender:
