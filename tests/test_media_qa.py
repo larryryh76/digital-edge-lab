@@ -97,7 +97,7 @@ class ScaledMotionRegionTests(unittest.TestCase):
         clip = make_clip(
             self.tmp / "preview-motion.mp4",
             "color=c=black:size=288x512:rate=24:duration=2,"
-            "drawbox=x='90+40*t':y=180:w=40:h=40:color=white:t=fill:eval=frame"
+            "geq=lum='if(between(X,90+40*T,130+40*T)*between(Y,180,220),255,0)':cb=128:cr=128"
         )
         box = media_qa.scale_region_box(media_qa.HERO_BOX, 288, 512)
         self.assertGreater(media_qa.region_motion(clip, box), 0.01)
