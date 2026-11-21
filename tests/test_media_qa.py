@@ -92,8 +92,13 @@ class ScaledMotionRegionTests(unittest.TestCase):
         self.assertEqual(hero, {"x": 270, "y": 450, "w": 540, "h": 780})
 
     def test_scaled_preview_crop_measures_real_motion(self):
-        clip = make_clip(self.tmp / "preview-motion.mp4",
-                         "testsrc2=size=288x512:rate=24:duration=2")
+        # Put a known moving subject fully inside the scaled hero crop.
+        # testsrc2 is not guaranteed to move inside that specific region.
+        clip = make_clip(
+            self.tmp / "preview-motion.mp4",
+            "color=c=black:size=288x512:rate=24:duration=2,"
+            "drawbox=x='90+40*t':y=180:w=40:h=40:color=white:t=fill"
+        )
         box = media_qa.scale_region_box(media_qa.HERO_BOX, 288, 512)
         self.assertGreater(media_qa.region_motion(clip, box), 0.01)
 
