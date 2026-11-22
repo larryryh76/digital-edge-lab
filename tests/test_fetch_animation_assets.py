@@ -71,8 +71,10 @@ class AnimationFetcherTests(unittest.TestCase):
                 calls = []
                 def fake_open(request, timeout):
                     calls.append(request)
-                    if isinstance(request, str) and "media.githubusercontent.com" in request:
-                        raise OSError("mirror temporarily unavailable")
+                    if isinstance(request, str):
+                        if "media.githubusercontent.com" in request:
+                            raise OSError("mirror temporarily unavailable")
+                        return FakeResponse(archive_bytes)
                     if request.full_url.endswith("as_props=1"):
                         return FakeResponse(json.dumps({"url": "https://signed.example/file"}).encode())
                     return FakeResponse(archive_bytes)
