@@ -80,6 +80,27 @@ class TtsPlausibilityTest(unittest.TestCase):
         self.assertIn("bare", message)
         self.assertIn("styled", message)
 
+    def test_multi_beat_episode_uses_one_continuous_tts_request(self):
+        beats = [
+            {"id": "b1", "role": "hook", "narration": "A hidden chip changed everything."},
+            {"id": "b2", "role": "reveal", "narration": "But the real breakthrough came from shrinking the memory footprint."},
+        ]
+        full_text = " ".join(beat["narration"] for beat in beats)
+        client = FakeClient(lambda prompt: 12.0)
+        wav, windows, report = narration.synthesize(
+            {"beats": beats, "narration": full_text}, self.work / "continuous",
+            client=client, tts_model="fake-tts",
+        )
+        self.assertEqual(len(client.prompts), 1, "per-beat synthesis causes audible seams")
+        self.assertEqual(client.prompts[0], f"{narration.STYLE_BRIEF} {full_text}")
+        self.assertEqual(len(windows), 2)
+        self.assertAlmostEqual(windows[0]["start"], 0.0, places=3)
+        self.assertAlmostEqual(windows[-1]["end"], 12.0, delta=0.05)
+        self.assertAlmostEqual(sum(w["duration"] for w in windows), 12.0, delta=0.05)
+        self.assertEqual(report["engine"], "continuous-gemini-tts")
+        self.assertEqual(report["timing_method"],
+                       "single continuous TTS request; scene windows estimated from word proportions")
+
     def test_synthesize_rejects_implausible_beat_before_rendering(self):
         episode = {"beats": [{"id": "b1", "role": "hook", "narration": LINE}],
                    "narration": LINE}
