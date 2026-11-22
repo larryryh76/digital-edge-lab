@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "scripts/fetch_animation_assets.py"
+      - "scripts/inspect_animation_glb.py"
+      - "scripts/blender_animation_smoke.py"
+      - "tests/test_fetch_animation_assets.py"
+      - "tests/test_inspect_animation_glb.py"
       - "assets/animation-manifest.json"
       - ".github/workflows/animation-assets-smoke.yml"
   workflow_dispatch:
