@@ -71,14 +71,26 @@ def bone_positions(frame):
 samples = [bone_positions(frame) for frame in sample_frames]
 max_motion = 0.0
 max_motion_bone = None
+core_patterns = ("hips", "pelvis", "spine", "upperarm", "lowerarm", "upperleg", "lowerleg", "head")
+core_bones = [
+    bone.name for bone in armature.pose.bones
+    if any(pattern in bone.name.lower() for pattern in core_patterns)
+    and "leaf" not in bone.name.lower()
+]
+core_max_motion = 0.0
+core_motion_bone = None
 for a, b in ((0, 1), (1, 2), (0, 2)):
     for name in samples[a]:
         if name in samples[b]:
             delta = (samples[b][name] - samples[a][name]).length
             if delta > max_motion:
                 max_motion, max_motion_bone = delta, name
-if max_motion < 0.015:
-    fail(f"locomotion clip has no measurable subject movement ({max_motion:.5f})")
+            if name in core_bones and delta > core_max_motion:
+                core_max_motion, core_motion_bone = delta, name
+if not core_bones:
+    fail("imported humanoid has no recognized core body bones")
+if core_max_motion < 0.015:
+    fail(f"locomotion action moves only accessories or camera; core bone movement={core_max_motion:.5f}")
 
 # Render a review image using imported meshes, their real materials, and simple studio lighting.
 scene.frame_set(sample_frames[0])
@@ -140,6 +152,9 @@ report = {
     "sample_frames": sample_frames,
     "max_bone_motion": round(max_motion, 6),
     "max_motion_bone": max_motion_bone,
+    "core_bones": core_bones,
+    "core_bone_motion": round(core_max_motion, 6),
+    "core_motion_bone": core_motion_bone,
     "passed": True,
 }
 (review_dir / "animation-smoke.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
