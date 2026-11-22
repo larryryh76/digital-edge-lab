@@ -1,0 +1,43 @@
+name: CC0 Animation Asset Smoke Test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/fetch_animation_assets.py"
+      - "assets/animation-manifest.json"
+      - ".github/workflows/animation-assets-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-free-animation-packs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Fetch and verify CC0 archives and GLBs
+        run: python scripts/fetch_animation_assets.py --pack both --asset-dir /tmp/del-animation-assets --cache-dir /tmp/del-animation-cache
+      - name: Verify asset provenance manifests
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('/tmp/del-animation-assets')
+          for name in ('UAL1_Standard', 'UAL2_Standard'):
+              asset = root / f'{name}.glb'
+              report = root / f'{name}.provenance.json'
+              assert asset.is_file() and asset.stat().st_size > 1_000_000, f'missing or undersized {asset}'
+              data = json.loads(report.read_text())
+              actual = hashlib.sha256(asset.read_bytes()).hexdigest()
+              assert actual == data['asset_sha256'], f'{name} provenance hash mismatch'
+              assert data['license_id'] == 'CC0-1.0'
+              assert data['archive_sha256'], 'missing archive integrity pin'
+              print(f'{name}: {asset.stat().st_size:,} bytes; sha256={actual}; license={data["license_id"]}')
+          PY
