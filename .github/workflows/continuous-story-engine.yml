@@ -1,0 +1,43 @@
+name: Digital Edge Lab — Continuous story engine certification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/continuous_story_engine.py"
+      - ".github/workflows/continuous-story-engine.yml"
+      - "requirements.txt"
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install runtime
+        run: |
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y --no-install-recommends ffmpeg espeak-ng fonts-dejavu-core
+          python -m pip install --disable-pip-version-check -r requirements.txt
+      - name: Render continuous story
+        run: python scripts/continuous_story_engine.py
+      - name: Inspect rendered MP4, audio continuity and motion
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          report=json.loads(Path("output/continuous-story/report.json").read_text())
+          assert report["status"]=="pass", report
+          mp4=Path("output/continuous-story/continuous-story.mp4")
+          assert mp4.stat().st_size > 150000
+          frames=subprocess.check_output(["ffmpeg","-v","error","-i",str(mp4),"-vf","select='not(mod(n,120))',scale=180:-1","-frames:v","8","-f","image2pipe","-vcodec","png","-"], stderr=subprocess.STDOUT)
+          assert frames, "no sampled frames"
+          print(report)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: continuous-story-certification
+          path: output/continuous-story/
+          retention-days: 14
