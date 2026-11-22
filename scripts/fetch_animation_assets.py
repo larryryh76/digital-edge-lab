@@ -8,11 +8,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
+import io
 
 PACKS = {
     "ual1": {
@@ -56,15 +55,11 @@ def _response_bytes(urlopen, request_or_url, timeout: int) -> bytes:
 
 
 def resolve_download_url(pack: dict, urlopen=urllib.request.urlopen) -> str:
+    slug = "universal-animation-library-2" if pack["upload_id"] == 17958478 else "universal-animation-library"
     endpoint = (
-        f"https://quaternius.itch.io/universal-animation-library"
-        f"/file/{pack['upload_id']}?source=game_download&as_props=1"
+        f"https://quaternius.itch.io/{slug}/file/{pack['upload_id']}"
+        "?source=game_download&as_props=1"
     )
-    if pack["upload_id"] == 17958478:
-        endpoint = (
-            f"https://quaternius.itch.io/universal-animation-library-2"
-            f"/file/{pack['upload_id']}?source=game_download&as_props=1"
-        )
     request = urllib.request.Request(
         endpoint,
         data=b"",
@@ -89,13 +84,11 @@ def _fetch_archive(pack: dict, archive_path: Path, urlopen) -> None:
         raise AssetFetchError(f"asset archive download failed: {exc}") from exc
     actual = sha256_bytes(payload)
     if actual != pack["archive_sha256"]:
-        raise AssetFetchError(
-            f"{pack['id']}: archive SHA-256 mismatch (got {actual})"
-        )
+        raise AssetFetchError(f"{pack['id']}: archive SHA-256 mismatch (got {actual})")
     archive_path.parent.mkdir(parents=True, exist_ok=True)
-    temp = archive_path.with_suffix(archive_path.suffix + ".tmp")
-    temp.write_bytes(payload)
-    temp.replace(archive_path)
+    temporary = archive_path.with_suffix(archive_path.suffix + ".tmp")
+    temporary.write_bytes(payload)
+    temporary.replace(archive_path)
 
 
 def _read_verified_archive(pack: dict, archive_path: Path, urlopen) -> bytes:
@@ -110,14 +103,16 @@ def _read_verified_archive(pack: dict, archive_path: Path, urlopen) -> bytes:
 
 def _extract_expected_glb(pack: dict, archive_bytes: bytes, destination: Path) -> str:
     try:
-        with zipfile.ZipFile(__import__("io").BytesIO(archive_bytes)) as archive:
-            names = [info.filename for info in archive.infolist() if info.filename == pack["glb_path"]]
-            if len(names) != 1:
+        with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+            basename = Path(pack["glb_path"]).name
+            entries = [info for info in archive.infolist()
+                       if Path(info.filename).name == basename and not info.is_dir()]
+            if len(entries) != 1:
                 raise AssetFetchError(
-                    f"{pack['id']}: expected exactly one {pack['glb_path']} in verified archive"
+                    f"{pack['id']}: expected exactly one {basename} entry in verified archive"
                 )
-            info = archive.getinfo(names[0])
-            if info.is_dir() or info.file_size <= 0:
+            info = entries[0]
+            if info.file_size <= 0:
                 raise AssetFetchError(f"{pack['id']}: invalid GLB entry")
             glb = archive.read(info)
     except (zipfile.BadZipFile, OSError) as exc:
@@ -149,6 +144,7 @@ def fetch_pack(pack_key: str, asset_dir: Path, cache_dir: Path, urlopen=urllib.r
     metadata = {
         "asset_id": pack["id"],
         "asset_path": asset_path.name,
+        "archive_entry": pack["glb_path"],
         "asset_sha256": digest,
         "archive_sha256": pack["archive_sha256"],
         "source_url": pack["source_url"],
