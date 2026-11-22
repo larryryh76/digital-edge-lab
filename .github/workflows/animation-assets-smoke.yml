@@ -15,6 +15,9 @@ on:
 permissions:
   contents: read
 
+env:
+  BLENDER_URL: https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz
+
 jobs:
   verify-free-animation-packs:
     runs-on: ubuntu-latest
@@ -30,8 +33,31 @@ jobs:
         run: python scripts/fetch_animation_assets.py --pack both --asset-dir /tmp/del-animation-assets --cache-dir /tmp/del-animation-cache
       - name: Inspect actual GLB rig and animation channels
         run: python scripts/inspect_animation_glb.py /tmp/del-animation-assets/UAL1_Standard.glb /tmp/del-animation-assets/UAL2_Standard.glb --min-animations 20 --min-joints 40
-      - name: Install Blender for rigged render smoke
-        run: sudo apt-get update -qq && sudo apt-get install -y blender python3-numpy
+      - name: Install Blender runtime libraries
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 libice6 libxext6 libgomp1 libxrandr2 libxinerama1
+      - name: Restore pinned Blender cache
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/blender
+          key: blender-4.2.11-linux-x64
+      - name: Install pinned Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if curl -sS --fail --connect-timeout 20 --max-time 420 -o /tmp/blender.tar.xz "$BLENDER_URL"; then break; fi
+            echo "Blender download attempt $attempt failed; retrying"
+            sleep 5
+          done
+          sudo mkdir -p /opt/blender
+          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
+          rm -f /tmp/blender.tar.xz
+      - name: Add pinned Blender to PATH
+        run: |
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+          blender --version | head -1
       - name: Render actual animated mannequin clips
         run: |
           mkdir -p /tmp/del-animation-review
