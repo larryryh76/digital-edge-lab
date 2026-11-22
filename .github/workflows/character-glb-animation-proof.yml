@@ -1,0 +1,39 @@
+name: Character GLB animation import proof
+on:
+  pull_request:
+    paths:
+      - "scripts/blender_glb_animation_proof.py"
+      - "scripts/fetch_animation_assets.py"
+      - ".github/workflows/character-glb-animation-proof.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  import-and-render-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender and runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender ffmpeg
+          blender --version | head -1
+      - name: Download and verify CC0 UAL1 archive and GLB
+        run: python scripts/fetch_animation_assets.py --pack ual1 --asset-dir assets/animations --cache-dir /tmp/animation-cache
+      - name: Import rig and render animation proof
+        timeout-minutes: 12
+        run: |
+          blender -b --python scripts/blender_glb_animation_proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
+          test -s output/character-animation-proof.mp4
+          test -s output/character-animation-proof.json
+          ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -show_entries format=duration -of json output/character-animation-proof.mp4
+      - name: Upload actual animated character proof
+        uses: actions/upload-artifact@v4
+        with:
+          name: character-glb-animation-proof
+          path: |
+            output/character-animation-proof.mp4
+            output/character-animation-proof.json
+          if-no-files-found: error
+          retention-days: 7
