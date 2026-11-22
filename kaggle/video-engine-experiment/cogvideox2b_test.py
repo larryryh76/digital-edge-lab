@@ -9,7 +9,7 @@ from __future__ import annotations
 import json, os, subprocess, time
 from pathlib import Path
 
-OUT = Path("/kaggle/working/video-engine-test")
+OUT = Path("/kaggle/working")
 OUT.mkdir(parents=True, exist_ok=True)
 PROMPT = (
     "Cinematic macro documentary shot, photorealistic: inside a dark server room, "
