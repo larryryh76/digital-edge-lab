@@ -1,0 +1,45 @@
+name: Validate video engine experiments
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "kaggle/video-engine-experiment/**"
+      - ".github/workflows/wan21-experiment.yml"
+      - ".github/workflows/cogvideox2b-experiment.yml"
+  pull_request:
+    paths:
+      - "kaggle/video-engine-experiment/**"
+      - ".github/workflows/wan21-experiment.yml"
+      - ".github/workflows/cogvideox2b-experiment.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Syntax-check experimental engines
+        run: |
+          set -euo pipefail
+          python -m py_compile kaggle/video-engine-experiment/*.py
+      - name: Validate experiment workflow YAML syntax
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check PyYAML
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in (
+              Path(".github/workflows/wan21-experiment.yml"),
+              Path(".github/workflows/cogvideox2b-experiment.yml"),
+          ):
+              yaml.safe_load(path.read_text())
+              print(f"YAML syntax OK: {path}")
+          PY
