@@ -1,0 +1,115 @@
+name: Digital Edge Lab — Wan 2.1 real text-to-video experiment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_free_gpu:
+        description: "Use my available free Kaggle GPU quota for one 5-second video test"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: digital-edge-lab-wan21-experiment
+  cancel-in-progress: false
+
+jobs:
+  wan21-test:
+    if: inputs.confirm_free_gpu
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      KERNEL_SLUG: digital-edge-lab-wan21-t2v-experiment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Kaggle CLI and validate free GPU secrets
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check kaggle
+          test -n "${KAGGLE_USERNAME:-}" || { echo "::error::KAGGLE_USERNAME secret is missing"; exit 1; }
+          test -n "${KAGGLE_KEY:-}" || { echo "::error::KAGGLE_KEY secret is missing"; exit 1; }
+          mkdir -p "$HOME/.kaggle" "$RUNNER_TEMP/wan-kernel"
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          Path.home().joinpath(".kaggle","kaggle.json").write_text(json.dumps({"username":os.environ["KAGGLE_USERNAME"],"key":os.environ["KAGGLE_KEY"]}))
+          PY
+          chmod 600 "$HOME/.kaggle/kaggle.json"
+          cp kaggle/video-engine-experiment/wan21_test.py "$RUNNER_TEMP/wan-kernel/"
+          cat > "$RUNNER_TEMP/wan-kernel/kernel-metadata.json" <<EOF
+          {
+            "id": "${KAGGLE_USERNAME}/${KERNEL_SLUG}",
+            "title": "Digital Edge Lab Wan 2.1 T2V Experiment",
+            "code_file": "wan21_test.py",
+            "language": "python",
+            "kernel_type": "script",
+            "is_private": "true",
+            "enable_gpu": "true",
+            "enable_internet": "true",
+            "machine_shape": "NvidiaTeslaT4",
+            "dataset_sources": [],
+            "competition_sources": [],
+            "kernel_sources": [],
+            "model_sources": []
+          }
+          EOF
+      - name: Launch Wan 2.1 experiment on free Kaggle GPU
+        run: |
+          set -euo pipefail
+          kaggle kernels push -p "$RUNNER_TEMP/wan-kernel" --accelerator NvidiaTeslaT4 --timeout 10800
+      - name: Poll generation
+        timeout-minutes: 185
+        run: |
+          set -euo pipefail
+          completed=0
+          for attempt in $(seq 1 180); do
+            status="$(kaggle kernels status "$KAGGLE_USERNAME/$KERNEL_SLUG" 2>&1 || true)"
+            echo "Kaggle status $attempt/180: $status"
+            lower="$(printf '%s' "$status" | tr '[:upper:]' '[:lower:]')"
+            if printf '%s' "$lower" | grep -Eq '(^|[^a-z])(complete|success)([^a-z]|$)'; then completed=1; break; fi
+            if printf '%s' "$lower" | grep -Eq 'error|failed|cancelled|canceled'; then
+              kaggle kernels logs "$KAGGLE_USERNAME/$KERNEL_SLUG" || true
+              exit 1
+            fi
+            sleep 60
+          done
+          if [ "$completed" -ne 1 ]; then
+            kaggle kernels logs "$KAGGLE_USERNAME/$KERNEL_SLUG" || true
+            echo "::error::Timed out waiting for Wan generation"
+            exit 1
+          fi
+      - name: Retrieve and validate experiment artifact
+        run: |
+          set -euo pipefail
+          mkdir -p output/wan21-experiment
+          kaggle kernels output "$KAGGLE_USERNAME/$KERNEL_SLUG" -p output/wan21-experiment --force
+          test -s output/wan21-experiment/wan21_portrait.mp4
+          test -s output/wan21-experiment/experiment_metadata.json
+          test -s output/wan21-experiment/motion_qa.json
+          for sec in 00 01 02 03 04 05; do test -s "output/wan21-experiment/frame_$sec.jpg"; done
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          qa=json.loads(Path("output/wan21-experiment/motion_qa.json").read_text())
+          assert qa.get("pass") is True, qa
+          print("Motion QA passed:", qa["intervals"])
+          PY
+          ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,avg_frame_rate -of json output/wan21-experiment/wan21_portrait.mp4
+      - name: Upload video, frames, and QA for manual inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: wan21-real-t2v-experiment
+          path: output/wan21-experiment/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Preserve generation logs on failure
+        if: failure()
+        run: kaggle kernels logs "$KAGGLE_USERNAME/$KERNEL_SLUG" || true
