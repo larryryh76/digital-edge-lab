@@ -27,12 +27,18 @@ jobs:
       - name: Inspect actual GLB rig and animation channels
         run: python scripts/inspect_animation_glb.py /tmp/del-animation-assets/UAL1_Standard.glb /tmp/del-animation-assets/UAL2_Standard.glb --min-animations 20 --min-joints 40
       - name: Install Blender for rigged render smoke
-        run: sudo apt-get update -qq && sudo apt-get install -y blender
+        run: sudo apt-get update -qq && sudo apt-get install -y blender python3-numpy
       - name: Render actual animated mannequin clips
         run: |
           mkdir -p /tmp/del-animation-review
-          blender -b -t 2 --python scripts/blender_animation_smoke.py -- /tmp/del-animation-assets/UAL1_Standard.glb /tmp/del-animation-review/UAL1
-          blender -b -t 2 --python scripts/blender_animation_smoke.py -- /tmp/del-animation-assets/UAL2_Standard.glb /tmp/del-animation-review/UAL2
+          blender -b -t 2 --python-exit-code 1 --python scripts/blender_animation_smoke.py -- /tmp/del-animation-assets/UAL1_Standard.glb /tmp/del-animation-review/UAL1
+          test -s /tmp/del-animation-review/UAL1/animation-smoke.json
+          test -s /tmp/del-animation-review/UAL1/frame_00.png
+          test -s /tmp/del-animation-review/UAL1/frame_01.png
+          blender -b -t 2 --python-exit-code 1 --python scripts/blender_animation_smoke.py -- /tmp/del-animation-assets/UAL2_Standard.glb /tmp/del-animation-review/UAL2
+          test -s /tmp/del-animation-review/UAL2/animation-smoke.json
+          test -s /tmp/del-animation-review/UAL2/frame_00.png
+          test -s /tmp/del-animation-review/UAL2/frame_01.png
       - name: Upload actual animation render evidence
         uses: actions/upload-artifact@v4
         with:
