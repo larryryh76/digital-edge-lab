@@ -54,11 +54,32 @@ class AnimationFetcherTests(unittest.TestCase):
                     return FakeResponse(archive_bytes)
                 asset = target.fetch_pack("ual1", root / "assets", root / "cache", urlopen=fake_open)
             self.assertEqual(asset.read_bytes(), glb)
-            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(calls), 1)  # verified GitHub mirror is preferred
             metadata = json.loads((root / "assets/UAL1_Standard.provenance.json").read_text())
             self.assertEqual(metadata["asset_sha256"], target.sha256_bytes(glb))
             self.assertEqual(metadata["license_id"], "CC0-1.0")
             self.assertTrue((root / "cache/UAL1_Standard.zip").exists())
+
+    def test_mirror_network_error_falls_back_to_itch_signed_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            glb = fake_glb()
+            archive_bytes = make_archive(glb)
+            pack = dict(target.PACKS["ual1"])
+            pack.update(archive_sha256=target.sha256_bytes(archive_bytes), glb_sha256=target.sha256_bytes(glb))
+            with patch.dict(target.PACKS, {"ual1": pack}):
+                calls = []
+                def fake_open(request, timeout):
+                    calls.append(request)
+                    if isinstance(request, str):
+                        raise OSError("mirror temporarily unavailable")
+                    if request.full_url.endswith("as_props=1"):
+                        return FakeResponse(json.dumps({"url": "https://signed.example/file"}).encode())
+                    return FakeResponse(archive_bytes)
+                path = target.fetch_pack("ual1", root / "assets", root / "cache", urlopen=fake_open)
+            self.assertEqual(path.read_bytes(), glb)
+            self.assertEqual(len(calls), 3)
+
 
     def test_bad_archive_hash_fails_before_zip_read(self):
         with tempfile.TemporaryDirectory() as tmp:
