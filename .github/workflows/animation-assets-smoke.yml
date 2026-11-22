@@ -24,6 +24,8 @@ jobs:
           python-version: "3.11"
       - name: Fetch and verify CC0 archives and GLBs
         run: python scripts/fetch_animation_assets.py --pack both --asset-dir /tmp/del-animation-assets --cache-dir /tmp/del-animation-cache
+      - name: Inspect actual GLB rig and animation channels
+        run: python scripts/inspect_animation_glb.py /tmp/del-animation-assets/UAL1_Standard.glb /tmp/del-animation-assets/UAL2_Standard.glb --min-animations 20 --min-joints 40
       - name: Verify asset provenance manifests
         run: |
           python - <<'PY'
