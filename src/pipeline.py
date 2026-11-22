@@ -726,11 +726,15 @@ def main(argv=None):
         # Text generation and hosted TTS are independent requests. Keep the
         # fallback plan explicitly degraded, but still try hosted narration below;
         # only fall back to local speech if the TTS request itself fails.
-        degraded = {"stage": "plan_generation", "reason": str(exc)[:600],
-                    "plan": Path(args.fallback_plan).name}
-        diagnostics.append("plan_fallback", degraded)
-        print("[plan] Gemini script generation unavailable; using the checked-in plan. "
-              "Hosted narration will still be attempted; this delivery is DEGRADED.",
+        # A checked-in fallback plan is a curated, deterministic production plan. It is
+        # not a degraded media path by itself: hosted narration, rendering, and all QA
+        # gates still run normally. Only a local voice fallback makes the delivery degraded.
+        fallback_info = {"stage": "plan_generation", "reason": str(exc)[:600],
+                         "plan": Path(args.fallback_plan).name,
+                         "curated": True}
+        diagnostics.append("plan_fallback", fallback_info)
+        print("[plan] Gemini script generation unavailable; using the checked-in curated plan. "
+              "Hosted narration will still be attempted; media QA remains authoritative.",
               flush=True)
         try:
             episode = load_plan(args.fallback_plan)
