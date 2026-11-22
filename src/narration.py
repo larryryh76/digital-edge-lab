@@ -243,7 +243,12 @@ def pad_to(wav_in, wav_out, seconds):
 
 
 def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False):
-    """Synthesise every beat, return (narration_wav, windows, report)."""
+    """Create ONE continuous narration track and derive scene windows from it.
+
+    This avoids per-beat TTS clip boundaries, repeated voice resets, and hard
+    concatenation artifacts. Beat windows are estimated from word proportions
+    over the measured whole-track duration; audio itself remains continuous.
+    """
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     local = find_local_voice()
@@ -256,80 +261,73 @@ def synthesize(episode, work_dir, *, client=None, tts_model=None, offline=False)
     if not use_local and client is None:
         raise NarrationError("No TTS backend available")
 
-    padded_files, windows, report_beats = [], [], []
+    beats = episode.get("beats") or []
+    full_text = " ".join(str(beat.get("narration", "")).strip() for beat in beats).strip()
+    if not full_text:
+        full_text = str(episode.get("narration", "")).strip()
+    if not full_text:
+        raise NarrationError("episode narration is empty")
+
+    wav = work_dir / "narration.wav"
+    pace_report = None
+    if use_local:
+        local_tts(full_text, wav, local)
+        if local == "kokoro":
+            pace_report = normalize_local_pace(wav, full_text)
+        engine = "kokoro-neural" if local == "kokoro" else "espeak-ng-fallback"
+    else:
+        gemini_tts(client, full_text, wav, tts_model)
+        engine = client.actual_models.get("tts") or tts_model
+
+    total_audio = probe_duration(wav)
+    ok, rate = plausibility(full_text, total_audio)
+    if not ok:
+        raise NarrationError(
+            f"continuous narration duration is implausible ({total_audio:.2f}s for "
+            f"{len(full_text.split())} words, {rate:.2f}s/word)"
+        )
+    level = mean_volume_db(wav)
+    if level is None or level < -45:
+        raise NarrationError(f"narration is silent (mean {level} dB)")
+
+    weights = [max(1, len(str(b.get("narration", "")).split())) for b in beats]
+    if not weights:
+        weights = [max(1, len(full_text.split()))]
+        beats = [{"id": "b1", "role": "narration", "narration": full_text}]
+    weight_total = sum(weights)
+    windows, report_beats = [], []
     cursor = 0.0
-    for i, beat in enumerate(episode["beats"]):
-        raw = work_dir / f"beat_{i:02d}.wav"
-        pace_report = None
-        if use_local:
-            local_tts(beat["narration"], raw, local)
-            pace_report = normalize_local_pace(raw, beat["narration"])
-            engine = "kokoro-neural" if local == "kokoro" else "espeak-ng-fallback"
-        else:
-            gemini_tts(client, beat["narration"], raw, tts_model)
-            engine = client.actual_models.get("tts") or tts_model
-        spoken = probe_duration(raw)
-        if spoken < MIN_BEAT_SECONDS:
-            raise NarrationError(
-                f"beat {i + 1} narration is only {spoken:.2f}s; refusing to ship a truncated line"
-            )
-        ok, rate = plausibility(beat["narration"], spoken)
-        if not ok:
-            raise NarrationError(
-                f"beat {i + 1} narration is {spoken:.2f}s for "
-                f"{len(beat['narration'].split())} words ({rate:.2f}s/word); the voice "
-                "did not read this beat's line"
-            )
-        level = mean_volume_db(raw)
-        if level is None or level < -45:
-            raise NarrationError(f"beat {i + 1} narration is silent (mean {level} dB)")
-        role_pause = pause_after_role(beat.get("role", ""))
-        duration = max(1, round((spoken + SCENE_TAIL_SECONDS + role_pause) * FPS)) / FPS
-        padded = work_dir / f"beat_{i:02d}_padded.wav"
-        pad_to(raw, padded, duration)
-        padded_files.append(padded)
+    for i, beat in enumerate(beats):
+        duration = total_audio * weights[i] / weight_total
+        end = total_audio if i == len(beats) - 1 else cursor + duration
+        duration = end - cursor
         windows.append({
-            "index": i,
-            "beat_id": beat["id"],
-            "role": beat["role"],
-            "start": round(cursor, 4),
-            "end": round(cursor + duration, 4),
+            "index": i, "beat_id": beat.get("id", f"b{i+1}"),
+            "role": beat.get("role", "narration"),
+            "start": round(cursor, 4), "end": round(end, 4),
             "duration": round(duration, 4),
             "frames": int(round(duration * FPS)),
-            "spoken_seconds": round(spoken, 4),
-            "narration": beat["narration"],
+            "spoken_seconds": round(duration, 4),
+            "narration": str(beat.get("narration", "")).strip(),
         })
-        report_beats.append({"index": i, "engine": engine, "spoken_seconds": round(spoken, 3),
-                             "scene_seconds": round(duration, 3), "role_pause_seconds": role_pause,
-                             "pace": pace_report, "mean_db": level})
-        cursor += duration
+        report_beats.append({
+            "index": i, "engine": engine, "spoken_seconds": round(duration, 3),
+            "scene_seconds": round(duration, 3), "role_pause_seconds": 0.0,
+            "pace": pace_report, "mean_db": level,
+            "timing_method": "word-proportional continuous-track estimate",
+        })
+        cursor = end
 
-    concat_list = work_dir / "narration_concat.txt"
-    concat_list.write_text(
-        "\n".join(f"file '{p.resolve().as_posix()}'" for p in padded_files) + "\n",
-        encoding="utf-8",
-    )
-    narration = work_dir / "narration.wav"
-    result = subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(concat_list),
-         "-ac", "1", "-ar", "48000", str(narration)],
-        check=False, capture_output=True, text=True, timeout=120,
-    )
-    if result.returncode:
-        raise NarrationError(f"could not concatenate narration: {result.stderr[-400:]}")
-    total = probe_duration(narration)
-    if abs(total - cursor) > 0.25:
-        raise NarrationError(
-            f"narration timeline drift: expected {cursor:.2f}s, measured {total:.2f}s"
-        )
     report = {
-        "engine": ("kokoro-neural" if local == "kokoro" else "espeak-ng-fallback") if use_local else "gemini-tts",
+        "engine": "continuous-" + engine,
         "publication_quality_voice": (not use_local) or local == "kokoro",
-        "model": tts_model,
-        "total_seconds": round(total, 3),
+        "model": tts_model, "total_seconds": round(total_audio, 3),
         "beats": report_beats,
+        "timing_method": "single continuous TTS request; scene windows estimated from word proportions",
+        "word_count": len(full_text.split()),
+        "seconds_per_word": round(rate, 4),
     }
-    return narration, windows, report
+    return wav, windows, report
 
 
 def caption_cards(text, duration, max_chars=34):
