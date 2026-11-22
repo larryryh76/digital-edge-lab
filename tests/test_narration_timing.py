@@ -97,7 +97,7 @@ class TtsPlausibilityTest(unittest.TestCase):
         self.assertAlmostEqual(windows[0]["start"], 0.0, places=3)
         self.assertAlmostEqual(windows[-1]["end"], 12.0, delta=0.05)
         self.assertAlmostEqual(sum(w["duration"] for w in windows), 12.0, delta=0.05)
-        self.assertEqual(report["engine"], "continuous-gemini-tts")
+        self.assertEqual(report["engine"], "continuous-fake-tts")
         self.assertEqual(report["timing_method"],
                        "single continuous TTS request; scene windows estimated from word proportions")
 
