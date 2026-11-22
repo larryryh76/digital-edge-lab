@@ -1,5 +1,6 @@
 import unittest
 import inspect
+import re
 from pathlib import Path
 import sys
 
@@ -20,9 +21,8 @@ class ArtifactInspectionContractTests(unittest.TestCase):
 
     def test_representative_frames_are_extracted(self):
         source = inspect.getsource(target.frame_metrics)
-        self.assertIn('("start", 0.5)', source)
-        self.assertIn('("middle", 5.0)', source)
-        self.assertIn('("end", 10.0)', source)
+        for label, timestamp in (("start", "0.5"), ("middle", "5.0"), ("end", "10.0")):
+            self.assertRegex(source, rf'\("{label}"\s*,\s*{timestamp}\)')
         self.assertIn('f"{label}.jpg"', source)
         self.assertIn('"-frames:v"', source)
         self.assertIn('"fps=1"', source)
