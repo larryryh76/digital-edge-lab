@@ -18,7 +18,7 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class AssetManifestError(ValueError):
-    pass
+    """Raised when a manifest or asset violates the production trust policy."""
 
 
 @dataclass(frozen=True)
@@ -62,8 +62,7 @@ def parse_manifest(data: Any) -> list[AssetRecord]:
         _require(isinstance(raw, dict), f"assets[{index}] must be an object")
         asset_id = str(raw.get("id", "")).strip()
         _require(asset_id and asset_id not in seen, f"assets[{index}]: missing or duplicate id")
-        seen.add(asset_id
-        )
+        seen.add(asset_id)
         status = raw.get("status")
         _require(status in {"candidate", "ready"}, f"{asset_id}: status must be candidate or ready")
         kind = raw.get("kind")
@@ -88,6 +87,10 @@ def parse_manifest(data: Any) -> list[AssetRecord]:
         else:
             _require(file_path is None and digest is None,
                     f"{asset_id}: candidate assets must not carry unverified file/hash values")
+        compatible_rigs = raw.get("compatible_rigs", [])
+        animation_clips = raw.get("animation_clips", [])
+        _require(isinstance(compatible_rigs, list), f"{asset_id}: compatible_rigs must be a list")
+        _require(isinstance(animation_clips, list), f"{asset_id}: animation_clips must be a list")
         records.append(AssetRecord(
             asset_id=asset_id,
             title=str(raw.get("title", asset_id)).strip(),
@@ -99,8 +102,8 @@ def parse_manifest(data: Any) -> list[AssetRecord]:
             file_format=file_format,
             file_path=file_path,
             sha256=digest,
-            compatible_rigs=tuple(str(x) for x in raw.get("compatible_rigs", [])),
-            animation_clips=tuple(str(x) for x in raw.get("animation_clips", [])),
+            compatible_rigs=tuple(str(x) for x in compatible_rigs),
+            animation_clips=tuple(str(x) for x in animation_clips),
             attribution=str(raw.get("attribution", "")).strip() or None,
         ))
     return records
@@ -119,7 +122,7 @@ def verify_ready_asset(record: AssetRecord, asset_root: Path) -> Path:
     _require(record.license_id == "CC0-1.0", f"{record.asset_id}: license is not production-approved")
     root = asset_root.resolve()
     path = (root / record.file_path).resolve()
-    _require(path == root or root in path.parents,
+    _require(root in path.parents,
              f"{record.asset_id}: resolved asset path escapes asset root")
     _require(path.is_file(), f"{record.asset_id}: asset file not found: {path}")
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
