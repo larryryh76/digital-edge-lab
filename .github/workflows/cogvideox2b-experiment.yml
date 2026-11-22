@@ -93,9 +93,15 @@ jobs:
           kaggle kernels output "$KAGGLE_USERNAME/$KERNEL_SLUG" -p output/cogvideox2b-experiment --force
           test -s output/cogvideox2b-experiment/cogvideox2b_portrait.mp4
           test -s output/cogvideox2b-experiment/experiment_metadata.json
-          test -s output/cogvideox2b-experiment/frame_00.jpg
-          test -s output/cogvideox2b-experiment/frame_02.jpg
-          test -s output/cogvideox2b-experiment/frame_05.jpg
+          for sec in 00 01 02 03 04 05; do test -s "output/cogvideox2b-experiment/frame_$sec.jpg"; done
+          test -s output/cogvideox2b-experiment/motion_qa.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          qa=json.loads(Path("output/cogvideox2b-experiment/motion_qa.json").read_text())
+          assert qa.get("pass") is True, qa
+          print("Motion QA sanity passed:", qa.get("intervals"))
+          PY
           ffprobe -v error -show_entries format=duration:stream=codec_name,width,height,avg_frame_rate -of json output/cogvideox2b-experiment/cogvideox2b_portrait.mp4
       - name: Upload experiment for manual artifact inspection
         uses: actions/upload-artifact@v4
