@@ -22,6 +22,7 @@ PACKS = {
         "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
         "archive_sha256": "cc73fc4e495b82958207316596317a3f40b9fa38065bde1027937452da537724",
         "archive_name": "UAL1_Standard.zip",
+        "mirror_url": "https://media.githubusercontent.com/media/MightyBubble/Ludots-Assets/main/animations/Quaternius-Universal-Animation-Library-Standard.zip",
         "glb_path": "Unreal-Godot/UAL1_Standard.glb",
         "glb_name": "UAL1_Standard.glb",
         "glb_sha256": "69591853d817488edaa8fd9bf8fc1d821eaeaf789f8627b3cd23b41c4ed67997",
@@ -34,6 +35,7 @@ PACKS = {
         "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
         "archive_sha256": "4008ea208a604773a2b2177d965f0f5d3195498b5bf838c3f5785d68e95f2a68",
         "archive_name": "UAL2_Standard.zip",
+        "mirror_url": "https://media.githubusercontent.com/media/MightyBubble/Ludots-Assets/main/animations/Quaternius-Universal-Animation-Library-2-Standard.zip",
         "glb_path": "Unreal-Godot/UAL2_Standard.glb",
         "glb_name": "UAL2_Standard.glb",
         "glb_sha256": None,
@@ -77,18 +79,34 @@ def resolve_download_url(pack: dict, urlopen=urllib.request.urlopen) -> str:
 
 
 def _fetch_archive(pack: dict, archive_path: Path, urlopen) -> None:
-    signed_url = resolve_download_url(pack, urlopen=urlopen)
-    try:
-        payload = _response_bytes(urlopen, signed_url, 120)
-    except OSError as exc:
-        raise AssetFetchError(f"asset archive download failed: {exc}") from exc
-    actual = sha256_bytes(payload)
-    if actual != pack["archive_sha256"]:
-        raise AssetFetchError(f"{pack['id']}: archive SHA-256 mismatch (got {actual})")
-    archive_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = archive_path.with_suffix(archive_path.suffix + ".tmp")
-    temporary.write_bytes(payload)
-    temporary.replace(archive_path)
+    last_error = None
+    # Prefer the SHA-pinned GitHub LFS mirror to avoid intermittent itch.io 429s.
+    # Fall back to the official itch.io signed-download flow only if the mirror
+    # is unavailable. Integrity mismatches are hard failures, never fallback.
+    sources = [("mirror", pack.get("mirror_url")), ("itch", None)]
+    for source, url in sources:
+        if source == "mirror" and not url:
+            continue
+        try:
+            if source == "mirror":
+                payload = _response_bytes(urlopen, url, 120)
+            else:
+                signed_url = resolve_download_url(pack, urlopen=urlopen)
+                payload = _response_bytes(urlopen, signed_url, 120)
+        except (OSError, AssetFetchError) as exc:
+            last_error = exc
+            continue
+        actual = sha256_bytes(payload)
+        if actual != pack["archive_sha256"]:
+            raise AssetFetchError(
+                f"{pack['id']}: archive SHA-256 mismatch from {source} (got {actual})"
+            )
+        archive_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = archive_path.with_suffix(archive_path.suffix + ".tmp")
+        temporary.write_bytes(payload)
+        temporary.replace(archive_path)
+        return
+    raise AssetFetchError(f"{pack['id']}: all archive sources failed: {last_error}")
 
 
 def _read_verified_archive(pack: dict, archive_path: Path, urlopen) -> bytes:
