@@ -54,7 +54,7 @@ def main():
          "-c:v","libx264","-preset","fast","-crf","20","-pix_fmt","yuv420p",
          "-an",str(portrait)])
     # QA stills at three different times to demonstrate actual clip variation.
-    for sec in (0, 2, 5):
+    for sec in range(6):
         run(["ffmpeg","-y","-v","error","-ss",str(sec),"-i",str(portrait),
              "-frames:v","1",str(OUT/f"frame_{sec:02d}.jpg")])
     meta = {
