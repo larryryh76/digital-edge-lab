@@ -1,0 +1,94 @@
+name: CC0 Animation Asset Smoke Test
+
+on:
+  pull_request:
+    paths:
+      - "scripts/fetch_animation_assets.py"
+      - "scripts/inspect_animation_glb.py"
+      - "scripts/blender_animation_smoke.py"
+      - "tests/test_fetch_animation_assets.py"
+      - "tests/test_inspect_animation_glb.py"
+      - "assets/animation-manifest.json"
+      - ".github/workflows/animation-assets-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  BLENDER_URL: https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz
+
+jobs:
+  verify-free-animation-packs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Fetch and verify CC0 archives and GLBs
+        run: python scripts/fetch_animation_assets.py --pack both --asset-dir /tmp/del-animation-assets --cache-dir /tmp/del-animation-cache
+      - name: Inspect actual GLB rig and animation channels
+        run: python scripts/inspect_animation_glb.py /tmp/del-animation-assets/UAL1_Standard.glb /tmp/del-animation-assets/UAL2_Standard.glb --min-animations 20 --min-joints 40
+      - name: Install Blender runtime libraries
+        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 libsm6 libice6 libxext6 libgomp1 libxrandr2 libxinerama1
+      - name: Restore pinned Blender cache
+        id: blender-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/blender
+          key: blender-4.2.11-linux-x64
+      - name: Install pinned Blender
+        if: steps.blender-cache.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if curl -sS --fail --connect-timeout 20 --max-time 420 -o /tmp/blender.tar.xz "$BLENDER_URL"; then break; fi
+            echo "Blender download attempt $attempt failed; retrying"
+            sleep 5
+          done
+          sudo mkdir -p /opt/blender
+          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
+          rm -f /tmp/blender.tar.xz
+      - name: Add pinned Blender to PATH
+        run: |
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+          blender --version | head -1
+      - name: Render actual animated mannequin clips
+        run: |
+          mkdir -p /tmp/del-animation-review
+          blender -b -t 2 --python-exit-code 1 --python scripts/blender_animation_smoke.py -- /tmp/del-animation-assets/UAL1_Standard.glb /tmp/del-animation-review/UAL1
+          test -s /tmp/del-animation-review/UAL1/animation-smoke.json
+          test -s /tmp/del-animation-review/UAL1/frame_00.png
+          test -s /tmp/del-animation-review/UAL1/frame_01.png
+          blender -b -t 2 --python-exit-code 1 --python scripts/blender_animation_smoke.py -- /tmp/del-animation-assets/UAL2_Standard.glb /tmp/del-animation-review/UAL2
+          test -s /tmp/del-animation-review/UAL2/animation-smoke.json
+          test -s /tmp/del-animation-review/UAL2/frame_00.png
+          test -s /tmp/del-animation-review/UAL2/frame_01.png
+      - name: Upload actual animation render evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: digital-edge-lab-animation-smoke-review
+          path: /tmp/del-animation-review
+          retention-days: 7
+      - name: Verify asset provenance manifests
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          root = Path('/tmp/del-animation-assets')
+          for name in ('UAL1_Standard', 'UAL2_Standard'):
+              asset = root / f'{name}.glb'
+              report = root / f'{name}.provenance.json'
+              assert asset.is_file() and asset.stat().st_size > 1_000_000, f'missing or undersized {asset}'
+              data = json.loads(report.read_text())
+              actual = hashlib.sha256(asset.read_bytes()).hexdigest()
+              assert actual == data['asset_sha256'], f'{name} provenance hash mismatch'
+              assert data['license_id'] == 'CC0-1.0'
+              assert data['archive_sha256'], 'missing archive integrity pin'
+              print(f'{name}: {asset.stat().st_size:,} bytes; sha256={actual}; license={data["license_id"]}')
+          PY

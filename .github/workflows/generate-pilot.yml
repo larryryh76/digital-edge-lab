@@ -22,7 +22,10 @@ on:
   pull_request:
     paths:
       - "src/**"
+      - "scripts/**"
       - "tests/**"
+      - "assets/animation-manifest.json"
+      - ".github/workflows/animation-assets-smoke.yml"
       - "plans/**"
       - "kaggle/**"
       - ".github/workflows/kaggle-production-render.yml"
