@@ -58,6 +58,23 @@ def main():
     for sec in range(6):
         run(["ffmpeg","-y","-v","error","-ss",str(sec),"-i",str(portrait),
              "-frames:v","1",str(OUT/f"frame_{sec:02d}.jpg")])
+    # Pixel-difference sanity check across consecutive one-second samples.
+    from PIL import Image, ImageChops, ImageStat
+    motion = []
+    for sec in range(1, 6):
+        a = Image.open(OUT/f"frame_{sec-1:02d}.jpg").convert("RGB")
+        b = Image.open(OUT/f"frame_{sec:02d}.jpg").convert("RGB")
+        diff = ImageChops.difference(a, b)
+        mean_delta = sum(ImageStat.Stat(diff).mean) / 3
+        changed = sum(1 for v in diff.convert("L").getdata() if v > 8) / (a.width*a.height)
+        motion.append({"interval": f"{sec-1}-{sec}s", "mean_abs_rgb_delta": round(mean_delta,3), "changed_pixel_fraction": round(changed,4)})
+    frozen = [m for m in motion if m["mean_abs_rgb_delta"] < 1.0 or m["changed_pixel_fraction"] < 0.01]
+    qa = {"intervals": motion, "frozen_intervals": frozen, "pass": not frozen,
+          "limitation": "Pixel-difference QA is only a motion sanity check, not proof of coherent subject motion."}
+    (OUT/"motion_qa.json").write_text(json.dumps(qa,indent=2),encoding="utf-8")
+    print("MOTION_QA:", json.dumps(qa), flush=True)
+    if frozen:
+        raise RuntimeError(f"Motion QA rejected clip: {frozen}")
     meta = {
         "model": model, "prompt": PROMPT, "seconds": 6.0, "frames": 49, "fps": 8,
         "inference_steps": 20, "seed": 4242, "gpu": torch.cuda.get_device_name(0),
