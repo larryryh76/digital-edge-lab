@@ -25,6 +25,7 @@ def run(cmd):
     subprocess.run(cmd, check=True, timeout=600)
 
 def main():
+    run([__import__("sys").executable, "-m", "pip", "install", "--disable-pip-version-check", "diffusers==0.32.4", "transformers==4.46.3", "accelerate==1.1.1", "imageio-ffmpeg==0.5.1"])
     import torch
     from diffusers import CogVideoXPipeline
     from diffusers.utils import export_to_video
