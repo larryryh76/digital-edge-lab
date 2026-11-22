@@ -5,6 +5,7 @@ on:
       - "scripts/blender_glb_animation_proof.py"
       - "scripts/fetch_animation_assets.py"
       - ".github/workflows/character-glb-animation-proof.yml"
+      - ".github/workflows/character-proof-output-fix.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,6 +25,7 @@ jobs:
       - name: Import rig and render animation proof
         timeout-minutes: 12
         run: |
+          mkdir -p output
           blender -b --python scripts/blender_glb_animation_proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
           test -s output/character-animation-proof.mp4
           test -s output/character-animation-proof.json
