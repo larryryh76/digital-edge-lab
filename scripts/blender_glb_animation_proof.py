@@ -123,11 +123,11 @@ scene.render.fps = 24
 # the legacy direct FFMPEG selector.
 if bpy.app.version >= (5, 0, 0):
     scene.render.image_settings.media_type = "VIDEO"
-scene.render.image_settings.file_format = "FFMPEG"
-scene.render.ffmpeg.format = "MPEG4"
-scene.render.ffmpeg.codec = "H264"
-scene.render.ffmpeg.constant_rate_factor = "MEDIUM"
-scene.render.filepath = str(output.with_suffix(""))
+# Render a deterministic PNG sequence; encode the MP4 with system ffmpeg after Blender.
+scene.render.image_settings.file_format = "PNG"
+frames_dir = output.parent / "proof_frames"
+frames_dir.mkdir(parents=True, exist_ok=True)
+scene.render.filepath = str(frames_dir / "frame_")
 scene.view_settings.view_transform = "AgX"
 scene.frame_set(start)
 bpy.ops.render.render(animation=True)
@@ -136,6 +136,6 @@ action_inventory = [{"name": a.name, "frame_range": [int(a.frame_range[0]), int(
 report = {"status": "proof_rendered", "source_glb": str(source), "armatures": [o.name for o in rigs], "available_actions": action_inventory,
           "selected_rig": rig.name, "selected_action": action.name, "action_frame_range": [start, end],
           "render_frame_range": [scene.frame_start, scene.frame_end], "evaluated_rig_motion": motion_trace,
-          "output": str(output)}
+          "frames_dir": str(frames_dir), "expected_output": str(output)}
 output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(report, indent=2))
