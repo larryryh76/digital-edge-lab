@@ -117,5 +117,5 @@ report = {"status": "proof_rendered", "source_glb": str(source), "armatures": [o
           "selected_rig": rig.name, "selected_action": action.name, "action_frame_range": [start, end],
           "render_frame_range": [scene.frame_start, scene.frame_end], "evaluated_rig_motion": motion_trace,
           "output": str(output)}
-output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\\n", encoding="utf-8")
+output.with_suffix(".json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 print(json.dumps(report, indent=2))
