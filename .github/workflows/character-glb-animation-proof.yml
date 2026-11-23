@@ -5,11 +5,16 @@ on:
       - "scripts/blender_glb_animation_proof.py"
       - "scripts/fetch_animation_assets.py"
       - "scripts/subject_motion_qa.py"
+      - "scripts/inspect_animation_glb.py"
+      - "scripts/blender_animation_smoke.py"
       - "tests/test_subject_motion_qa.py"
+      - "tests/test_inspect_animation_glb.py"
       - ".github/workflows/character-glb-animation-proof.yml"
   workflow_dispatch:
 permissions:
   contents: read
+env:
+  BLENDER_URL: https://download.blender.org/release/Blender4.2/blender-4.2.11-linux-x64.tar.xz
 concurrency:
   group: del-character-proof-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -19,22 +24,40 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Install Blender and runtime
+      - name: Install Blender 4.2 and runtime
+        timeout-minutes: 12
         run: |
-          sudo apt-get update
-          sudo apt-get install -y blender ffmpeg python3-numpy \
+          set -euo pipefail
+          sudo apt-get update -o Acquire::Retries=3 -o Acquire::http::Timeout=20
+          sudo apt-get install -y --no-install-recommends ffmpeg python3-numpy \
             libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri \
             libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 \
             libsm6 libice6 libxext6 libgomp1 libxrandr2 libxinerama1
-          blender -b --python-expr "import bpy, numpy; print('Blender GLB importer dependencies OK:', bpy.app.version_string, numpy.__version__)"
+          curl -sS --fail --retry 3 --connect-timeout 20 --max-time 420 \
+            -o /tmp/blender.tar.xz "$BLENDER_URL"
+          sudo mkdir -p /opt/blender
+          sudo tar -xJf /tmp/blender.tar.xz -C /opt/blender --strip-components=1
+          sudo ln -sf /opt/blender/blender /usr/local/bin/blender
+          rm -f /tmp/blender.tar.xz
+          blender -b --python-expr "import bpy, numpy; print('Blender runtime OK:', bpy.app.version_string, numpy.__version__)"
           blender --version | head -1
-          blender -b --python-expr "import bpy; s=bpy.context.scene; s.render.image_settings.media_type='VIDEO'; s.render.image_settings.file_format='FFMPEG'; print('VIDEO OUTPUT PREFLIGHT OK:', s.render.image_settings.media_type, s.render.image_settings.file_format)"
       - name: Test encoded subject-motion gate
         run: |
           python -m pip install --disable-pip-version-check "numpy>=2.2,<2.4"
-          python -m unittest tests/test_subject_motion_qa.py -v
-      - name: Download and verify CC0 UAL1 archive and GLB
-        run: python scripts/fetch_animation_assets.py --pack ual1 --asset-dir assets/animations --cache-dir /tmp/animation-cache
+          python -m unittest tests/test_subject_motion_qa.py tests/test_inspect_animation_glb.py -v
+      - name: Download and verify both CC0 animation packs
+        run: python scripts/fetch_animation_assets.py --pack both --asset-dir assets/animations --cache-dir /tmp/animation-cache
+      - name: Inspect animation clips and humanoid rigs
+        run: python scripts/inspect_animation_glb.py assets/animations/UAL1_Standard.glb assets/animations/UAL2_Standard.glb --min-animations 20 --min-joints 40
+      - name: Render actual walk/jog motion review frames from both packs
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          mkdir -p output/animation-review
+          blender -b -t 2 --python-exit-code 1 --python scripts/blender_animation_smoke.py -- assets/animations/UAL1_Standard.glb output/animation-review/UAL1
+          blender -b -t 2 --python-exit-code 1 --python scripts/blender_animation_smoke.py -- assets/animations/UAL2_Standard.glb output/animation-review/UAL2
+          test -s output/animation-review/UAL1/animation-smoke.json
+          test -s output/animation-review/UAL2/animation-smoke.json
       - name: Import rig and render animation proof
         timeout-minutes: 12
         run: |
@@ -54,5 +77,6 @@ jobs:
             output/character-animation-proof.mp4
             output/character-animation-proof.json
             output/character-animation-proof.motion-qa.json
+            output/animation-review/**
           if-no-files-found: error
           retention-days: 7
