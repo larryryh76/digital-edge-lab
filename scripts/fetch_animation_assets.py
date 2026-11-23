@@ -37,7 +37,7 @@ PACKS = {
         "archive_name": "UAL2_Standard.zip",
         "glb_path": "Unreal-Godot/UAL2_Standard.glb",
         "glb_name": "UAL2_Standard.glb",
-        "glb_sha256": None,
+        "glb_sha256": "8cee20ab1bc55130092447e810e26df22dd2803eccc54f52137a7d54d7ab88a8",
     },
 }
 
