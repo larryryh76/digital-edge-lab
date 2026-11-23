@@ -71,10 +71,19 @@ def resolve_download_url(pack: dict, urlopen=urllib.request.urlopen) -> str:
         headers={"User-Agent": "DigitalEdgeLab-CC0AssetVerifier/1.0"},
         method="POST",
     )
-    try:
-        payload = json.loads(_response_bytes(urlopen, request, 40).decode("utf-8"))
-    except (OSError, ValueError, UnicodeDecodeError) as exc:
-        raise AssetFetchError(f"itch.io download-url resolution failed: {exc}") from exc
+    last_error = None
+    # itch.io occasionally rate-limits its signed-download resolver (HTTP 429).
+    # Retry boundedly with exponential backoff before failing this proof.
+    import time
+    for attempt in range(4):
+        try:
+            payload = json.loads(_response_bytes(urlopen, request, 40).decode("utf-8"))
+            break
+        except (OSError, ValueError, UnicodeDecodeError) as exc:
+            last_error = exc
+            if attempt == 3:
+                raise AssetFetchError(f"itch.io download-url resolution failed after 4 attempts: {exc}") from exc
+            time.sleep(2 ** (attempt + 1)
     signed_url = payload.get("url")
     if not isinstance(signed_url, str) or not signed_url.startswith("https://"):
         raise AssetFetchError("itch.io returned no HTTPS download URL")
