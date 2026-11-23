@@ -19,7 +19,10 @@ jobs:
       - name: Install Blender and runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender ffmpeg python3-numpy
+          sudo apt-get install -y blender ffmpeg python3-numpy \
+            libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri \
+            libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 \
+            libsm6 libice6 libxext6 libgomp1 libxrandr2 libxinerama1
           blender -b --python-expr "import bpy, numpy; print('Blender GLB importer dependencies OK:', bpy.app.version_string, numpy.__version__)"
           blender --version | head -1
           blender -b --python-expr "import bpy; s=bpy.context.scene; s.render.image_settings.media_type='VIDEO'; s.render.image_settings.file_format='FFMPEG'; print('VIDEO OUTPUT PREFLIGHT OK:', s.render.image_settings.media_type, s.render.image_settings.file_format)"
