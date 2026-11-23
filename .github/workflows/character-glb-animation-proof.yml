@@ -19,19 +19,21 @@ jobs:
       - name: Install Blender and runtime
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender ffmpeg
-          sudo apt-get install -y python3-numpy
-          PYTHONPATH=/usr/lib/python3/dist-packages blender -b --python-expr "import bpy, numpy; print('Blender GLB importer dependencies OK:', bpy.app.version_string, numpy.__version__)"
+          sudo apt-get install -y blender ffmpeg python3-numpy
+          blender -b --python-expr "import bpy, numpy; print('Blender GLB importer dependencies OK:', bpy.app.version_string, numpy.__version__)"
           blender --version | head -1
       - name: Test encoded subject-motion gate
-        run: python -m unittest tests/test_subject_motion_qa.py -v
+        run: |
+          python -m pip install --disable-pip-version-check "numpy>=2.2,<2.4"
+          python -m unittest tests/test_subject_motion_qa.py -v
       - name: Download and verify CC0 UAL1 archive and GLB
         run: python scripts/fetch_animation_assets.py --pack ual1 --asset-dir assets/animations --cache-dir /tmp/animation-cache
       - name: Import rig and render animation proof
         timeout-minutes: 12
         run: |
+          set -euo pipefail
           mkdir -p output
-          PYTHONPATH=/tmp/blender-python-deps blender -b --python scripts/blender_glb_animation_proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
+          blender -b --python scripts/blender_glb_animation_proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
           test -s output/character-animation-proof.mp4
           test -s output/character-animation-proof.json
           ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -show_entries format=duration -of json output/character-animation-proof.mp4
