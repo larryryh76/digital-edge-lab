@@ -17,8 +17,13 @@ def extract_sampled_frames(path: Path, fps: float = 3.0, width: int = 160):
          "-pix_fmt", "gray", "pipe:1"],
         capture_output=True, check=True, timeout=180)
     payload = probe.stdout
-    # scale to even height; ffmpeg's scaled output is known to preserve aspect ratio.
-    height = int(round(width * 16 / 9 / 2) * 2)  # vertical short, 9:16
+    metadata = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0",
+         "-show_entries", "stream=width,height", "-of", "json", str(path)],
+        capture_output=True, check=True, text=True, timeout=30)
+    stream = json.loads(metadata.stdout)["streams"][0]
+    source_w, source_h = int(stream["width"]), int(stream["height"])
+    height = int(round(source_h * width / source_w / 2) * 2)
     frame_bytes = width * height
     if not payload or len(payload) % frame_bytes:
         raise RuntimeError(f"ffmpeg returned incomplete sample frames ({len(payload)} bytes)")
@@ -46,7 +51,7 @@ def motion_metrics(frames):
         "background_mean_delta": float(bg_per_frame.mean()),
         "subject_active_fraction": float((per_frame >= 0.65).mean()),
         "subject_frozen_interval_fraction": float((per_frame < 0.20).mean()),
-        "subject_motion_dominates": bool(per_frame.mean() >= max(0.45, bg_per_frame.mean() * 0.50)),
+        "subject_motion_dominates": bool(per_frame.mean() >= max(0.45, bg_per_frame.mean() * 1.15)),
         "interval_subject_delta": [round(float(v), 3) for v in per_frame],
     }
 
