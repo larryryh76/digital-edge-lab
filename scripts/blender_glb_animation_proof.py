@@ -72,6 +72,6 @@ scene.render.resolution_x=540; scene.render.resolution_y=960; scene.render.resol
 scene.frame_start=start; scene.frame_end=min(end,start+120)
 scene.render.image_settings.file_format="FFMPEG"; scene.render.ffmpeg.format="MPEG4"; scene.render.ffmpeg.codec="H264"; scene.render.ffmpeg.constant_rate_factor="MEDIUM"; scene.render.filepath=str(output.with_suffix(""))
 scene.view_settings.view_transform="AgX"; scene.frame_set(start); bpy.ops.render.render(animation=True)
-report={"status":"proof_rendered","source_glb":str(source),"armatures":[o.name for o in rigs],"selected_rig":rig.name,"selected_action":action.name,"action_frame_range":[start,end],"render_frame_range":[scene.frame_start,scene.frame_end],"output":str(output)}
+report={"status":"proof_rendered","source_glb":str(source),"armatures":[o.name for o in rigs],"selected_rig":rig.name,"selected_action":action.name,"action_frame_range":[start,end],"render_frame_range":[scene.frame_start,scene.frame_end],"evaluated_rig_motion":motion_trace,"output":str(output)}
 output.with_suffix(".json").write_text(json.dumps(report,indent=2)+"\n")
 print(json.dumps(report,indent=2))
