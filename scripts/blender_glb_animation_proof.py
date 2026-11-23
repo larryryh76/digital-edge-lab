@@ -28,8 +28,8 @@ end = max(start + 2, end)
 rig.animation_data_create()
 rig.animation_data.action = action
 scene.frame_start = start
-# Two seconds are enough for encoded motion QA (6 samples at 3fps); keep proof renders fast.
-scene.frame_end = min(end, start + 48)
+# 1.25 seconds at 24fps yields enough encoded samples for motion QA without a slow render.
+scene.frame_end = min(end, start + 30)
 
 # Verify evaluated rig transforms, not merely the presence of an Action datablock.
 def pose_motion_trace(armature, first, last, max_samples=48):
@@ -101,8 +101,8 @@ try:
     scene.render.engine = "BLENDER_EEVEE_NEXT"
 except Exception:
     scene.render.engine = "BLENDER_EEVEE"
-scene.render.resolution_x = 540
-scene.render.resolution_y = 960
+scene.render.resolution_x = 360
+scene.render.resolution_y = 640
 scene.render.resolution_percentage = 100
 scene.render.fps = 24
 # Blender 5.0 gates movie output behind media_type; older versions use
