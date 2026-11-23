@@ -104,8 +104,10 @@ scene.render.resolution_x = 540
 scene.render.resolution_y = 960
 scene.render.resolution_percentage = 100
 scene.render.fps = 24
-# Blender 5.0 gates movie output behind the media_type selector.
-scene.render.image_settings.media_type = "VIDEO"
+# Blender 5.0 gates movie output behind media_type; older versions use
+# the legacy direct FFMPEG selector.
+if bpy.app.version >= (5, 0, 0):
+    scene.render.image_settings.media_type = "VIDEO"
 scene.render.image_settings.file_format = "FFMPEG"
 scene.render.ffmpeg.format = "MPEG4"
 scene.render.ffmpeg.codec = "H264"
