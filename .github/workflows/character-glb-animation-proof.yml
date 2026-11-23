@@ -20,19 +20,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y blender ffmpeg
-          python -m pip install --user numpy
-          BLENDER_PY_VERSION=$(blender -b --python-expr "import sys; print('BLENDER_PY_VERSION=%d.%d' % (sys.version_info.major, sys.version_info.minor))" 2>&1 | grep -oE 'BLENDER_PY_VERSION=[0-9]+\.[0-9]+' | tail -1 | cut -d= -f2)
-          if [ -z "$BLENDER_PY_VERSION" ]; then
-            echo "Could not extract Blender embedded Python version from Blender output."
-            blender --version
-            exit 1
-          fi
-          echo "Detected Blender embedded Python: $BLENDER_PY_VERSION"
-          BLENDER_ABI=$(echo "$BLENDER_PY_VERSION" | tr -d '.')
-          python -m pip install --only-binary=:all: --target /tmp/blender-python-deps \
-            --platform manylinux_2_28_x86_64 --implementation cp --abi "cp$BLENDER_ABI" \
-            --python-version "$BLENDER_PY_VERSION" "numpy>=2.2,<2.4"
-          PYTHONPATH=/tmp/blender-python-deps blender -b --python-expr "import bpy, numpy; print('Blender GLB importer dependencies OK:', bpy.app.version_string, numpy.__version__)"
+          sudo apt-get install -y python3-numpy
+          PYTHONPATH=/usr/lib/python3/dist-packages blender -b --python-expr "import bpy, numpy; print('Blender GLB importer dependencies OK:', bpy.app.version_string, numpy.__version__)"
           blender --version | head -1
       - name: Test encoded subject-motion gate
         run: python -m unittest tests/test_subject_motion_qa.py -v
