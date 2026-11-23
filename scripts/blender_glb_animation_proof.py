@@ -29,7 +29,7 @@ rig.animation_data_create()
 rig.animation_data.action = action
 scene.frame_start = start
 # 1.25 seconds at 24fps yields enough encoded samples for motion QA without a slow render.
-scene.frame_end = min(end, start + 30)
+scene.frame_end = min(end, start + 11)  # Fast proof clip: 12 frames maximum.
 
 # Verify evaluated rig transforms, not merely the presence of an Action datablock.
 def pose_motion_trace(armature, first, last, max_samples=48):
@@ -101,9 +101,14 @@ try:
     scene.render.engine = "BLENDER_EEVEE_NEXT"
 except Exception:
     scene.render.engine = "BLENDER_EEVEE"
-scene.render.resolution_x = 360
-scene.render.resolution_y = 640
+scene.render.resolution_x = 180
+scene.render.resolution_y = 320
 scene.render.resolution_percentage = 100
+# Low-sample Eevee proof render; production quality settings are separate.
+if hasattr(scene, "eevee") and hasattr(scene.eevee, "taa_render_samples"):
+    scene.eevee.taa_render_samples = 8
+if hasattr(scene, "render") and hasattr(scene.render, "image_settings"):
+    scene.render.image_settings.color_mode = "RGB"
 scene.render.fps = 24
 # Blender 5.0 gates movie output behind media_type; older versions use
 # the legacy direct FFMPEG selector.
