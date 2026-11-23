@@ -63,7 +63,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p output
-          blender -b --python scripts/blender_glb_animation_proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
+          blender -b --python scripts/blender_glb_animation-proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
+          ffmpeg -hide_banner -loglevel error -y -framerate 24 -start_number 0 \\
+            -i output/proof_frames/frame_%04d.png -frames:v 12 \\
+            -c:v libx264 -pix_fmt yuv420p -movflags +faststart \\
+            output/character-animation-proof.mp4
           test -s output/character-animation-proof.mp4
           test -s output/character-animation-proof.json
           ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -show_entries format=duration -of json output/character-animation-proof.mp4
