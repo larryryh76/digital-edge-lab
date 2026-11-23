@@ -24,19 +24,21 @@ def pose_motion_trace(armature, first, last, max_samples=48):
     span=max(1,last-first)
     count=min(max_samples,span+1)
     frames=sorted(set(int(round(first+i*span/max(1,count-1))) for i in range(count)))
-    per_bone={}
+    bone_samples={bone.name:{"translations":[],"rotations":[]} for bone in armature.pose.bones}
     scene=bpy.context.scene
-    for bone in armature.pose.bones:
-        translations=[]; rotations=[]
-        for frame in frames:
-            scene.frame_set(frame)
-            bpy.context.view_layer.update()
+    for frame in frames:
+        scene.frame_set(frame)
+        bpy.context.view_layer.update()
+        for bone in armature.pose.bones:
             matrix=bone.matrix.copy()
-            translations.append(matrix.translation.copy())
-            rotations.append(matrix.to_quaternion().copy())
+            bone_samples[bone.name]["translations"].append(matrix.translation.copy())
+            bone_samples[bone.name]["rotations"].append(matrix.to_quaternion().copy())
+    per_bone={}
+    for name,samples in bone_samples.items():
+        translations=samples["translations"]; rotations=samples["rotations"]
         displacement=max((a-b).length for a in translations for b in translations)
         angular=max((a.rotation_difference(b).angle for a in rotations for b in rotations),default=0.0)
-        per_bone[bone.name]={"max_translation":float(displacement),"max_rotation_radians":float(angular)}
+        per_bone[name]={"max_translation":float(displacement),"max_rotation_radians":float(angular)}
     scene.frame_set(first); bpy.context.view_layer.update()
     best=max(per_bone.items(),key=lambda item:max(item[1]["max_translation"],item[1]["max_rotation_radians"]),default=(None,{}))
     return {"sampled_frames":frames,"bone_count":len(per_bone),"most_moving_bone":best[0],
