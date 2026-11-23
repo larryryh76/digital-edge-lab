@@ -10,6 +10,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: del-character-proof-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   import-and-render-proof:
     runs-on: ubuntu-latest
