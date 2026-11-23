@@ -16,8 +16,7 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(source))
 scene = bpy.context.scene
 rigs = [o for o in scene.objects if o.type == "ARMATURE"]
-actions = [a for a in bpy.data.actions if a.frame_range[1] > a.frame_range[0]
-           and any(fc.keyframe_points for fc in a.fcurves)]
+actions = [a for a in bpy.data.actions if a.frame_range[1] > a.frame_range[0]]
 if not rigs:
     raise SystemExit("GLB import yielded no armature")
 if not actions:
