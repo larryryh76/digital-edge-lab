@@ -83,7 +83,7 @@ def resolve_download_url(pack: dict, urlopen=urllib.request.urlopen) -> str:
             last_error = exc
             if attempt == 3:
                 raise AssetFetchError(f"itch.io download-url resolution failed after 4 attempts: {exc}") from exc
-            time.sleep(2 ** (attempt + 1)
+            time.sleep(2 ** (attempt + 1))
     signed_url = payload.get("url")
     if not isinstance(signed_url, str) or not signed_url.startswith("https://"):
         raise AssetFetchError("itch.io returned no HTTPS download URL")
