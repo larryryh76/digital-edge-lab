@@ -17,6 +17,36 @@ if not actions: raise SystemExit("GLB import yielded no actions; motionless asse
 rig=max(rigs,key=lambda o:len(o.pose.bones))
 action=max(actions,key=lambda a:a.frame_range[1]-a.frame_range[0])
 rig.animation_data_create(); rig.animation_data.action=action
+
+# Verify the imported action changes evaluated pose transforms, not just that an
+# Action datablock exists. Sample the whole clip at bounded intervals.
+def pose_motion_trace(armature, first, last, max_samples=48):
+    span=max(1,last-first)
+    count=min(max_samples,span+1)
+    frames=sorted(set(int(round(first+i*span/max(1,count-1))) for i in range(count)))
+    per_bone={}
+    scene=bpy.context.scene
+    for bone in armature.pose.bones:
+        translations=[]; rotations=[]
+        for frame in frames:
+            scene.frame_set(frame)
+            bpy.context.view_layer.update()
+            matrix=bone.matrix.copy()
+            translations.append(matrix.translation.copy())
+            rotations.append(matrix.to_quaternion().copy())
+        displacement=max((a-b).length for a in translations for b in translations)
+        angular=max((a.rotation_difference(b).angle for a in rotations for b in rotations),default=0.0)
+        per_bone[bone.name]={"max_translation":float(displacement),"max_rotation_radians":float(angular)}
+    scene.frame_set(first); bpy.context.view_layer.update()
+    best=max(per_bone.items(),key=lambda item:max(item[1]["max_translation"],item[1]["max_rotation_radians"]),default=(None,{}))
+    return {"sampled_frames":frames,"bone_count":len(per_bone),"most_moving_bone":best[0],
+            "max_translation":best[1].get("max_translation",0.0),
+            "max_rotation_radians":best[1].get("max_rotation_radians",0.0),
+            "bones":per_bone}
+
+motion_trace=pose_motion_trace(rig,start,end)
+if motion_trace["max_translation"] < 0.01 and motion_trace["max_rotation_radians"] < 0.05:
+    raise SystemExit("selected GLB action does not visibly animate any rig bone; rejected")
 start,end=map(int,action.frame_range); end=max(start+2,end)
 bpy.context.view_layer.update()
 mesh_objs=[o for o in bpy.context.scene.objects if o.type=="MESH"]
