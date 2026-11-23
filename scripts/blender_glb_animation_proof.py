@@ -117,7 +117,8 @@ scene.view_settings.view_transform = "AgX"
 scene.frame_set(start)
 bpy.ops.render.render(animation=True)
 
-report = {"status": "proof_rendered", "source_glb": str(source), "armatures": [o.name for o in rigs],
+action_inventory = [{"name": a.name, "frame_range": [int(a.frame_range[0]), int(a.frame_range[1])], "duration_frames": int(a.frame_range[1] - a.frame_range[0])} for a in actions]
+report = {"status": "proof_rendered", "source_glb": str(source), "armatures": [o.name for o in rigs], "available_actions": action_inventory,
           "selected_rig": rig.name, "selected_action": action.name, "action_frame_range": [start, end],
           "render_frame_range": [scene.frame_start, scene.frame_end], "evaluated_rig_motion": motion_trace,
           "output": str(output)}
