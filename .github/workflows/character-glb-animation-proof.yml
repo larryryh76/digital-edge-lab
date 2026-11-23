@@ -21,6 +21,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y blender ffmpeg
           python -m pip install --user numpy
+          BLENDER_PY_VERSION=$(blender -b --python-expr "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" | tail -1)
+          BLENDER_ABI=$(echo "$BLENDER_PY_VERSION" | tr -d '.')
+          python -m pip install --only-binary=:all: --target /tmp/blender-python-deps \
+            --platform manylinux_2_28_x86_64 --implementation cp --abi "cp$BLENDER_ABI" \
+            --python-version "$BLENDER_PY_VERSION" "numpy>=2.2,<2.4"
+          PYTHONPATH=/tmp/blender-python-deps blender -b --python-expr "import bpy, numpy; print('Blender GLB importer dependencies OK:', bpy.app.version_string, numpy.__version__)"
           blender --version | head -1
       - name: Test encoded subject-motion gate
         run: python -m unittest tests/test_subject_motion_qa.py -v
@@ -30,7 +36,7 @@ jobs:
         timeout-minutes: 12
         run: |
           mkdir -p output
-          blender -b --python scripts/blender_glb_animation_proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
+          PYTHONPATH=/tmp/blender-python-deps blender -b --python scripts/blender_glb_animation_proof.py -- assets/animations/UAL1_Standard.glb output/character-animation-proof.mp4
           test -s output/character-animation-proof.mp4
           test -s output/character-animation-proof.json
           ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -show_entries format=duration -of json output/character-animation-proof.mp4
