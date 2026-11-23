@@ -28,7 +28,8 @@ end = max(start + 2, end)
 rig.animation_data_create()
 rig.animation_data.action = action
 scene.frame_start = start
-scene.frame_end = min(end, start + 120)
+# Two seconds are enough for encoded motion QA (6 samples at 3fps); keep proof renders fast.
+scene.frame_end = min(end, start + 48)
 
 # Verify evaluated rig transforms, not merely the presence of an Action datablock.
 def pose_motion_trace(armature, first, last, max_samples=48):
