@@ -11,19 +11,19 @@ from pathlib import Path
 import numpy as np
 
 def extract_sampled_frames(path: Path, fps: float = 3.0, width: int = 160):
-    probe = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(path), "-vf",
-         f"fps={fps},scale={width}:-2:flags=area", "-f", "rawvideo",
-         "-pix_fmt", "gray", "pipe:1"],
-        capture_output=True, check=True, timeout=180)
-    payload = probe.stdout
     metadata = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "v:0",
          "-show_entries", "stream=width,height", "-of", "json", str(path)],
         capture_output=True, check=True, text=True, timeout=30)
     stream = json.loads(metadata.stdout)["streams"][0]
     source_w, source_h = int(stream["width"]), int(stream["height"])
-    height = int(round(source_h * width / source_w / 2) * 2)
+    height = max(2, int(source_h * width / source_w) // 2 * 2)
+    probe = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(path), "-vf",
+         f"fps={fps},scale={width}:{height}:flags=area", "-f", "rawvideo",
+         "-pix_fmt", "gray", "pipe:1"],
+        capture_output=True, check=True, timeout=180)
+    payload = probe.stdout
     frame_bytes = width * height
     if not payload or len(payload) % frame_bytes:
         raise RuntimeError(f"ffmpeg returned incomplete sample frames ({len(payload)} bytes)")
