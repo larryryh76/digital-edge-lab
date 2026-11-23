@@ -22,7 +22,16 @@ if not rigs:
 if not actions:
     raise SystemExit("GLB import yielded no animated actions; motionless asset rejected")
 rig = max(rigs, key=lambda o: len(o.pose.bones))
-action = max(actions, key=lambda a: a.frame_range[1] - a.frame_range[0])
+# Choose an actual locomotion clip for the proof, not the longest unrelated
+# action (which may be kneeling/repair/idle and fail subject-motion QA).
+locomotion_terms = ("jog_fwd_loop", "walk_loop", "jog", "walk")
+locomotion_actions = [
+    a for term in locomotion_terms for a in actions
+    if term in a.name.lower()
+]
+action = locomotion_actions[0] if locomotion_actions else max(
+    actions, key=lambda a: a.frame_range[1] - a.frame_range[0]
+)
 start, end = map(int, action.frame_range)
 end = max(start + 2, end)
 rig.animation_data_create()
