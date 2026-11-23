@@ -4,8 +4,9 @@ on:
     paths:
       - "scripts/blender_glb_animation_proof.py"
       - "scripts/fetch_animation_assets.py"
+      - "scripts/subject_motion_qa.py"
+      - "tests/test_subject_motion_qa.py"
       - ".github/workflows/character-glb-animation-proof.yml"
-      - ".github/workflows/character-proof-output-fix.yml"
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,7 +20,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y blender ffmpeg
+          python -m pip install --user numpy
           blender --version | head -1
+      - name: Test encoded subject-motion gate
+        run: python -m unittest tests/test_subject_motion_qa.py -v
       - name: Download and verify CC0 UAL1 archive and GLB
         run: python scripts/fetch_animation_assets.py --pack ual1 --asset-dir assets/animations --cache-dir /tmp/animation-cache
       - name: Import rig and render animation proof
@@ -30,12 +34,15 @@ jobs:
           test -s output/character-animation-proof.mp4
           test -s output/character-animation-proof.json
           ffprobe -v error -show_entries stream=codec_name,width,height,r_frame_rate -show_entries format=duration -of json output/character-animation-proof.mp4
-      - name: Upload actual animated character proof
+      - name: Reject static or background-only character footage
+        run: python scripts/subject_motion_qa.py output/character-animation-proof.mp4 --report output/character-animation-proof.motion-qa.json
+      - name: Upload actual animated character proof and QA
         uses: actions/upload-artifact@v4
         with:
           name: character-glb-animation-proof
           path: |
             output/character-animation-proof.mp4
             output/character-animation-proof.json
+            output/character-animation-proof.motion-qa.json
           if-no-files-found: error
           retention-days: 7
