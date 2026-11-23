@@ -111,14 +111,17 @@ def _read_verified_archive(pack: dict, archive_path: Path, urlopen) -> bytes:
 def _extract_expected_glb(pack: dict, archive_bytes: bytes, destination: Path) -> str:
     try:
         with zipfile.ZipFile(__import__("io").BytesIO(archive_bytes)) as archive:
-            names = [info.filename for info in archive.infolist() if info.filename == pack["glb_path"]]
-            if len(names) != 1:
+            entries = [
+                info for info in archive.infolist()
+                if not info.is_dir() and Path(info.filename).name == pack["glb_name"]
+            ]
+            if len(entries) != 1:
+                candidates = [info.filename for info in entries]
                 raise AssetFetchError(
-                    f"{pack['id']}: expected exactly one {pack['glb_path']} in verified archive"
+                    f"{pack['id']}: expected exactly one {pack['glb_name']} by basename; "
+                    f"found {len(entries)} candidates: {candidates}"
                 )
-            info = archive.getinfo(names[0])
-            if info.is_dir() or info.file_size <= 0:
-                raise AssetFetchError(f"{pack['id']}: invalid GLB entry")
+            info = entries[0]
             glb = archive.read(info)
     except (zipfile.BadZipFile, OSError) as exc:
         raise AssetFetchError(f"{pack['id']}: verified archive is not a readable ZIP: {exc}") from exc
