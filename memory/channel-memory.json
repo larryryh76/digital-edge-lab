@@ -260,10 +260,14 @@
       "title": "Why Your Processor Guesses the Future to Stay Fast",
       "topic": "Speculative Execution and Branch Prediction in CPU Architecture",
       "created_at_utc": "2026-11-23T22:15:07.716424+00:00"
+    },
+    {
+      "title": "How Big AI Can Fit on Your Phone",
+      "topic": "Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
+      "created_at_utc": "2026-11-24T09:42:59.222829+00:00"
     }
   ],
   "running_context": [
-    "Episode: Why Video Fades to Black: The Hidden Math of Bitrate Crushing — Video Compression Macroblocks and Adaptive Bitrate Allocation",
     "Episode: The Strawberry Paradox: Why AI Can't Count — LLM Tokenization and Subword Encoding",
     "Episode: How a Giant AI Model Fits in Your Pocket — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
@@ -282,7 +286,8 @@
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: Why AI Remembers Word Order By Spinning Vectors — Rotary Position Embeddings (RoPE) in Large Language Models",
     "Episode: Why AI Memory Traffic Slows Down GPUs — FlashAttention IO-aware memory tiling in LLM attention mechanisms",
-    "Episode: Why Your Processor Guesses the Future to Stay Fast — Speculative Execution and Branch Prediction in CPU Architecture"
+    "Episode: Why Your Processor Guesses the Future to Stay Fast — Speculative Execution and Branch Prediction in CPU Architecture",
+    "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware"
   ],
   "migrated_at": "2026-10-28T14:10:14.679341+00:00",
   "updated_at": "2026-10-28T14:10:14.679317+00:00",
