@@ -452,6 +452,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Generate verified SRT captions
+        if: success()
+        run: python scripts/generate_captions.py
+
       - name: Upload verified delivery
         if: success()
         uses: actions/upload-artifact@v4
