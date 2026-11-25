@@ -456,6 +456,12 @@ jobs:
         if: success()
         run: python scripts/generate_captions.py
 
+      - name: Verify continuous narration and subtitle timing
+        if: success()
+        run: |
+          set -euo pipefail
+          python scripts/qa_delivery_media.py output/delivery/*.mp4 output/delivery/*.srt | tee output/delivery/audio-caption-qa.json
+
       - name: Upload verified delivery
         if: success()
         uses: actions/upload-artifact@v4
