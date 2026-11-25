@@ -73,8 +73,16 @@ jobs:
         timeout-minutes: 5
         run: |
           set -euo pipefail
-          sudo apt-get update -o Acquire::Retries=3
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          curl --fail --location --retry 3 --connect-timeout 20 --max-time 240 \
+            -o /tmp/ffmpeg-static.tar.xz "$FFMPEG_STATIC_URL"
+          echo "$FFMPEG_STATIC_SHA256  /tmp/ffmpeg-static.tar.xz" | sha256sum --check
+          mkdir -p /tmp/ffmpeg-extract
+          tar -xJf /tmp/ffmpeg-static.tar.xz -C /tmp/ffmpeg-extract
+          ffmpeg_binary=$(find /tmp/ffmpeg-extract -type f -name ffmpeg -print -quit)
+          ffprobe_binary=$(find /tmp/ffmpeg-extract -type f -name ffprobe -print -quit)
+          test -n "$ffmpeg_binary" && test -n "$ffprobe_binary"
+          sudo install -m 0755 "$ffmpeg_binary" /usr/local/bin/ffmpeg
+          sudo install -m 0755 "$ffprobe_binary" /usr/local/bin/ffprobe
           ffmpeg -version | head -1
       - name: Install Python dependencies
         timeout-minutes: 5
@@ -90,6 +98,7 @@ jobs:
     name: Renderer certification shard ${{ matrix.shard }}
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7]
     runs-on: ubuntu-latest
@@ -112,8 +121,8 @@ jobs:
         run: |
           set -euo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          sudo apt-get update -o Acquire::Retries=5 -o Acquire::http::Timeout=30
-          sudo apt-get install -y --no-install-recommends \
+          timeout 240 sudo apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          timeout 360 sudo apt-get install -y --no-install-recommends \
             ffmpeg libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri \
             libxkbcommon0 libxi6 libxxf86vm1 libxfixes3 libxrender1 \
             libsm6 libice6 libxext6 libgomp1 libxrandr2 libxinerama1

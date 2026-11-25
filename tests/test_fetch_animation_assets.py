@@ -34,6 +34,12 @@ class FakeResponse(io.BytesIO):
 
 
 class AnimationFetcherTests(unittest.TestCase):
+
+    def test_ual2_glb_sha256_is_pinned(self):
+        self.assertEqual(
+            target.PACKS["ual2"]["glb_sha256"],
+            "8cee20ab1bc55130092447e810e26df22dd2803eccc54f52137a7d54d7ab88a8",
+        )
     def test_unknown_pack_is_rejected(self):
         with self.assertRaisesRegex(target.AssetFetchError, "unknown pack"):
             target.fetch_pack("invalid", Path("assets"), Path("cache"))
