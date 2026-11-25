@@ -270,10 +270,14 @@
       "title": "Why AI Doesn't Re-Read Your Prompts",
       "topic": "Prompt Caching and KV Cache Reuse in Large Language Models",
       "created_at_utc": "2026-11-24T20:47:06.545999+00:00"
+    },
+    {
+      "title": "Why Deep Neural Networks Used to Collapse",
+      "topic": "Residual Connections and Vanishing Gradients in Deep Learning",
+      "created_at_utc": "2026-11-25T08:15:26.869486+00:00"
     }
   ],
   "running_context": [
-    "Episode: How a Giant AI Model Fits in Your Pocket — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
@@ -292,7 +296,8 @@
     "Episode: Why AI Memory Traffic Slows Down GPUs — FlashAttention IO-aware memory tiling in LLM attention mechanisms",
     "Episode: Why Your Processor Guesses the Future to Stay Fast — Speculative Execution and Branch Prediction in CPU Architecture",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
-    "Episode: Why AI Doesn't Re-Read Your Prompts — Prompt Caching and KV Cache Reuse in Large Language Models"
+    "Episode: Why AI Doesn't Re-Read Your Prompts — Prompt Caching and KV Cache Reuse in Large Language Models",
+    "Episode: Why Deep Neural Networks Used to Collapse — Residual Connections and Vanishing Gradients in Deep Learning"
   ],
   "migrated_at": "2026-10-28T14:10:14.679341+00:00",
   "updated_at": "2026-10-28T14:10:14.679317+00:00",
