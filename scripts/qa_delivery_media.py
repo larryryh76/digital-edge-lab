@@ -19,6 +19,20 @@ def probe(path: Path):
     p=subprocess.run(["ffprobe","-v","error","-show_streams","-show_format","-of","json",str(path)],capture_output=True,text=True,check=True)
     return json.loads(p.stdout)
 
+def audio_packet_bounds(path: Path):
+    p=subprocess.run(["ffprobe","-v","error","-select_streams","a:0","-show_entries","packet=pts_time,duration_time","-of","csv=p=0",str(path)],capture_output=True,text=True,check=True)
+    packets=[]
+    for line in p.stdout.splitlines():
+        parts=[x for x in line.strip().split(",") if x not in ("","N/A")]
+        if len(parts)>=2:
+            try: packets.append((float(parts[0]), float(parts[1])))
+            except ValueError: pass
+    if not packets: raise SystemExit("no audio packets found")
+    first=packets[0][0]
+    last=max(pts+dur for pts,dur in packets)
+    max_gap=max((b[0]-(a[0]+a[1]) for a,b in zip(packets,packets[1:])), default=0.0)
+    return first,last,max_gap
+
 def parse_srt(path: Path):
     cues=[]; lines=path.read_text(encoding="utf-8").splitlines(); i=0
     while i < len(lines):
@@ -53,7 +67,7 @@ def main():
         if start<prev_end: raise SystemExit(f"cue {n} overlaps previous cue")
         if end/1000 > duration+0.25: raise SystemExit(f"cue {n} exceeds media duration")
         prev_end=end
-    report={"status":"passed","media_duration_seconds":round(duration,3),"audio_duration_seconds":round(adur,3),"audio_streams":1,"srt_cues":len(cues),"last_cue_end_seconds":round(prev_end/1000,3)}
+    if not cues or cues[0][0] > 250: raise SystemExit("captions start too late")\n    if duration*1000-cues[-1][1] > 500: raise SystemExit("captions end too early")\n    report={"status":"passed","media_duration_seconds":round(duration,3),"audio_duration_seconds":round(adur,3),"audio_streams":1,"audio_first_packet_seconds":round(first_audio,3),"max_audio_packet_gap_seconds":round(max_gap,3),"srt_cues":len(cues),"last_cue_end_seconds":round(prev_end/1000,3)}
     print(json.dumps(report,indent=2))
     return 0
 
