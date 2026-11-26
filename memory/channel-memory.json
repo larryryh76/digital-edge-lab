@@ -132,11 +132,6 @@
   "analytics": [],
   "recent_topics": [
     {
-      "title": "Why \"Just Return JSON\" Breaks Your AI Pipelines",
-      "topic": "Constrained Decoding and Structured Outputs in Large Language Models",
-      "created_at_utc": "2026-10-24T19:44:01.199984+00:00"
-    },
-    {
       "title": "Why Vector Search Fails on Exact Matches",
       "topic": "Hybrid Search: Combining BM25 Lexical Matching with Dense Vector Embeddings",
       "created_at_utc": "2026-10-25T08:29:51.229636+00:00"
@@ -280,10 +275,14 @@
       "title": "How Big AI Can Fit on Your Phone",
       "topic": "Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
       "created_at_utc": "2026-11-26T08:21:52.942867+00:00"
+    },
+    {
+      "title": "How Big AI Can Fit on Your Phone",
+      "topic": "Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
+      "created_at_utc": "2026-11-26T10:07:11.295602+00:00"
     }
   ],
   "running_context": [
-    "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: Why AI GPUs Run Out of Memory — PagedAttention and Memory Management in LLM Serving",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
@@ -301,6 +300,7 @@
     "Episode: Why AI Doesn't Re-Read Your Prompts — Prompt Caching and KV Cache Reuse in Large Language Models",
     "Episode: Why Deep Neural Networks Used to Collapse — Residual Connections and Vanishing Gradients in Deep Learning",
     "Episode: How Web Browsers Spot Bad URLs Instantly — Bloom Filters in Web Browsers and Database Engines",
+    "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware",
     "Episode: How Big AI Can Fit on Your Phone — Neural network quantization from 16-bit weights to 4-bit integers on mobile hardware"
   ],
