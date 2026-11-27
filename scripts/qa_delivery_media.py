@@ -64,12 +64,16 @@ def parse_srt(path: Path):
         cues.append((start, end, " ".join(text)))
     return cues
 
+def normalized_words(text: str):
+    return re.findall(r"[A-Za-z0-9\'’-]+", text.lower())
+
 def main():
-    if len(sys.argv) != 3:
-        print("usage: qa_delivery_media.py FINAL.mp4 FINAL.srt", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("usage: qa_delivery_media.py FINAL.mp4 FINAL.srt [NARRATION.txt]", file=sys.stderr)
         return 2
 
-    mp4, srt = map(Path, sys.argv[1:])
+    mp4, srt = map(Path, sys.argv[1:3])
+    narration_path = Path(sys.argv[3]) if len(sys.argv) == 4 else mp4.parent / "narration.txt"
     data = probe(mp4)
     streams = data.get("streams", [])
     audio = [s for s in streams if s.get("codec_type") == "audio"]
@@ -107,6 +111,20 @@ def main():
     if duration * 1000 - cues[-1][1] > 500:
         raise SystemExit("captions end too early")
 
+    cue_gaps = [max(0, (b[0] - a[1]) / 1000.0) for a, b in zip(cues, cues[1:])]
+    max_caption_gap = max(cue_gaps, default=0.0)
+    if max_caption_gap > 2.0:
+        raise SystemExit(f"caption gap too large: {max_caption_gap:.3f}s")
+
+    narration_word_count = None
+    caption_word_count = sum(len(normalized_words(text)) for _, _, text in cues)
+    if narration_path.exists():
+        narration_words = normalized_words(narration_path.read_text(encoding="utf-8"))
+        caption_words = normalized_words(" ".join(text for _, _, text in cues))
+        narration_word_count = len(narration_words)
+        if narration_words != caption_words:
+            raise SystemExit("caption text does not exactly match narration text")
+
     report = {
         "status": "passed",
         "media_duration_seconds": round(duration, 3),
@@ -117,6 +135,10 @@ def main():
         "max_audio_packet_gap_seconds": round(max_gap, 3),
         "srt_cues": len(cues),
         "last_cue_end_seconds": round(prev_end / 1000, 3),
+        "max_caption_gap_seconds": round(max_caption_gap, 3),
+        "caption_word_count": caption_word_count,
+        "narration_word_count": narration_word_count,
+        "caption_text_matches_narration": narration_word_count is None or narration_word_count == caption_word_count,
     }
     print(json.dumps(report, indent=2))
     return 0
