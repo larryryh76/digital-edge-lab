@@ -462,6 +462,17 @@ jobs:
           set -euo pipefail
           python scripts/qa_delivery_media.py output/delivery/*.mp4 output/delivery/*.srt | tee output/delivery/audio-caption-qa.json
 
+      - name: Inspect final delivery artifact
+        if: success()
+        run: |
+          set -euo pipefail
+          rm -rf output/delivery/artifact-inspection
+          python scripts/inspect_delivery_artifact.py \
+            output/delivery/*.mp4 \
+            --captions output/delivery/*.srt \
+            --out output/delivery/artifact-inspection \
+            | tee output/delivery/artifact-inspection/artifact-inspection.stdout.json
+
       - name: Upload verified delivery
         if: success()
         uses: actions/upload-artifact@v4
