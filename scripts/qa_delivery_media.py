@@ -32,10 +32,17 @@ def audio_packet_bounds(path: Path):
                 pass
     if not packets:
         raise SystemExit("no audio packets found")
+    packets.sort(key=lambda item: item[0])
+    if any(dur < 0 for _, dur in packets):
+        raise SystemExit("negative audio packet duration found")
+    overlaps = [((a[0] + a[1]) - b[0]) for a, b in zip(packets, packets[1:])]
+    max_overlap = max(overlaps, default=0.0)
+    if max_overlap > 0.25:
+        raise SystemExit(f"audio packet overlap too large: {max_overlap:.3f}s")
     first = packets[0][0]
     last = max(pts + dur for pts, dur in packets)
     max_gap = max((b[0] - (a[0] + a[1]) for a, b in zip(packets, packets[1:])), default=0.0)
-    return first, last, max_gap
+    return first, last, max_gap, len(packets)
 
 def parse_srt(path: Path):
     cues = []
@@ -87,7 +94,7 @@ def main():
     if abs(duration - adur) > 0.25:
         raise SystemExit(f"audio is not continuous to end: media={duration:.3f}s audio={adur:.3f}s")
 
-    first_audio, last_audio, max_gap = audio_packet_bounds(mp4)
+    first_audio, last_audio, max_gap, audio_packet_count = audio_packet_bounds(mp4)
     if first_audio > 0.25:
         raise SystemExit(f"audio starts too late: {first_audio:.3f}s")
     if max_gap > 0.25:
@@ -132,6 +139,7 @@ def main():
         "audio_streams": 1,
         "audio_first_packet_seconds": round(first_audio, 3),
         "audio_last_packet_end_seconds": round(last_audio, 3),
+        "audio_packet_count": audio_packet_count,
         "max_audio_packet_gap_seconds": round(max_gap, 3),
         "srt_cues": len(cues),
         "last_cue_end_seconds": round(prev_end / 1000, 3),
