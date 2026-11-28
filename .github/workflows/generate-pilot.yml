@@ -467,6 +467,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf output/delivery/artifact-inspection
+          mkdir -p output/delivery/artifact-inspection
           python scripts/inspect_delivery_artifact.py \
             output/delivery/*.mp4 \
             --captions output/delivery/*.srt \
